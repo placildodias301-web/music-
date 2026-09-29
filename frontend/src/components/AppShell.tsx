@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { Logo } from "./Logo";
 import { getLibrary } from "../lib/library";
+import { ACCOUNT_CHANGED_EVENT, firstNameOf, initialsOf, loadPrefs } from "../lib/account";
 
 interface NavItem {
   to: string;
@@ -10,157 +11,275 @@ interface NavItem {
   icon: ReactNode;
 }
 
-function icon(path: ReactNode) {
+function icon(path: ReactNode, size = 18) {
   return (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" className="flex-shrink-0">
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" className="flex-shrink-0" aria-hidden="true">
       {path}
     </svg>
   );
 }
 
-const SIDEBAR_ITEMS: NavItem[] = [
-  {
-    to: "/studio",
-    label: "Studio",
-    icon: icon(<rect x="4" y="4" width="16" height="16" rx="4" fill="currentColor" opacity="0.85" />),
-  },
-  {
-    to: "/analysis",
-    label: "Analysis",
-    icon: icon(
+const ICONS = {
+  home: (
+    <path
+      d="M4 10.5 12 4l8 6.5V19a1.5 1.5 0 0 1-1.5 1.5H15v-5.5h-6v5.5H5.5A1.5 1.5 0 0 1 4 19v-8.5Z"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinejoin="round"
+    />
+  ),
+  analysis: <path d="M4 18v-4m5 4V8m5 10v-7m5 7V5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />,
+  practice: <polygon points="7 4.5 19 12 7 19.5 7 4.5" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />,
+  tuner: (
+    <>
+      <circle cx="12" cy="12" r="8" stroke="currentColor" strokeWidth="1.8" />
+      <path d="M12 7v5l3 3" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+    </>
+  ),
+  chords: (
+    <>
+      <rect x="4" y="4" width="7" height="7" rx="1.5" stroke="currentColor" strokeWidth="1.8" />
+      <rect x="13" y="4" width="7" height="7" rx="1.5" stroke="currentColor" strokeWidth="1.8" />
+      <rect x="4" y="13" width="7" height="7" rx="1.5" stroke="currentColor" strokeWidth="1.8" />
+      <rect x="13" y="13" width="7" height="7" rx="1.5" stroke="currentColor" strokeWidth="1.8" />
+    </>
+  ),
+  library: (
+    <path d="M6 4h12v16l-6-3.5L6 20V4Z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
+  ),
+  assistant: (
+    <>
+      <path d="M12 3.5 13.8 9l5.7 1.5-5.7 1.6L12 17.5l-1.8-5.4-5.7-1.6L10.2 9 12 3.5Z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
+      <path d="M18.5 16.5l.7 2 2 .7-2 .7-.7 2-.7-2-2-.7 2-.7.7-2Z" fill="currentColor" />
+    </>
+  ),
+  progress: (
+    <path d="M3 3v18h18M7 14l4-4 4 4 5-6" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+  ),
+  community: (
+    <>
+      <circle cx="9" cy="8" r="3" stroke="currentColor" strokeWidth="1.8" />
+      <circle cx="17" cy="10" r="2.4" stroke="currentColor" strokeWidth="1.8" />
+      <path d="M3.5 19c.6-3 2.7-4.6 5.5-4.6s4.9 1.6 5.5 4.6" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+      <path d="M14.5 19c.4-2 1.8-3.3 3.8-3.3" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+    </>
+  ),
+  tools: (
+    <path
+      d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+  ),
+  settings: (
+    <>
+      <circle cx="12" cy="12" r="3" stroke="currentColor" strokeWidth="1.8" />
       <path
-        d="M4 18v-4m5 4V8m5 10v-7m5 7V5"
+        d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z"
         stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
+        strokeWidth="1.6"
       />
-    ),
+    </>
+  ),
+  plus: <path d="M12 5v14M5 12h14" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" />,
+  more: (
+    <>
+      <circle cx="6" cy="12" r="1.6" fill="currentColor" />
+      <circle cx="12" cy="12" r="1.6" fill="currentColor" />
+      <circle cx="18" cy="12" r="1.6" fill="currentColor" />
+    </>
+  ),
+};
+
+const NAV_GROUPS: { label: string | null; items: NavItem[] }[] = [
+  { label: null, items: [{ to: "/studio", label: "Home", icon: icon(ICONS.home) }] },
+  {
+    label: "Analyze",
+    items: [
+      { to: "/analysis", label: "Analysis", icon: icon(ICONS.analysis) },
+      { to: "/library", label: "Library", icon: icon(ICONS.library) },
+      { to: "/assistant", label: "AI Assistant", icon: icon(ICONS.assistant) },
+    ],
   },
   {
-    to: "/practice",
     label: "Practice",
-    icon: icon(
-      <>
-        <polygon points="6 4 19 12 6 20 6 4" fill="currentColor" opacity="0.85" />
-      </>
-    ),
+    items: [
+      { to: "/practice", label: "Practice", icon: icon(ICONS.practice) },
+      { to: "/tuner", label: "Tuner", icon: icon(ICONS.tuner) },
+      { to: "/chords", label: "Chords", icon: icon(ICONS.chords) },
+      { to: "/dashboard", label: "Progress", icon: icon(ICONS.progress) },
+    ],
   },
-  {
-    to: "/tuner",
-    label: "Tuner",
-    icon: icon(
-      <>
-        <circle cx="12" cy="12" r="8" stroke="currentColor" strokeWidth="2" />
-        <path d="M12 7v5l3 3" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-      </>
-    ),
-  },
-  {
-    to: "/chords",
-    label: "Chords",
-    icon: icon(
-      <>
-        <rect x="4" y="4" width="7" height="7" rx="1.5" stroke="currentColor" strokeWidth="1.8" />
-        <rect x="13" y="4" width="7" height="7" rx="1.5" stroke="currentColor" strokeWidth="1.8" />
-        <rect x="4" y="13" width="7" height="7" rx="1.5" stroke="currentColor" strokeWidth="1.8" />
-        <rect x="13" y="13" width="7" height="7" rx="1.5" stroke="currentColor" strokeWidth="1.8" />
-      </>
-    ),
-  },
-  {
-    to: "/library",
-    label: "Library",
-    icon: icon(
-      <path
-        d="M5 4h11a2 2 0 0 1 2 2v14l-7.5-3.5L5 20V4Z"
-        stroke="currentColor"
-        strokeWidth="1.8"
-        strokeLinejoin="round"
-      />
-    ),
-  },
-  {
-    to: "/assistant",
-    label: "AI Assistant",
-    icon: icon(
-      <>
-        <path d="M12 2a4 4 0 0 1 4 4v2a4 4 0 0 1-8 0V6a4 4 0 0 1 4-4Z" stroke="currentColor" strokeWidth="1.8" />
-        <path d="M6 10v2a6 6 0 0 0 12 0v-2" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-        <path d="M12 18v4m-4 0h8" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-      </>
-    ),
-  },
-  {
-    to: "/dashboard",
-    label: "Analytics",
-    icon: icon(
-      <path
-        d="M3 3v18h18M7 14l4-4 4 4 5-6"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    ),
-  },
-  {
-    to: "/community",
-    label: "Community",
-    icon: icon(
-      <>
-        <circle cx="9" cy="8" r="3" stroke="currentColor" strokeWidth="1.8" />
-        <circle cx="17" cy="10" r="2.4" stroke="currentColor" strokeWidth="1.8" />
-        <path d="M3.5 19c.6-3 2.7-4.6 5.5-4.6s4.9 1.6 5.5 4.6" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-        <path d="M14.5 19c.4-2 1.8-3.3 3.8-3.3" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-      </>
-    ),
-  },
-  {
-    to: "/tools",
-    label: "All Tools",
-    icon: icon(
-      <path
-        d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"
-        stroke="currentColor"
-        strokeWidth="1.8"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    ),
-  },
-  {
-    to: "/account",
-    label: "Settings",
-    icon: icon(
-      <>
-        <circle cx="12" cy="8" r="3.2" stroke="currentColor" strokeWidth="1.8" />
-        <path d="M5 20c1-3.6 3.6-5.4 7-5.4s6 1.8 7 5.4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-      </>
-    ),
-  },
+  { label: "Connect", items: [{ to: "/community", label: "Community", icon: icon(ICONS.community) }] },
+];
+
+const FOOTER_ITEMS: NavItem[] = [
+  { to: "/tools", label: "All Tools", icon: icon(ICONS.tools) },
+  { to: "/account", label: "Settings", icon: icon(ICONS.settings) },
 ];
 
 const SECTION_META: Record<string, { title: string; subtitle: string }> = {
-  "/studio": { title: "Studio", subtitle: "Analyse a track, then read, correct and export the chart." },
+  // Home renders its own greeting, so the header stays clean there.
+  "/studio": { title: "", subtitle: "" },
   "/analysis": { title: "Analysis", subtitle: "Chord timeline, stems and export — everything from one analysis." },
   "/library": { title: "Library", subtitle: "Saved analyses keep their chords, tab and stems together." },
   "/community": { title: "Community", subtitle: "Every post carries the song analysis behind it — open it and play along." },
   "/tools": { title: "Tools", subtitle: "Six tools, one library — see exactly what each one does." },
-  "/account": { title: "Account", subtitle: "Profile and preferences for this device." },
+  "/account": { title: "Settings", subtitle: "Profile and preferences for this device." },
   "/upload": { title: "Upload & Analyze", subtitle: "Upload a song or video and Wilsify AI will analyze the real audio." },
   "/practice": { title: "Practice Mode", subtitle: "Practice along at your own speed, with live accuracy tracking." },
   "/assistant": { title: "AI Assistant", subtitle: "Ask questions about the song you just analyzed or music theory." },
   "/tuner": { title: "Chromatic Tuner", subtitle: "Live chromatic tuner — instrument presets and real-time pitch feedback." },
   "/chords": { title: "Chord Library", subtitle: "Browse chord shapes across guitar, ukulele and piano." },
-  "/dashboard": { title: "Analytics", subtitle: "Your practice history, streaks and weak chords." },
+  "/dashboard": { title: "Progress", subtitle: "Your practice history, streaks and weak chords." },
 };
 
 function isActiveItem(pathname: string, itemTo: string): boolean {
   if (pathname === itemTo) return true;
   if (itemTo === "/studio" && pathname === "/") return true;
-  if (itemTo === "/studio" && pathname === "/upload") return true;
   return false;
 }
+
+function NavRow({
+  item,
+  active,
+  badge,
+  onNavigate,
+}: {
+  item: NavItem;
+  active: boolean;
+  badge?: number;
+  onNavigate?: () => void;
+}) {
+  return (
+    <Link
+      to={item.to}
+      onClick={onNavigate}
+      aria-current={active ? "page" : undefined}
+      className={`group relative flex items-center justify-between rounded-xl px-3 py-2 text-sm font-semibold transition-colors ${
+        active
+          ? "bg-gradient-to-r from-primary/25 to-primary/[0.06] text-content ring-1 ring-primary/30"
+          : "text-content-muted hover:bg-white/[0.04] hover:text-content"
+      }`}
+    >
+      {active && (
+        <span className="absolute -left-3 top-1/2 h-5 w-1 -translate-y-1/2 rounded-r-full bg-primary shadow-[0_0_12px_rgba(124,92,255,0.9)]" />
+      )}
+      <span className="flex items-center gap-3">
+        <span className={active ? "text-primary-light" : "text-content-dim group-hover:text-content-light"}>
+          {item.icon}
+        </span>
+        {item.label}
+      </span>
+      {badge !== undefined && badge > 0 && (
+        <span
+          className={`flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-[11px] font-bold ${
+            active ? "bg-primary/40 text-white" : "bg-white/[0.07] text-content-muted"
+          }`}
+        >
+          {badge}
+        </span>
+      )}
+    </Link>
+  );
+}
+
+function SidebarContent({
+  pathname,
+  libraryCount,
+  name,
+  subtitle,
+  onNavigate,
+}: {
+  pathname: string;
+  libraryCount: number;
+  name: string;
+  subtitle: string;
+  onNavigate?: () => void;
+}) {
+  return (
+    <>
+      <div>
+        <Link
+          to="/upload"
+          onClick={onNavigate}
+          className="btn-primary mb-6 w-full py-2.5 text-sm"
+        >
+          {icon(ICONS.plus, 16)}
+          Analyze a song
+        </Link>
+
+        <nav aria-label="Main" className="flex flex-col gap-5">
+          {NAV_GROUPS.map((group) => (
+            <div key={group.label ?? "root"}>
+              {group.label && (
+                <p className="mb-1.5 px-3 text-[10.5px] font-bold uppercase tracking-[0.12em] text-content-dim/80">
+                  {group.label}
+                </p>
+              )}
+              <div className="flex flex-col gap-0.5">
+                {group.items.map((item) => (
+                  <NavRow
+                    key={item.to}
+                    item={item}
+                    active={isActiveItem(pathname, item.to)}
+                    badge={item.to === "/library" ? libraryCount : undefined}
+                    onNavigate={onNavigate}
+                  />
+                ))}
+              </div>
+            </div>
+          ))}
+        </nav>
+      </div>
+
+      <div className="mt-6">
+        <div className="flex flex-col gap-0.5">
+          {FOOTER_ITEMS.map((item) => (
+            <NavRow key={item.to} item={item} active={isActiveItem(pathname, item.to)} onNavigate={onNavigate} />
+          ))}
+        </div>
+        <Link
+          to="/account"
+          onClick={onNavigate}
+          className="mt-3 flex items-center gap-3 rounded-xl border border-glass bg-bg-raised/60 p-2.5 transition-colors hover:border-glass-strong"
+        >
+          <span className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-primary to-primary-dark text-xs font-bold text-white ring-2 ring-primary/25">
+            {initialsOf(name)}
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block truncate text-xs font-bold text-content">{name || "Musician"}</span>
+            <span className="block truncate text-[11px] text-content-dim">{subtitle}</span>
+          </span>
+        </Link>
+      </div>
+    </>
+  );
+}
+
+function BottomLink({ item, pathname }: { item: NavItem; pathname: string }) {
+  const active = isActiveItem(pathname, item.to);
+  return (
+    <Link
+      to={item.to}
+      aria-current={active ? "page" : undefined}
+      className={`flex flex-1 flex-col items-center gap-1 py-1.5 text-[11px] font-semibold transition-colors ${
+        active ? "text-primary-light" : "text-content-dim hover:text-content-muted"
+      }`}
+    >
+      {item.icon}
+      {item.label}
+    </Link>
+  );
+}
+
+const BOTTOM_LEFT: NavItem[] = [
+  { to: "/studio", label: "Home", icon: icon(ICONS.home, 21) },
+  { to: "/analysis", label: "Analysis", icon: icon(ICONS.analysis, 21) },
+];
+const BOTTOM_RIGHT: NavItem[] = [{ to: "/practice", label: "Practice", icon: icon(ICONS.practice, 21) }];
 
 export function AppShell({ children }: { children: ReactNode }) {
   const location = useLocation();
@@ -168,182 +287,126 @@ export function AppShell({ children }: { children: ReactNode }) {
   const [query, setQuery] = useState("");
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [libraryCount, setLibraryCount] = useState(0);
+  const [prefs, setPrefs] = useState(loadPrefs);
 
   const meta = SECTION_META[location.pathname] ?? { title: "Wilsify AI", subtitle: "" };
+  const profileSubtitle = [prefs.instruments, prefs.level].filter(Boolean).join(" · ");
 
   useEffect(() => {
     setMobileNavOpen(false);
     setLibraryCount(getLibrary().length);
   }, [location.pathname]);
 
+  useEffect(() => {
+    const refresh = () => setPrefs(loadPrefs());
+    window.addEventListener(ACCOUNT_CHANGED_EVENT, refresh);
+    return () => window.removeEventListener(ACCOUNT_CHANGED_EVENT, refresh);
+  }, []);
+
+  useEffect(() => {
+    if (!mobileNavOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setMobileNavOpen(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [mobileNavOpen]);
+
   function handleSearch(e: React.FormEvent) {
     e.preventDefault();
     const trimmed = query.trim();
     if (!trimmed) return;
     navigate(`/library?q=${encodeURIComponent(trimmed)}`);
-    setMobileNavOpen(false);
   }
 
   return (
-    <div className="flex min-h-screen bg-bg">
+    <div className="flex min-h-screen">
       {/* Desktop sidebar — visible at md (768px) and up */}
-      <aside className="hidden w-[230px] flex-shrink-0 flex-col justify-between border-r border-glass/80 bg-bg-card/40 px-3 py-5 backdrop-blur-md md:flex">
-        <div>
-          <Link to="/studio" className="mb-7 flex items-center gap-3 px-3 transition-opacity hover:opacity-90">
-            <Logo size={28} />
-            <div>
-              <span className="font-heading text-base font-bold tracking-tight text-content">Wilsify</span>
-              <span className="ml-1.5 rounded-full bg-primary/20 px-2 py-0.5 text-[10px] font-bold text-primary-light">AI</span>
-            </div>
-          </Link>
-
-          <nav className="flex flex-col gap-1">
-            {SIDEBAR_ITEMS.map((item) => {
-              const active = isActiveItem(location.pathname, item.to);
-              return (
-                <Link
-                  key={item.to}
-                  to={item.to}
-                  className={`group flex items-center justify-between rounded-xl px-3 py-2 text-sm font-medium transition-all ${
-                    active
-                      ? "bg-primary text-white shadow-[0_4px_16px_rgba(124,92,255,0.35)]"
-                      : "text-content-muted hover:bg-white/[0.04] hover:text-content"
-                  }`}
-                >
-                  <span className="flex items-center gap-2.5">
-                    <span className={active ? "text-white" : "text-content-dim group-hover:text-content-light"}>
-                      {item.icon}
-                    </span>
-                    {item.label}
-                  </span>
-                  {item.to === "/library" && libraryCount > 0 && (
-                    <span
-                      className={`flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-[11px] font-semibold ${
-                        active ? "bg-white/25 text-white" : "bg-white/10 text-content-muted"
-                      }`}
-                    >
-                      {libraryCount}
-                    </span>
-                  )}
-                </Link>
-              );
-            })}
-          </nav>
-        </div>
-
-        {/* Sidebar user profile footer */}
-        <div className="border-t border-glass/80 pt-4">
-          <Link
-            to="/account"
-            className="flex items-center gap-3 rounded-xl p-2 transition-colors hover:bg-white/[0.04]"
-          >
-            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-primary to-primary-dark text-xs font-bold text-white shadow-[0_2px_10px_rgba(124,92,255,0.4)]">
-              WF
-            </div>
-            <div className="min-w-0 flex-1">
-              <p className="truncate text-xs font-semibold text-content">Wilbur Fernandes</p>
-              <span className="inline-block text-[10px] font-medium text-primary-light">PRO Member</span>
-            </div>
-          </Link>
+      <aside className="sticky top-0 hidden h-screen w-[244px] flex-shrink-0 flex-col overflow-y-auto border-r border-glass bg-[#090d18]/80 px-4 py-5 md:flex">
+        <Link to="/studio" className="mb-6 flex items-center gap-2.5 px-2 transition-opacity hover:opacity-90">
+          <Logo size={30} withText={false} />
+          <span className="font-heading text-[17px] font-bold tracking-tight text-content">Wilsify</span>
+          <span className="rounded-md border border-primary/30 bg-primary/15 px-1.5 py-px text-[10px] font-bold text-primary-light">
+            AI
+          </span>
+        </Link>
+        <div className="flex flex-1 flex-col justify-between">
+          <SidebarContent
+            pathname={location.pathname}
+            libraryCount={libraryCount}
+            name={prefs.name}
+            subtitle={profileSubtitle}
+          />
         </div>
       </aside>
 
-      {/* Mobile Drawer */}
+      {/* Mobile drawer */}
       {mobileNavOpen && (
-        <div className="fixed inset-0 z-50 md:hidden">
-          <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={() => setMobileNavOpen(false)} />
-          <aside className="bg-glass-heavy relative flex h-full w-[260px] flex-col justify-between border-r border-glass px-4 py-5 backdrop-blur-xl">
-            <div>
-              <div className="mb-6 flex items-center justify-between px-2">
-                <Link to="/studio" onClick={() => setMobileNavOpen(false)} className="flex items-center gap-2">
-                  <Logo size={26} />
-                  <span className="font-heading text-base font-bold text-content">Wilsify AI</span>
-                </Link>
-                <button
-                  type="button"
-                  aria-label="Close menu"
-                  onClick={() => setMobileNavOpen(false)}
-                  className="flex h-8 w-8 items-center justify-center rounded-lg text-content-muted hover:text-content"
-                >
-                  <svg width="18" height="18" viewBox="0 0 20 20" fill="none">
-                    <path d="M5 5l10 10M15 5L5 15" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-                  </svg>
-                </button>
-              </div>
-
-              <nav className="flex flex-col gap-1">
-                {SIDEBAR_ITEMS.map((item) => {
-                  const active = isActiveItem(location.pathname, item.to);
-                  return (
-                    <Link
-                      key={item.to}
-                      to={item.to}
-                      onClick={() => setMobileNavOpen(false)}
-                      className={`flex items-center justify-between rounded-xl px-3 py-2 text-sm font-medium transition-colors ${
-                        active ? "bg-primary text-white" : "text-content-muted hover:bg-white/[0.04] hover:text-content"
-                      }`}
-                    >
-                      <span className="flex items-center gap-2.5">
-                        <span className={active ? "text-white" : "text-content-dim"}>{item.icon}</span>
-                        {item.label}
-                      </span>
-                      {item.to === "/library" && libraryCount > 0 && (
-                        <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-white/15 px-1.5 text-[11px]">
-                          {libraryCount}
-                        </span>
-                      )}
-                    </Link>
-                  );
-                })}
-              </nav>
-            </div>
-
-            <div className="border-t border-glass pt-3">
-              <Link
-                to="/account"
-                onClick={() => setMobileNavOpen(false)}
-                className="flex items-center gap-3 rounded-xl p-2 text-sm text-content"
-              >
-                <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-primary to-primary-dark text-xs font-bold text-white">
-                  WF
-                </div>
-                <div className="min-w-0">
-                  <p className="truncate text-xs font-semibold text-content">Wilbur Fernandes</p>
-                  <span className="text-[10px] text-primary-light">PRO Member</span>
-                </div>
+        <div className="fixed inset-0 z-50 md:hidden" role="dialog" aria-modal="true" aria-label="Navigation">
+          <div className="animate-fadeIn absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={() => setMobileNavOpen(false)} />
+          <aside className="bg-glass-heavy relative flex h-full w-[280px] flex-col overflow-y-auto border-r border-glass px-4 py-5">
+            <div className="mb-6 flex items-center justify-between px-2">
+              <Link to="/studio" onClick={() => setMobileNavOpen(false)} className="flex items-center gap-2.5">
+                <Logo size={28} withText={false} />
+                <span className="font-heading text-base font-bold text-content">Wilsify AI</span>
               </Link>
+              <button
+                type="button"
+                aria-label="Close menu"
+                onClick={() => setMobileNavOpen(false)}
+                className="flex h-9 w-9 items-center justify-center rounded-lg text-content-muted hover:bg-white/[0.05] hover:text-content"
+              >
+                <svg width="18" height="18" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+                  <path d="M5 5l10 10M15 5L5 15" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+                </svg>
+              </button>
+            </div>
+            <div className="flex flex-1 flex-col justify-between">
+              <SidebarContent
+                pathname={location.pathname}
+                libraryCount={libraryCount}
+                name={prefs.name}
+                subtitle={profileSubtitle}
+                onNavigate={() => setMobileNavOpen(false)}
+              />
             </div>
           </aside>
         </div>
       )}
 
-      {/* Main Content Area */}
-      <div className="flex min-h-screen min-w-0 flex-1 flex-col overflow-x-hidden pb-20 md:pb-8">
-        {/* Top Header */}
-        <header className="sticky top-0 z-30 flex items-center justify-between gap-3 border-b border-glass/80 bg-bg/75 px-4 py-3.5 backdrop-blur-md sm:px-6 md:px-8">
+      {/* Main content area */}
+      <div className="flex min-h-screen min-w-0 flex-1 flex-col pb-24 md:pb-10">
+        <header className="sticky top-0 z-30 flex items-center justify-between gap-3 border-b border-glass/70 bg-bg/80 px-4 py-3 backdrop-blur-md sm:px-6 md:px-8">
           <div className="flex min-w-0 items-center gap-3">
             <button
               type="button"
               aria-label="Open menu"
               onClick={() => setMobileNavOpen(true)}
-              className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl border border-glass bg-white/[0.03] text-content transition-colors hover:border-glass-strong md:hidden"
+              className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl border border-glass bg-bg-raised text-content transition-colors hover:border-glass-strong md:hidden"
             >
-              <svg width="18" height="18" viewBox="0 0 20 20" fill="none">
+              <svg width="18" height="18" viewBox="0 0 20 20" fill="none" aria-hidden="true">
                 <path d="M3 5h14M3 10h14M3 15h14" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
               </svg>
             </button>
-            <div className="min-w-0">
-              <h1 className="truncate font-heading text-lg font-bold text-content sm:text-xl">{meta.title}</h1>
-              {meta.subtitle && (
-                <p className="mt-0.5 hidden truncate text-xs text-content-muted sm:block">{meta.subtitle}</p>
-              )}
-            </div>
+            {meta.title ? (
+              <div className="min-w-0">
+                <h1 className="truncate font-heading text-lg font-bold text-content">{meta.title}</h1>
+                {meta.subtitle && (
+                  <p className="mt-0.5 hidden truncate text-xs text-content-muted sm:block">{meta.subtitle}</p>
+                )}
+              </div>
+            ) : (
+              <Link to="/studio" className="flex items-center gap-2 md:hidden">
+                <Logo size={26} withText={false} />
+                <span className="font-heading text-base font-bold text-content">Wilsify</span>
+              </Link>
+            )}
           </div>
 
           <div className="flex flex-shrink-0 items-center gap-2 sm:gap-3">
-            <form onSubmit={handleSearch} className="hidden lg:block">
-              <div className="flex items-center gap-2 rounded-full border border-glass bg-white/[0.03] px-3.5 py-1.5 focus-within:border-primary/50 focus-within:bg-white/[0.05]">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" className="text-content-dim">
+            <form onSubmit={handleSearch} role="search" className="hidden lg:block">
+              <div className="flex items-center gap-2 rounded-xl border border-glass-strong bg-bg-raised px-3.5 py-2 transition-colors focus-within:border-primary/60">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" className="text-content-dim" aria-hidden="true">
                   <circle cx="11" cy="11" r="7" stroke="currentColor" strokeWidth="2" />
                   <path d="m20 20-3-3" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
                 </svg>
@@ -351,30 +414,21 @@ export function AppShell({ children }: { children: ReactNode }) {
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
                   aria-label="Search your saved tracks"
-                  placeholder="Search tracks..."
-                  className="w-36 bg-transparent text-xs text-content placeholder:text-content-dim focus:outline-none xl:w-44"
+                  placeholder="Search saved tracks…"
+                  className="w-44 bg-transparent text-[13px] text-content placeholder:text-content-dim focus:outline-none focus-visible:shadow-none xl:w-56"
                 />
               </div>
             </form>
 
             <Link
-              to="/upload"
-              className="btn-primary hidden px-3.5 py-1.5 text-xs sm:inline-flex"
-            >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
-                <path d="M12 4v16m-8-8h16" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" />
-              </svg>
-              Upload Song
-            </Link>
-
-            <Link
               to="/account"
-              className="flex items-center gap-2 rounded-full border border-glass bg-white/[0.02] py-1 pl-1 pr-2.5 transition-colors hover:border-glass-strong sm:pr-3"
+              aria-label={`Settings for ${prefs.name || "your profile"}`}
+              className="flex items-center gap-2 rounded-full border border-glass bg-bg-raised py-1 pl-1 pr-1 transition-colors hover:border-glass-strong sm:pr-3"
             >
-              <span className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-primary to-primary-dark text-[11px] font-bold text-white shadow-sm">
-                WF
+              <span className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-primary to-primary-dark text-[11px] font-bold text-white">
+                {initialsOf(prefs.name)}
               </span>
-              <span className="hidden text-xs font-semibold text-content sm:inline">Wilbur</span>
+              <span className="hidden text-xs font-semibold text-content sm:inline">{firstNameOf(prefs.name)}</span>
             </Link>
           </div>
         </header>
@@ -382,78 +436,34 @@ export function AppShell({ children }: { children: ReactNode }) {
         <main className="min-w-0 flex-1">{children}</main>
       </div>
 
-      {/* Mobile Fixed Bottom Navigation Bar — Exactly matches Figma mobile layout */}
-      <nav className="bottom-nav-blur fixed inset-x-0 bottom-0 z-40 flex h-16 items-center justify-around px-2 md:hidden">
-        <Link
-          to="/studio"
-          className={`flex flex-col items-center gap-1 py-1 text-[11px] font-medium transition-colors ${
-            location.pathname === "/studio" || location.pathname === "/"
-              ? "text-primary-light"
-              : "text-content-dim hover:text-content-muted"
-          }`}
-        >
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-            <path
-              d="M3 10.5 12 3l9 7.5v9.5a2 2 0 0 1-2 2h-4a2 2 0 0 1-2-2v-5a1 1 0 0 0-1-1h-2a1 1 0 0 0-1 1v5a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-9.5Z"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinejoin="round"
-            />
-          </svg>
-          Studio
-        </Link>
-
-        <Link
-          to="/analysis"
-          className={`flex flex-col items-center gap-1 py-1 text-[11px] font-medium transition-colors ${
-            location.pathname === "/analysis" ? "text-primary-light" : "text-content-dim hover:text-content-muted"
-          }`}
-        >
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-            <path d="M4 18v-4m5 4V8m5 10v-7m5 7V5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-          </svg>
-          Analysis
-        </Link>
-
-        <Link
-          to="/practice"
-          className={`flex flex-col items-center gap-1 py-1 text-[11px] font-medium transition-colors ${
-            location.pathname === "/practice" ? "text-primary-light" : "text-content-dim hover:text-content-muted"
-          }`}
-        >
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-            <polygon points="6 4 19 12 6 20 6 4" fill="currentColor" opacity="0.8" />
-          </svg>
-          Practice
-        </Link>
-
-        <Link
-          to="/tuner"
-          className={`flex flex-col items-center gap-1 py-1 text-[11px] font-medium transition-colors ${
-            location.pathname === "/tuner" ? "text-primary-light" : "text-content-dim hover:text-content-muted"
-          }`}
-        >
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-            <circle cx="12" cy="12" r="7" stroke="currentColor" strokeWidth="2" />
-            <path d="M12 8v4l2.5 2.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-          </svg>
-          Tuner
-        </Link>
-
-        <button
-          type="button"
-          onClick={() => setMobileNavOpen(true)}
-          className="flex flex-col items-center gap-1 py-1 text-[11px] font-medium text-content-dim transition-colors hover:text-content-muted"
-        >
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-            <circle cx="6" cy="12" r="1.5" fill="currentColor" />
-            <circle cx="12" cy="12" r="1.5" fill="currentColor" />
-            <circle cx="18" cy="12" r="1.5" fill="currentColor" />
-          </svg>
-          More
-        </button>
+      {/* Mobile bottom navigation with a raised centre upload action */}
+      <nav aria-label="Primary" className="bottom-nav-blur fixed inset-x-0 bottom-0 z-40 md:hidden">
+        <div className="flex h-16 items-center px-2">
+          {BOTTOM_LEFT.map((item) => (
+            <BottomLink key={item.to} item={item} pathname={location.pathname} />
+          ))}
+          <div className="flex flex-1 justify-center">
+            <Link
+              to="/upload"
+              aria-label="Analyze a song"
+              className="-mt-7 flex h-14 w-14 items-center justify-center rounded-2xl border border-primary-light/30 bg-gradient-to-br from-[#8a6dff] to-primary-dark text-white shadow-[0_10px_28px_-6px_rgba(124,92,255,0.8)] transition-transform active:scale-95"
+            >
+              {icon(ICONS.plus, 24)}
+            </Link>
+          </div>
+          {BOTTOM_RIGHT.map((item) => (
+            <BottomLink key={item.to} item={item} pathname={location.pathname} />
+          ))}
+          <button
+            type="button"
+            onClick={() => setMobileNavOpen(true)}
+            className="flex flex-1 flex-col items-center gap-1 py-1.5 text-[11px] font-semibold text-content-dim transition-colors hover:text-content-muted"
+          >
+            {icon(ICONS.more, 21)}
+            More
+          </button>
+        </div>
       </nav>
     </div>
   );
 }
-

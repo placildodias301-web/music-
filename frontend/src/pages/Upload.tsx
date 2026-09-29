@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { useMvp } from "../lib/MvpContext";
 import { analyzeFile, logRightsAttestation } from "../lib/api";
 import { generateSampleTrack } from "../lib/generateSampleTrack";
@@ -12,13 +12,21 @@ function formatBytes(bytes: number): string {
 
 type Stage = "idle" | "uploading" | "analyzing" | "error";
 
+/** Optional router state: Home's drop zone hands over a file or the sample choice. */
+export interface UploadLocationState {
+  file?: File;
+  sample?: boolean;
+}
+
 export function Upload() {
   const navigate = useNavigate();
   const { setSong, setAnalysis } = useMvp();
+  const location = useLocation();
+  const handoff = (location.state ?? {}) as UploadLocationState;
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [usingSample, setUsingSample] = useState(false);
+  const [selectedFile, setSelectedFile] = useState<File | null>(handoff.file instanceof File ? handoff.file : null);
+  const [usingSample, setUsingSample] = useState(Boolean(handoff.sample) && !(handoff.file instanceof File));
   const [stage, setStage] = useState<Stage>("idle");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [rightsConfirmed, setRightsConfirmed] = useState(false);
@@ -248,8 +256,12 @@ export function Upload() {
         </label>
 
         {errorMessage && (
-          <div className="mt-4 rounded-xl border border-pink/30 bg-pink/10 p-3.5 text-xs text-pink">
-            {errorMessage}
+          <div role="alert" className="alert alert-error mt-4">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" className="mt-px flex-shrink-0 text-pink" aria-hidden="true">
+              <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="2" />
+              <path d="M12 7.5v5.5M12 16.5v.01" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+            </svg>
+            <span>{errorMessage}</span>
           </div>
         )}
 

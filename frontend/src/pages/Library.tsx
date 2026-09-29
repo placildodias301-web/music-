@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { getLibrary, removeFromLibrary, type SavedAnalysis } from "../lib/library";
 import { useMvp } from "../lib/MvpContext";
+import { ConfirmDialog } from "../components/ui";
 
 export function Library() {
   const navigate = useNavigate();
@@ -14,14 +15,13 @@ export function Library() {
     setItems(getLibrary());
   }, []);
 
-  function handleRemove(item: SavedAnalysis) {
-    // Removing is permanent and there is no undo, so confirm first.
-    const ok = window.confirm(
-      `Remove "${item.fileName}" from your library? This can't be undone.`
-    );
-    if (!ok) return;
-    removeFromLibrary(item.id);
+  const [pendingRemove, setPendingRemove] = useState<SavedAnalysis | null>(null);
+
+  function handleRemove() {
+    if (!pendingRemove) return;
+    removeFromLibrary(pendingRemove.id);
     setItems(getLibrary());
+    setPendingRemove(null);
   }
 
   function handleOpen(item: SavedAnalysis) {
@@ -188,7 +188,7 @@ export function Library() {
 
                     <button
                       type="button"
-                      onClick={() => handleRemove(item)}
+                      onClick={() => setPendingRemove(item)}
                       aria-label={`Remove ${item.fileName} from library`}
                       className="text-content-dim hover:text-pink transition-colors p-1 rounded-md hover:bg-pink/10"
                       title="Remove from library"
@@ -262,6 +262,21 @@ export function Library() {
           })}
         </div>
       )}
+      {/* Removing is permanent and there is no undo, so confirm first. */}
+      <ConfirmDialog
+        open={pendingRemove !== null}
+        title="Remove from library?"
+        body={
+          <>
+            <span className="font-semibold text-content">{pendingRemove?.fileName}</span> and its saved chords will be
+            removed from this device. This can’t be undone.
+          </>
+        }
+        confirmLabel="Remove"
+        destructive
+        onConfirm={handleRemove}
+        onCancel={() => setPendingRemove(null)}
+      />
     </div>
   );
 }

@@ -1,53 +1,15 @@
-import { useEffect, useState } from "react";
-
-interface AccountPrefs {
-  name: string;
-  instruments: string;
-  level: string;
-  improveAi: boolean;
-  referencePitch: number;
-  metronomeSound: string;
-}
-
-const STORAGE_KEY = "wilsify_account_v1";
-
-const DEFAULT_PREFS: AccountPrefs = {
-  name: "Wilbur Nathan Fernandes",
-  instruments: "Guitar",
-  level: "Intermediate",
-  improveAi: false,
-  referencePitch: 440,
-  metronomeSound: "digital",
-};
+import { useState } from "react";
+import { ConfirmDialog } from "../components/ui";
+import { initialsOf, loadPrefs, savePrefs, type AccountPrefs } from "../lib/account";
+import { clearPracticeSessions } from "../lib/practiceLog";
 
 const INSTRUMENT_OPTIONS = ["Guitar", "Piano", "Ukulele", "Bass", "Vocals"];
 const LEVEL_OPTIONS = ["Beginner", "Intermediate", "Advanced", "Pro"];
 
-function loadPrefs(): AccountPrefs {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return DEFAULT_PREFS;
-    return { ...DEFAULT_PREFS, ...JSON.parse(raw) };
-  } catch {
-    return DEFAULT_PREFS;
-  }
-}
-
-function savePrefs(prefs: AccountPrefs) {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(prefs));
-  } catch {
-    // non-fatal for the demo
-  }
-}
-
 export function Account() {
-  const [prefs, setPrefs] = useState<AccountPrefs>(DEFAULT_PREFS);
+  const [prefs, setPrefs] = useState<AccountPrefs>(loadPrefs);
   const [saved, setSaved] = useState(false);
-
-  useEffect(() => {
-    setPrefs(loadPrefs());
-  }, []);
+  const [confirmReset, setConfirmReset] = useState(false);
 
   function update<K extends keyof AccountPrefs>(key: K, value: AccountPrefs[K]) {
     setPrefs((prev) => ({ ...prev, [key]: value }));
@@ -62,9 +24,8 @@ export function Account() {
   }
 
   function handleClearCache() {
-    const ok = window.confirm("Reset your practice history and local cache? Your saved library will remain intact.");
-    if (!ok) return;
-    localStorage.removeItem("wilsify_practice_log_v1");
+    setConfirmReset(false);
+    clearPracticeSessions();
     window.location.reload();
   }
 
@@ -94,12 +55,7 @@ export function Account() {
           <div className="flex flex-col gap-6 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex items-center gap-4">
               <span className="flex h-16 w-16 flex-shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-primary to-primary-dark text-xl font-bold text-white shadow-lg shadow-primary/20">
-                {prefs.name
-                  .split(" ")
-                  .filter(Boolean)
-                  .map((n) => n[0])
-                  .slice(0, 2)
-                  .join("")}
+{initialsOf(prefs.name)}
               </span>
               <div>
                 <h2 className="font-heading text-lg font-bold text-content">{prefs.name || "Musician"}</h2>
@@ -271,13 +227,23 @@ export function Account() {
 
           <button
             type="button"
-            onClick={handleClearCache}
+            onClick={() => setConfirmReset(true)}
             className="text-xs text-content-dim hover:text-pink transition-colors underline"
           >
-            Reset Practice History & Cache
+            Reset practice history
           </button>
         </div>
       </form>
+
+      <ConfirmDialog
+        open={confirmReset}
+        title="Reset practice history?"
+        body="This deletes every logged practice session on this device, so your streak, XP and progress charts start from zero. Your saved library is not affected."
+        confirmLabel="Reset history"
+        destructive
+        onConfirm={handleClearCache}
+        onCancel={() => setConfirmReset(false)}
+      />
     </div>
   );
 }

@@ -1,4 +1,4 @@
-export function Logo({ size = 32 }: { size?: number }) {
+export function Logo({ size = 32, withText = true }: { size?: number; withText?: boolean }) {
   return (
     <div className="flex items-center gap-2.5">
       <div
@@ -12,9 +12,11 @@ export function Logo({ size = 32 }: { size?: number }) {
       >
         <img src="/wilsify-logo.svg" alt="" width={size * 0.6} height={size * 0.6} />
       </div>
-      <span className="font-heading text-lg font-bold tracking-tight text-content">
-        Wilsify AI
-      </span>
+      {withText && (
+        <span className="font-heading text-lg font-bold tracking-tight text-content">
+          Wilsify AI
+        </span>
+      )}
     </div>
   );
 }

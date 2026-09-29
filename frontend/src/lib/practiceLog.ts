@@ -51,6 +51,15 @@ export function logPracticeSession(session: Omit<PracticeSession, "id" | "starte
   writeAll(sessions);
 }
 
+/** Deletes every logged practice session on this device. */
+export function clearPracticeSessions() {
+  try {
+    localStorage.removeItem(STORAGE_KEY);
+  } catch {
+    // localStorage unavailable — nothing to clear
+  }
+}
+
 export function getAllSessions(): PracticeSession[] {
   return readAll().sort((a, b) => new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime());
 }
