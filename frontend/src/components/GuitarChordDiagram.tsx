@@ -1,0 +1,100 @@
+import type { GuitarVoicing } from "../lib/chordTheory";
+
+const STRING_COUNT = 6;
+const FRET_COUNT = 4;
+const STRING_SPACING = 20;
+const FRET_SPACING = 26;
+const TOP_MARGIN = 26;
+const LEFT_MARGIN = 14;
+
+/** Renders one guitar chord fingering as a real fretboard diagram (SVG). */
+export function GuitarChordDiagram({ voicing, size = 1 }: { voicing: GuitarVoicing; size?: number }) {
+  const frettedFrets = voicing.frets.filter((f): f is number => f !== null && f > 0);
+  const minFret = frettedFrets.length ? Math.min(...frettedFrets) : 0;
+  // If the lowest fretted note is beyond the visible window, shift the
+  // diagram up (like a real chord chart showing "starts at fret N").
+  const startFret = minFret > FRET_COUNT - 1 ? minFret - 1 : 0;
+
+  const width = LEFT_MARGIN * 2 + STRING_SPACING * (STRING_COUNT - 1) + 16;
+  const height = TOP_MARGIN + FRET_SPACING * FRET_COUNT + 20;
+
+  return (
+    <div className="flex flex-col items-center gap-1" style={{ transform: `scale(${size})` }}>
+      <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`}>
+        {startFret > 0 && (
+          <text x={2} y={TOP_MARGIN + FRET_SPACING / 2} fontSize="11" fill="var(--color-content-dim)">
+            {startFret + 1}fr
+          </text>
+        )}
+
+        {/* Nut or top line */}
+        <rect
+          x={LEFT_MARGIN}
+          y={TOP_MARGIN}
+          width={STRING_SPACING * (STRING_COUNT - 1)}
+          height={startFret === 0 ? 3 : 1}
+          fill="var(--color-content-muted)"
+        />
+
+        {/* Frets */}
+        {Array.from({ length: FRET_COUNT + 1 }).map((_, i) => (
+          <line
+            key={`fret-${i}`}
+            x1={LEFT_MARGIN}
+            x2={LEFT_MARGIN + STRING_SPACING * (STRING_COUNT - 1)}
+            y1={TOP_MARGIN + i * FRET_SPACING}
+            y2={TOP_MARGIN + i * FRET_SPACING}
+            stroke="var(--color-content-dim)"
+            strokeWidth={1}
+          />
+        ))}
+
+        {/* Strings */}
+        {Array.from({ length: STRING_COUNT }).map((_, i) => (
+          <line
+            key={`string-${i}`}
+            x1={LEFT_MARGIN + i * STRING_SPACING}
+            x2={LEFT_MARGIN + i * STRING_SPACING}
+            y1={TOP_MARGIN}
+            y2={TOP_MARGIN + FRET_SPACING * FRET_COUNT}
+            stroke="var(--color-content-dim)"
+            strokeWidth={1}
+          />
+        ))}
+
+        {/* Finger dots + open/mute markers */}
+        {voicing.frets.map((fret, stringIndex) => {
+          const x = LEFT_MARGIN + stringIndex * STRING_SPACING;
+
+          if (fret === null) {
+            return (
+              <text key={stringIndex} x={x - 4} y={TOP_MARGIN - 10} fontSize="12" fill="var(--color-pink)">
+                x
+              </text>
+            );
+          }
+          if (fret === 0) {
+            return (
+              <circle
+                key={stringIndex}
+                cx={x}
+                cy={TOP_MARGIN - 12}
+                r={4}
+                fill="none"
+                stroke="var(--color-green)"
+                strokeWidth={1.5}
+              />
+            );
+          }
+
+          const relativeFret = fret - startFret;
+          if (relativeFret < 1 || relativeFret > FRET_COUNT) return null;
+          const y = TOP_MARGIN + (relativeFret - 0.5) * FRET_SPACING;
+
+          return <circle key={stringIndex} cx={x} cy={y} r={7} fill="var(--color-primary-light)" />;
+        })}
+      </svg>
+      <p className="text-xs text-content-dim">{voicing.name}</p>
+    </div>
+  );
+}

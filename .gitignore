@@ -1,0 +1,110 @@
+# ─────────────────────────────────────────────────────────────────────────
+# Wilsify AI — root .gitignore (monorepo: backend, web-app, mobile_app,
+# ai-service, packages/shared)
+# ─────────────────────────────────────────────────────────────────────────
+
+# ── Node.js ─────────────────────────────────────────────────────────────
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+.npm/
+.pnp/
+.pnp.js
+
+# ── Build outputs ───────────────────────────────────────────────────────
+dist/
+build/
+out/
+*.tsbuildinfo
+
+# ── Next.js (web-app) ───────────────────────────────────────────────────
+web-app/.next/
+web-app/out/
+.next/
+next-env.d.ts.bak
+
+# ── Expo / React Native (mobile_app) ────────────────────────────────────
+mobile_app/.expo/
+mobile_app/dist/
+mobile_app/web-build/
+mobile_app/*.jks
+mobile_app/*.p8
+mobile_app/*.p12
+mobile_app/*.key
+mobile_app/*.mobileprovision
+mobile_app/*.orig.*
+.expo/
+.expo-shared/
+
+# ── Python (ai-service) ─────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+ai-service/.venv/
+ai-service/venv/
+ai-service/env/
+ai-service/.pytest_cache/
+ai-service/.mypy_cache/
+ai-service/.ruff_cache/
+ai-service/*.egg-info/
+ai-service/htmlcov/
+ai-service/.coverage
+ai-service/.coverage.*
+
+# ── Prisma / Database ───────────────────────────────────────────────────
+backend/prisma/*.db
+backend/prisma/dev.db*
+*.sqlite
+*.sqlite3
+
+# ── Logs ────────────────────────────────────────────────────────────────
+logs/
+*.log
+
+# ── Environment files (never commit real secrets) ──────────────────────
+.env
+.env.local
+.env.*.local
+.env.development
+.env.production
+!.env.example
+
+# ── Test / coverage output ──────────────────────────────────────────────
+coverage/
+.nyc_output/
+*.lcov
+
+# ── Editor / IDE ─────────────────────────────────────────────────────────
+.vscode/*
+!.vscode/extensions.json
+.idea/
+*.swp
+*.swo
+*~
+
+# ── OS ────────────────────────────────────────────────────────────────────
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# ── Misc local artifacts ──────────────────────────────────────────────────
+*.tmp
+*.temp
+tmp/
+.cache/
+
+# Local tooling (added for git baseline)
+backend/venv/
+.gradle/
+.pytest_cache/
+__pycache__/
+local.properties
