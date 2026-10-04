@@ -453,9 +453,9 @@ export function Assistant() {
         e.preventDefault();
         sendQuestion(input);
       }}
-      className={`composer relative w-full rounded-[26px] border bg-bg-raised/90 transition-colors ${
-        songMode ? "border-primary/35" : "border-glass-strong"
-      } focus-within:border-primary-light/60`}
+      className={`composer relative w-full rounded-2xl border bg-[var(--color-ns-card)] transition-colors shadow-lg ${
+        songMode ? "border-[var(--color-ns-coral)]/40" : "border-[var(--color-ns-border)]"
+      } focus-within:border-[var(--color-ns-coral)]/70`}
     >
       <label htmlFor="assistant-input" className="sr-only">
         Ask the Wilsify assistant
@@ -478,10 +478,10 @@ export function Assistant() {
             : songMode
               ? `Ask about “${songContext?.fileName}”…`
               : isEmpty
-                ? "Ask about chords, scales, rhythm or practice…"
-                : "Reply to Wilsify…"
+                ? "Ask about chords, scales, rhythm, or practice advice…"
+                : "Reply to Wilsify Tutor…"
         }
-        className={`block w-full resize-none bg-transparent px-5 text-[15px] leading-relaxed text-content placeholder:text-content-dim focus:outline-none focus-visible:shadow-none ${
+        className={`block w-full resize-none bg-transparent px-5 text-sm leading-relaxed text-[var(--color-ns-text)] placeholder:text-[var(--color-ns-muted)] focus:outline-none focus-visible:shadow-none ${
           isEmpty ? "min-h-[56px] pt-4 pb-2" : "pt-3.5 pb-1.5"
         }`}
       />
@@ -494,7 +494,7 @@ export function Assistant() {
             aria-label="Add a song"
             aria-expanded={attachOpen}
             onClick={() => setAttachOpen((o) => !o)}
-            className="flex h-9 w-9 items-center justify-center rounded-full text-content-muted transition-colors hover:bg-white/[0.06] hover:text-content"
+            className="flex h-9 w-9 items-center justify-center rounded-xl text-[var(--color-ns-muted)] transition-colors hover:bg-white/[0.06] hover:text-[var(--color-ns-text)]"
           >
             {ICONS.plus}
           </button>
@@ -502,22 +502,22 @@ export function Assistant() {
             <>
               <div className="fixed inset-0 z-10" onClick={() => setAttachOpen(false)} />
               <div
-                className={`animate-fadeIn absolute left-0 z-20 w-56 rounded-2xl border border-glass-strong bg-bg-card p-1.5 shadow-2xl ${
+                className={`animate-fadeIn absolute left-0 z-20 w-56 rounded-2xl border border-[var(--color-ns-border)] bg-[var(--color-ns-card)] p-1.5 shadow-2xl ${
                   isEmpty ? "top-11" : "bottom-11"
                 }`}
               >
                 <Link
                   to="/upload"
-                  className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm text-content-light hover:bg-white/[0.05]"
+                  className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-xs sm:text-sm text-[var(--color-ns-text)] hover:bg-[var(--color-ns-raised)]"
                 >
-                  <span className="text-primary-light">{ICONS.upload}</span>
+                  <span className="text-[var(--color-ns-coral)]">{ICONS.upload}</span>
                   Analyze a new song
                 </Link>
                 <Link
                   to="/library"
-                  className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm text-content-light hover:bg-white/[0.05]"
+                  className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-xs sm:text-sm text-[var(--color-ns-text)] hover:bg-[var(--color-ns-raised)]"
                 >
-                  <span className="text-cyan-soft">{ICONS.library}</span>
+                  <span className="text-[var(--color-ns-blue)]">{ICONS.library}</span>
                   Open from library
                 </Link>
               </div>
@@ -526,7 +526,7 @@ export function Assistant() {
         </div>
 
         {/* Mode switch */}
-        <div role="radiogroup" aria-label="Answer mode" className="flex rounded-full border border-glass bg-bg/60 p-0.5">
+        <div role="radiogroup" aria-label="Answer mode" className="flex rounded-xl border border-[var(--color-ns-border)] bg-[var(--color-ns-bg)] p-0.5">
           {(["theory", "song"] as Mode[]).map((m) => {
             const disabled = m === "song" && !songContext;
             const selected = effectiveMode === m;
@@ -539,10 +539,10 @@ export function Assistant() {
                 disabled={disabled}
                 title={disabled ? "Analyze a song to unlock song-grounded answers" : undefined}
                 onClick={() => setMode(m)}
-                className={`rounded-full px-3 py-1 text-xs font-semibold transition-colors ${
+                className={`rounded-lg px-3 py-1 text-xs font-semibold transition-colors ${
                   selected
-                    ? "bg-white/[0.09] text-content shadow-sm"
-                    : "text-content-dim hover:text-content-light disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:text-content-dim"
+                    ? "bg-[var(--color-ns-raised)] text-[var(--color-ns-text)] shadow-sm font-bold"
+                    : "text-[var(--color-ns-muted)] hover:text-[var(--color-ns-text)] disabled:cursor-not-allowed disabled:opacity-40"
                 }`}
               >
                 {m === "theory" ? "Theory" : "Song"}
@@ -553,8 +553,8 @@ export function Assistant() {
 
         <div className="ml-auto flex items-center gap-1.5">
           {songMode && songContext && (
-            <span className="chip tint-violet hidden max-w-[220px] sm:inline-flex" title={songContext.fileName}>
-              <span className="h-1.5 w-1.5 flex-shrink-0 rounded-full bg-primary-light" />
+            <span className="hidden max-w-[220px] items-center gap-1.5 rounded-lg border border-[var(--color-ns-violet)]/30 bg-[var(--color-ns-violet)]/10 px-2.5 py-1 text-[11px] font-semibold text-[var(--color-ns-violet)] sm:inline-flex" title={songContext.fileName}>
+              <span className="h-1.5 w-1.5 flex-shrink-0 rounded-full bg-[var(--color-ns-violet)]" />
               <span className="truncate">
                 {songContext.key} · {songContext.bpm} BPM
               </span>
@@ -566,18 +566,18 @@ export function Assistant() {
               aria-label={listening ? "Stop dictation" : "Dictate a question"}
               aria-pressed={listening}
               onClick={toggleListening}
-              className={`flex h-9 w-9 items-center justify-center rounded-full transition-colors ${
-                listening ? "bg-pink/15 text-pink" : "text-content-muted hover:bg-white/[0.06] hover:text-content"
+              className={`flex h-9 w-9 items-center justify-center rounded-xl transition-colors ${
+                listening ? "bg-[var(--color-ns-coral)]/15 text-[var(--color-ns-coral)]" : "text-[var(--color-ns-muted)] hover:bg-white/[0.06] hover:text-[var(--color-ns-text)]"
               }`}
             >
-              {listening ? <span className="h-2.5 w-2.5 animate-pulse rounded-full bg-pink" /> : ICONS.mic}
+              {listening ? <span className="h-2.5 w-2.5 animate-pulse rounded-full bg-[var(--color-ns-coral)]" /> : ICONS.mic}
             </button>
           )}
           <button
             type="submit"
             aria-label="Send"
             disabled={!input.trim() || isThinking}
-            className="send-btn flex h-9 w-9 items-center justify-center rounded-full text-white transition-all disabled:cursor-not-allowed"
+            className="flex h-9 w-9 items-center justify-center rounded-xl bg-[var(--color-ns-coral)] text-[var(--color-ns-ink)] shadow-md transition-all hover:scale-105 active:scale-95 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:scale-100"
           >
             {input.trim() || isThinking ? ICONS.send : <SoundOrbIcon />}
           </button>
@@ -592,15 +592,15 @@ export function Assistant() {
       <div className="animate-fadeIn absolute inset-0 z-20 bg-black/60 lg:hidden" onClick={() => setRailOpen(false)} />
       <aside
         aria-label="Conversations"
-        className="absolute inset-y-0 left-0 z-30 flex w-[272px] flex-shrink-0 flex-col border-r border-glass bg-[#0a0e1a] lg:static lg:z-auto lg:w-[260px] lg:bg-[#090d18]/60"
+        className="absolute inset-y-0 left-0 z-30 flex w-[272px] flex-shrink-0 flex-col border-r border-[var(--color-ns-border)] bg-[var(--color-ns-bg)] lg:static lg:z-auto lg:w-[260px]"
       >
         <div className="flex items-center justify-between px-3 pt-3 pb-2">
-          <span className="px-1 font-heading text-sm font-bold text-content">Chats</span>
+          <span className="px-1 font-heading text-sm font-bold text-[var(--color-ns-text)]">Chats</span>
           <button
             type="button"
             aria-label="Hide chat list"
             onClick={() => setRailOpen(false)}
-            className="flex h-8 w-8 items-center justify-center rounded-lg text-content-dim hover:bg-white/[0.05] hover:text-content"
+            className="flex h-8 w-8 items-center justify-center rounded-lg text-[var(--color-ns-muted)] hover:bg-white/[0.05] hover:text-[var(--color-ns-text)]"
           >
             {ICONS.panel}
           </button>
@@ -610,42 +610,42 @@ export function Assistant() {
           <button
             type="button"
             onClick={startNewChat}
-            className="flex w-full items-center gap-2.5 rounded-xl bg-white/[0.05] px-3 py-2.5 text-sm font-semibold text-content transition-colors hover:bg-white/[0.08]"
+            className="flex w-full items-center gap-2.5 rounded-xl border border-[var(--color-ns-border)] bg-[var(--color-ns-card)] px-3 py-2 text-xs sm:text-sm font-semibold text-[var(--color-ns-text)] transition-colors hover:border-[var(--color-ns-border-strong)] hover:bg-[var(--color-ns-raised)]"
           >
-            <span className="text-primary-light">{ICONS.compose}</span>
+            <span className="text-[var(--color-ns-coral)]">{ICONS.compose}</span>
             New chat
           </button>
-          <div className="mt-2 flex items-center gap-2 rounded-xl border border-glass px-3 py-2 focus-within:border-primary/50">
-            <span className="text-content-dim">{ICONS.search}</span>
+          <div className="mt-2 flex items-center gap-2 rounded-xl border border-[var(--color-ns-border)] bg-[var(--color-ns-card)] px-3 py-1.5 focus-within:border-[var(--color-ns-coral)]/60">
+            <span className="text-[var(--color-ns-muted)]">{ICONS.search}</span>
             <input
               value={railQuery}
               onChange={(e) => setRailQuery(e.target.value)}
               aria-label="Search chats"
               placeholder="Search chats"
-              className="w-full bg-transparent text-[13px] text-content placeholder:text-content-dim focus:outline-none focus-visible:shadow-none"
+              className="w-full bg-transparent text-xs text-[var(--color-ns-text)] placeholder:text-[var(--color-ns-muted)] focus:outline-none focus-visible:shadow-none"
             />
           </div>
         </div>
 
         <div className="mt-3 flex-1 overflow-y-auto px-3 pb-4">
           {songContext && (
-            <div className="mb-4 rounded-xl border border-primary/25 bg-gradient-to-br from-primary/15 to-transparent p-3">
-              <p className="text-[10.5px] font-bold uppercase tracking-[0.12em] text-primary-light">Now loaded</p>
-              <p className="mt-1 truncate text-sm font-semibold text-content" title={songContext.fileName}>
+            <div className="mb-4 rounded-xl border border-[var(--color-ns-border)] bg-[var(--color-ns-card)] p-3">
+              <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-[var(--color-ns-coral)]">Active Track</p>
+              <p className="mt-1 truncate text-xs font-semibold text-[var(--color-ns-text)]" title={songContext.fileName}>
                 {songContext.fileName}
               </p>
-              <p className="mt-0.5 text-xs text-content-muted">
+              <p className="mt-0.5 text-[11px] text-[var(--color-ns-muted)]">
                 {songContext.key} · {songContext.bpm} BPM · {songContext.timeSignature}
               </p>
             </div>
           )}
 
           {conversations.length === 0 ? (
-            <p className="px-2 pt-2 text-xs leading-relaxed text-content-dim">
-              Your conversations will appear here. They're saved on this device.
+            <p className="px-2 pt-2 text-xs leading-relaxed text-[var(--color-ns-muted)]">
+              Your conversations will appear here. They're saved locally in your browser.
             </p>
           ) : filtered.length === 0 ? (
-            <p className="px-2 pt-2 text-xs text-content-dim">No chats match “{railQuery}”.</p>
+            <p className="px-2 pt-2 text-xs text-[var(--color-ns-muted)]">No chats match “{railQuery}”.</p>
           ) : (
             <>
               {pinned.length > 0 && (
@@ -743,13 +743,13 @@ export function Assistant() {
                       type="button"
                       aria-expanded={selected}
                       onClick={() => setTopicKey(selected ? null : t.key)}
-                      className={`${t.tint} flex items-center gap-2 rounded-xl border px-3.5 py-2 text-sm font-semibold transition-all active:scale-95 ${
+                      className={`flex items-center gap-2 rounded-xl border px-3.5 py-2 text-xs sm:text-sm font-semibold transition-all active:scale-95 ${
                         selected
-                          ? "border-[var(--tint-border)] bg-[var(--tint-bg)] text-content"
-                          : "border-glass bg-bg-raised/70 text-content-light hover:border-glass-strong hover:bg-bg-hover"
+                          ? "border-[var(--color-ns-coral)]/60 bg-[var(--color-ns-coral)]/15 text-[var(--color-ns-text)] shadow-sm font-bold"
+                          : "border-[var(--color-ns-border)] bg-[var(--color-ns-card)] text-[var(--color-ns-muted)] hover:border-[var(--color-ns-border-strong)] hover:text-[var(--color-ns-text)]"
                       }`}
                     >
-                      <span className="text-[var(--tint-fg)]">{t.icon}</span>
+                      <span>{t.icon}</span>
                       {t.label}
                     </button>
                   );
@@ -757,19 +757,19 @@ export function Assistant() {
               </div>
 
               {openTopic && (
-                <div className="animate-fadeIn mt-4 w-full overflow-hidden rounded-2xl border border-glass bg-bg-card/80">
+                <div className="animate-fadeIn mt-4 w-full overflow-hidden rounded-2xl border border-[var(--color-ns-border)] bg-[var(--color-ns-card)] shadow-md">
                   {openTopic.prompts.map((p, i) => (
                     <button
                       key={p}
                       type="button"
                       onClick={() => sendQuestion(p)}
-                      className={`${openTopic.tint} group flex w-full items-center gap-3 px-4 py-3 text-left text-sm text-content-light transition-colors hover:bg-white/[0.04] ${
-                        i > 0 ? "border-t border-glass" : ""
+                      className={`group flex w-full items-center gap-3 px-4 py-3 text-left text-xs sm:text-sm text-[var(--color-ns-text)] transition-colors hover:bg-[var(--color-ns-raised)] ${
+                        i > 0 ? "border-t border-[var(--color-ns-border)]" : ""
                       }`}
                     >
-                      <span className="text-[var(--tint-fg)] opacity-70 group-hover:opacity-100">{openTopic.icon}</span>
+                      <span className="text-[var(--color-ns-coral)] opacity-80 group-hover:opacity-100">{openTopic.icon}</span>
                       <span className="flex-1">{p}</span>
-                      <span className="text-content-dim opacity-0 transition-opacity group-hover:opacity-100">↵</span>
+                      <span className="text-[var(--color-ns-muted)] opacity-0 transition-opacity group-hover:opacity-100">↵</span>
                     </button>
                   ))}
                 </div>
@@ -784,23 +784,23 @@ export function Assistant() {
                 {messages.map((msg) =>
                   msg.role === "user" ? (
                     <div key={msg.id} className="animate-fadeIn flex justify-end">
-                      <div className="max-w-[85%] whitespace-pre-wrap rounded-3xl rounded-br-lg border border-primary/20 bg-primary/[0.14] px-4 py-2.5 text-[15px] leading-relaxed text-content sm:max-w-[75%]">
+                      <div className="max-w-[85%] whitespace-pre-wrap rounded-2xl rounded-tr-sm border border-[var(--color-ns-border-strong)] bg-[var(--color-ns-raised)] px-4 py-3 text-sm leading-relaxed text-[var(--color-ns-text)] sm:max-w-[75%] shadow-sm">
                         {msg.text}
                       </div>
                     </div>
                   ) : (
-                    <div key={msg.id} className="group flex gap-3">
-                      <div className="mt-0.5">
-                        <SoundOrb size={28} active={revealId === msg.id} />
+                    <div key={msg.id} className="group flex gap-3.5">
+                      <div className="mt-0.5 flex-shrink-0">
+                        <SoundOrb size={30} active={revealId === msg.id} />
                       </div>
                       <div className="min-w-0 flex-1">
                         {msg.songLabel && (
-                          <span className="chip tint-violet mb-2 max-w-full">
+                          <span className="mb-2 inline-flex items-center gap-1.5 rounded-md border border-[var(--color-ns-violet)]/30 bg-[var(--color-ns-violet)]/10 px-2.5 py-0.5 text-[11px] font-semibold text-[var(--color-ns-violet)]">
                             {ICONS.disc}
                             <span className="truncate">Grounded in {msg.songLabel}</span>
                           </span>
                         )}
-                        <div className="whitespace-pre-wrap text-[15px] leading-7 text-content-light">
+                        <div className="whitespace-pre-wrap text-sm sm:text-[15px] leading-relaxed text-[var(--color-ns-text)]">
                           <RevealText
                             text={msg.text}
                             animate={revealId === msg.id}
@@ -809,7 +809,7 @@ export function Assistant() {
                           />
                         </div>
                         {revealId !== msg.id && (
-                          <div className="mt-2 flex gap-1 opacity-100 transition-opacity md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100">
+                          <div className="mt-2.5 flex gap-1 opacity-100 transition-opacity md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100">
                             <ActionButton label={copiedId === msg.id ? "Copied" : "Copy"} onClick={() => copyMessage(msg)}>
                               {copiedId === msg.id ? ICONS.check : ICONS.copy}
                             </ActionButton>
@@ -825,8 +825,10 @@ export function Assistant() {
 
                 {thinkingIn === active?.id && (
                   <div className="animate-fadeIn flex items-center gap-3">
-                    <SoundOrb size={28} />
-                    <span className="thinking-text text-sm font-medium">Listening for the answer…</span>
+                    <SoundOrb size={30} />
+                    <span className="text-xs sm:text-sm font-medium text-[var(--color-ns-muted)] animate-pulse">
+                      Analyzing music theory…
+                    </span>
                   </div>
                 )}
               </div>

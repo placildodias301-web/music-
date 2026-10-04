@@ -106,7 +106,7 @@ export function Upload() {
   return (
     <div className="mx-auto flex min-h-[calc(100vh-140px)] max-w-2xl flex-col justify-center px-4 py-8 sm:px-6 sm:py-12">
       <div className="mb-8 text-center sm:mb-10">
-        <span className="inline-flex items-center gap-1.5 rounded-full border border-primary/30 bg-primary/10 px-3 py-0.5 text-[11px] font-semibold uppercase tracking-wider text-primary-light">
+        <span className="inline-flex items-center gap-1.5 rounded-full border border-ns-blue/30 bg-ns-blue/10 px-3 py-0.5 text-[11px] font-semibold uppercase tracking-wider text-ns-blue">
           Audio & Video MIR Analysis
         </span>
         <h1 className="mt-3 font-heading text-3xl font-bold tracking-tight text-content sm:text-4xl">
@@ -146,11 +146,11 @@ export function Upload() {
           }}
           className={`group flex cursor-pointer flex-col items-center gap-3.5 rounded-2xl border-2 border-dashed px-6 py-10 text-center transition-all ${
             selectedFile
-              ? "border-primary/50 bg-primary/5"
-              : "border-glass-strong bg-white/[0.015] hover:border-primary/50 hover:bg-white/[0.03]"
+              ? "border-ns-coral/50 bg-ns-coral/5"
+              : "border-ns-border bg-white/[0.015] hover:border-ns-coral/50 hover:bg-white/[0.03]"
           } ${isBusy ? "cursor-not-allowed opacity-50" : ""}`}
         >
-          <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-primary/20 to-primary-dark/20 text-primary-light shadow-[0_4px_20px_rgba(124,92,255,0.2)] transition-transform group-hover:scale-105">
+          <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-ns-coral/15 text-ns-coral transition-transform group-hover:scale-105">
             <svg width="26" height="26" viewBox="0 0 24 24" fill="none">
               <path d="M12 16V4m0 0L7 9m5-5l5 5M5 20h14" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
@@ -165,7 +165,7 @@ export function Upload() {
           </div>
           <div className="flex flex-wrap justify-center gap-1.5 pt-1">
             {["MP3", "WAV", "M4A", "FLAC", "MP4", "MOV", "WEBM"].map((fmt) => (
-              <span key={fmt} className="rounded-md border border-glass bg-white/[0.03] px-2 py-0.5 text-[10px] font-mono font-medium text-content-dim">
+              <span key={fmt} className="rounded-md border border-ns-border bg-ns-raised px-2 py-0.5 text-[10px] font-mono font-medium text-content-muted">
                 {fmt}
               </span>
             ))}
@@ -174,9 +174,9 @@ export function Upload() {
 
         {/* Selected File Card */}
         {selectedFile && (
-          <div className="mt-4 flex items-center justify-between rounded-xl border border-primary/30 bg-primary/10 p-3.5">
+          <div className="mt-4 flex items-center justify-between rounded-xl border border-ns-coral/30 bg-ns-coral/10 p-3.5">
             <div className="flex items-center gap-3 min-w-0">
-              <span className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg bg-primary/20 text-primary-light">
+              <span className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg bg-ns-coral/20 text-ns-coral">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
                   <path d="M9 18V5l12-2v13" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
                   <circle cx="6" cy="18" r="3" stroke="currentColor" strokeWidth="2" />
@@ -189,7 +189,7 @@ export function Upload() {
               </div>
             </div>
             <div className="flex items-center gap-2 flex-shrink-0">
-              <span className="rounded-full bg-green/15 px-2.5 py-0.5 text-[11px] font-semibold text-green">
+              <span className="rounded-full bg-ns-mint/15 px-2.5 py-0.5 text-[11px] font-semibold text-ns-mint">
                 Ready
               </span>
               <button
@@ -217,12 +217,12 @@ export function Upload() {
           disabled={isBusy}
           className={`flex w-full items-center justify-between rounded-xl border p-4 text-left transition-all disabled:cursor-not-allowed disabled:opacity-50 ${
             usingSample
-              ? "border-primary/60 bg-primary/10 shadow-[0_2px_16px_rgba(124,92,255,0.2)]"
-              : "border-glass bg-white/[0.02] hover:border-glass-strong hover:bg-white/[0.04]"
+              ? "border-ns-blue/60 bg-ns-blue/10 shadow-[0_2px_16px_rgba(77,163,255,0.15)]"
+              : "border-ns-border bg-white/[0.02] hover:border-ns-border-strong hover:bg-white/[0.04]"
           }`}
         >
           <div className="flex items-center gap-3 min-w-0">
-            <span className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl bg-cyan/10 text-cyan">
+            <span className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl bg-ns-blue/15 text-ns-blue">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
                 <polygon points="5 3 19 12 5 21 5 3" fill="currentColor" />
               </svg>
@@ -235,7 +235,7 @@ export function Upload() {
             </div>
           </div>
           {usingSample && (
-            <span className="rounded-full bg-primary/20 px-2.5 py-0.5 text-[11px] font-semibold text-primary-light">
+            <span className="rounded-full bg-ns-blue/20 px-2.5 py-0.5 text-[11px] font-semibold text-ns-blue">
               Selected
             </span>
           )}
@@ -248,7 +248,7 @@ export function Upload() {
             checked={rightsConfirmed}
             onChange={(e) => setRightsConfirmed(e.target.checked)}
             disabled={isBusy}
-            className="mt-0.5 h-4 w-4 rounded border-glass bg-transparent text-primary accent-[#7C5CFF]"
+            className="mt-0.5 h-4 w-4 rounded border-glass bg-transparent accent-[#FF6B57]"
           />
           <span className="text-xs leading-relaxed text-content-muted">
             I confirm I own this audio or have the right to analyze it for personal practice. Attestations are logged with timestamps — no raw audio is retained beyond analysis.
@@ -257,7 +257,7 @@ export function Upload() {
 
         {errorMessage && (
           <div role="alert" className="alert alert-error mt-4">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" className="mt-px flex-shrink-0 text-pink" aria-hidden="true">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" className="mt-px flex-shrink-0 text-ns-coral" aria-hidden="true">
               <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="2" />
               <path d="M12 7.5v5.5M12 16.5v.01" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
             </svg>
@@ -269,7 +269,7 @@ export function Upload() {
           type="button"
           onClick={handleAnalyze}
           disabled={!canAnalyze}
-          className="btn-primary mt-6 w-full py-3 text-sm sm:text-base font-bold shadow-[0_4px_24px_rgba(124,92,255,0.4)]"
+          className="btn-primary mt-6 w-full py-3 text-sm sm:text-base font-bold shadow-[0_4px_24px_rgba(255,107,87,0.35)]"
         >
           {stage === "uploading" && (
             <>
@@ -287,7 +287,7 @@ export function Upload() {
         {isBusy && (
           <div className="mt-4 h-1.5 w-full overflow-hidden rounded-full bg-white/5">
             <div
-              className="h-full rounded-full bg-gradient-to-r from-primary via-primary-light to-cyan transition-all duration-500"
+              className="h-full rounded-full bg-gradient-to-r from-ns-coral via-ns-amber to-ns-blue transition-all duration-500"
               style={{ width: stage === "uploading" ? "40%" : "85%" }}
             />
           </div>

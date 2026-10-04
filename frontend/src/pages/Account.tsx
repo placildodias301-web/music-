@@ -32,34 +32,34 @@ export function Account() {
   return (
     <div className="mx-auto max-w-4xl px-4 py-8 sm:px-6 sm:py-10 md:px-8">
       {/* Header */}
-      <div className="mb-6 border-b border-glass pb-6">
+      <div className="mb-6 border-b border-[var(--color-ns-border)] pb-6">
         <div className="flex items-center gap-2">
-          <span className="rounded-full bg-primary/10 px-2.5 py-0.5 text-[11px] font-semibold text-primary-light">
-            Settings & Preferences
+          <span className="inline-flex items-center rounded-md border border-[var(--color-ns-coral)]/30 bg-[var(--color-ns-coral)]/10 px-2.5 py-0.5 text-[11px] font-semibold text-[var(--color-ns-coral)]">
+            Studio Settings
           </span>
-          <span className="rounded-full border border-green/30 bg-green/10 px-2.5 py-0.5 text-[11px] font-semibold text-green">
+          <span className="inline-flex items-center rounded-md border border-[var(--color-ns-mint)]/30 bg-[var(--color-ns-mint)]/10 px-2.5 py-0.5 text-[11px] font-semibold text-[var(--color-ns-mint)]">
             Active Profile
           </span>
         </div>
-        <h1 className="mt-2 font-heading text-2xl font-bold tracking-tight text-content sm:text-3xl">
+        <h1 className="mt-2 font-heading text-2xl font-bold tracking-tight text-[var(--color-ns-text)] sm:text-3xl">
           Account & Studio Settings
         </h1>
-        <p className="mt-1 text-sm text-content-muted">
-          Manage your musician profile, playback preferences, and audio analysis privacy.
+        <p className="mt-1 text-xs sm:text-sm text-[var(--color-ns-muted)]">
+          Configure your musician profile, tuner reference pitch, metronome click sound, and studio privacy.
         </p>
       </div>
 
       <form onSubmit={handleSave} className="space-y-6">
         {/* Profile Card */}
-        <div className="glass-card p-6">
-          <div className="flex flex-col gap-6 sm:flex-row sm:items-center sm:justify-between">
+        <div className="rounded-2xl border border-[var(--color-ns-border)] bg-[var(--color-ns-card)] p-6 shadow-sm">
+          <div className="flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex items-center gap-4">
-              <span className="flex h-16 w-16 flex-shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-primary to-primary-dark text-xl font-bold text-white shadow-lg shadow-primary/20">
-{initialsOf(prefs.name)}
+              <span className="flex h-16 w-16 flex-shrink-0 items-center justify-center rounded-2xl border border-[var(--color-ns-border)] bg-[var(--color-ns-raised)] text-xl font-bold text-[var(--color-ns-coral)] shadow-md">
+                {initialsOf(prefs.name)}
               </span>
               <div>
-                <h2 className="font-heading text-lg font-bold text-content">{prefs.name || "Musician"}</h2>
-                <div className="mt-1 flex items-center gap-2 text-xs text-content-dim">
+                <h2 className="font-heading text-lg font-bold text-[var(--color-ns-text)]">{prefs.name || "Musician"}</h2>
+                <div className="mt-1 flex items-center gap-2 text-xs text-[var(--color-ns-muted)]">
                   <span>{prefs.instruments}</span>
                   <span>•</span>
                   <span>{prefs.level} Level</span>
@@ -68,18 +68,18 @@ export function Account() {
             </div>
 
             <div className="flex items-center gap-2 self-start sm:self-center">
-              <span className="rounded-full border border-primary/30 bg-primary/10 px-3 py-1 text-xs font-semibold text-primary-light">
-                MVP Prototype Plan
+              <span className="rounded-full border border-[var(--color-ns-border)] bg-[var(--color-ns-raised)] px-3 py-1 text-xs font-semibold text-[var(--color-ns-muted)]">
+                Local MVP Plan
               </span>
-              <span className="rounded-full border border-green/30 bg-green/10 px-2.5 py-1 text-xs font-medium text-green">
-                Full Access
+              <span className="rounded-full border border-[var(--color-ns-mint)]/30 bg-[var(--color-ns-mint)]/10 px-2.5 py-1 text-xs font-medium text-[var(--color-ns-mint)]">
+                Full Studio Access
               </span>
             </div>
           </div>
 
-          <div className="mt-6 grid grid-cols-1 gap-5 border-t border-glass pt-6 sm:grid-cols-2">
+          <div className="mt-6 grid grid-cols-1 gap-5 border-t border-[var(--color-ns-border)] pt-6 sm:grid-cols-2">
             <div>
-              <label className="block text-xs font-medium uppercase tracking-wider text-content-dim">
+              <label className="block text-xs font-medium uppercase tracking-wider text-[var(--color-ns-muted)]">
                 Display Name
               </label>
               <input
@@ -88,12 +88,12 @@ export function Account() {
                 onChange={(e) => update("name", e.target.value)}
                 aria-label="Your name"
                 placeholder="Enter your name"
-                className="input-base mt-2 w-full"
+                className="input-base mt-2 w-full rounded-xl text-xs sm:text-sm"
               />
             </div>
 
             <div>
-              <label className="block text-xs font-medium uppercase tracking-wider text-content-dim">
+              <label className="block text-xs font-medium uppercase tracking-wider text-[var(--color-ns-muted)]">
                 Primary Instrument
               </label>
               <div className="mt-2 flex flex-wrap gap-1.5">
@@ -102,10 +102,10 @@ export function Account() {
                     key={inst}
                     type="button"
                     onClick={() => update("instruments", inst)}
-                    className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition-all ${
+                    className={`rounded-xl px-3 py-1.5 text-xs font-semibold transition-all ${
                       prefs.instruments.toLowerCase().includes(inst.toLowerCase())
-                        ? "bg-primary text-white shadow-sm"
-                        : "border border-glass bg-white/[0.03] text-content-muted hover:border-glass-strong hover:text-content"
+                        ? "bg-[var(--color-ns-coral)] text-[var(--color-ns-ink)] font-bold shadow-sm"
+                        : "border border-[var(--color-ns-border)] bg-[var(--color-ns-raised)] text-[var(--color-ns-muted)] hover:border-[var(--color-ns-border-strong)] hover:text-[var(--color-ns-text)]"
                     }`}
                   >
                     {inst}
@@ -116,7 +116,7 @@ export function Account() {
           </div>
 
           <div className="mt-5">
-            <label className="block text-xs font-medium uppercase tracking-wider text-content-dim">
+            <label className="block text-xs font-medium uppercase tracking-wider text-[var(--color-ns-muted)]">
               Experience Level
             </label>
             <div className="mt-2 flex flex-wrap gap-2">
@@ -125,10 +125,10 @@ export function Account() {
                   key={lvl}
                   type="button"
                   onClick={() => update("level", lvl)}
-                  className={`rounded-lg px-3.5 py-1.5 text-xs font-semibold transition-all ${
+                  className={`rounded-xl px-3.5 py-1.5 text-xs font-semibold transition-all ${
                     prefs.level === lvl
-                      ? "border border-cyan/40 bg-cyan/15 text-cyan"
-                      : "border border-glass bg-white/[0.03] text-content-muted hover:text-content"
+                      ? "border border-[var(--color-ns-blue)]/50 bg-[var(--color-ns-blue)]/15 text-[var(--color-ns-blue)] font-bold shadow-sm"
+                      : "border border-[var(--color-ns-border)] bg-[var(--color-ns-raised)] text-[var(--color-ns-muted)] hover:text-[var(--color-ns-text)]"
                   }`}
                 >
                   {lvl}
@@ -139,15 +139,15 @@ export function Account() {
         </div>
 
         {/* Audio & Tuner Settings */}
-        <div className="glass-card p-6">
-          <h3 className="font-heading text-base font-bold text-content">Audio & Tuner Preferences</h3>
-          <p className="mt-1 text-xs text-content-dim">
+        <div className="rounded-2xl border border-[var(--color-ns-border)] bg-[var(--color-ns-card)] p-6 shadow-sm">
+          <h3 className="font-heading text-base font-bold text-[var(--color-ns-text)]">Audio & Tuner Preferences</h3>
+          <p className="mt-1 text-xs text-[var(--color-ns-muted)]">
             Configure reference frequencies and playback defaults for practice sessions.
           </p>
 
           <div className="mt-5 grid grid-cols-1 gap-5 sm:grid-cols-2">
             <div>
-              <label className="block text-xs font-medium uppercase tracking-wider text-content-dim">
+              <label className="block text-xs font-medium uppercase tracking-wider text-[var(--color-ns-muted)]">
                 Concert Pitch (A4 Calibration)
               </label>
               <div className="mt-2 flex items-center gap-3">
@@ -157,20 +157,20 @@ export function Account() {
                   max="450"
                   value={prefs.referencePitch}
                   onChange={(e) => update("referencePitch", Number(e.target.value))}
-                  className="input-base w-28 font-mono text-sm"
+                  className="input-base w-28 font-mono text-sm rounded-xl"
                 />
-                <span className="text-xs text-content-muted">Hz (Standard concert pitch is 440 Hz)</span>
+                <span className="text-xs text-[var(--color-ns-muted)]">Hz (Standard concert pitch is 440 Hz)</span>
               </div>
             </div>
 
             <div>
-              <label className="block text-xs font-medium uppercase tracking-wider text-content-dim">
+              <label className="block text-xs font-medium uppercase tracking-wider text-[var(--color-ns-muted)]">
                 Metronome Audio Cue
               </label>
               <select
                 value={prefs.metronomeSound}
                 onChange={(e) => update("metronomeSound", e.target.value)}
-                className="input-base mt-2 w-full text-xs"
+                className="input-base mt-2 w-full text-xs rounded-xl"
               >
                 <option value="digital">Digital Synthetic Beep</option>
                 <option value="woodblock">Acoustic Woodblock Click</option>
@@ -181,13 +181,12 @@ export function Account() {
         </div>
 
         {/* AI & Privacy Toggle */}
-        <div className="glass-card p-6">
+        <div className="rounded-2xl border border-[var(--color-ns-border)] bg-[var(--color-ns-card)] p-6 shadow-sm">
           <div className="flex items-center justify-between gap-4">
             <div>
-              <h3 className="font-heading text-base font-bold text-content">Privacy & AI Model Improvement</h3>
-              <p className="mt-1 text-xs text-content-dim">
-                When enabled, anonymous audio stems help train the open-source chord recognition models.
-                When disabled, uploads remain strictly local and private.
+              <h3 className="font-heading text-base font-bold text-[var(--color-ns-text)]">Privacy & Model Training</h3>
+              <p className="mt-1 text-xs text-[var(--color-ns-muted)] max-w-xl">
+                When enabled, anonymous audio metrics assist in calibrating chord detection. When disabled, analysis remains strictly local in your browser.
               </p>
             </div>
 
@@ -197,7 +196,7 @@ export function Account() {
               aria-checked={prefs.improveAi}
               onClick={() => update("improveAi", !prefs.improveAi)}
               className={`relative h-7 w-12 flex-shrink-0 cursor-pointer rounded-full transition-colors ${
-                prefs.improveAi ? "bg-primary" : "bg-white/15"
+                prefs.improveAi ? "bg-[var(--color-ns-coral)]" : "bg-[var(--color-ns-border)]"
               }`}
             >
               <span
@@ -216,7 +215,7 @@ export function Account() {
               Save Preferences
             </button>
             {saved && (
-              <span role="status" aria-live="polite" className="flex items-center gap-1.5 text-xs font-semibold text-green animate-fadeIn">
+              <span role="status" aria-live="polite" className="flex items-center gap-1.5 text-xs font-semibold text-[var(--color-ns-mint)] animate-fadeIn">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M20 6L9 17l-5-5" />
                 </svg>
@@ -228,7 +227,7 @@ export function Account() {
           <button
             type="button"
             onClick={() => setConfirmReset(true)}
-            className="text-xs text-content-dim hover:text-pink transition-colors underline"
+            className="text-xs text-[var(--color-ns-muted)] hover:text-[var(--color-ns-coral)] transition-colors underline"
           >
             Reset practice history
           </button>
@@ -238,7 +237,7 @@ export function Account() {
       <ConfirmDialog
         open={confirmReset}
         title="Reset practice history?"
-        body="This deletes every logged practice session on this device, so your streak, XP and progress charts start from zero. Your saved library is not affected."
+        body="This deletes every logged practice session on this device, so your streak, XP, and progress charts start from zero. Your saved library is not affected."
         confirmLabel="Reset history"
         destructive
         onConfirm={handleClearCache}
@@ -247,3 +246,4 @@ export function Account() {
     </div>
   );
 }
+

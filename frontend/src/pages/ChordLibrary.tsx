@@ -79,51 +79,53 @@ export function ChordLibrary() {
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6 sm:py-10 md:px-8">
+      {/* Header */}
       <div className="mb-8">
-        <span className="inline-flex items-center gap-1.5 rounded-full border border-primary/30 bg-primary/10 px-3 py-0.5 text-[11px] font-semibold uppercase tracking-wider text-primary-light">
-          Chord Dictionary & Diagrams
+        <span className="inline-flex items-center gap-1.5 rounded-full border border-[var(--color-ns-amber)]/30 bg-[var(--color-ns-amber)]/10 px-3 py-0.5 text-[11px] font-semibold uppercase tracking-wider text-[var(--color-ns-amber)]">
+          Interactive Reference & Diagrams
         </span>
-        <h1 className="mt-3 font-heading text-3xl font-bold tracking-tight text-content sm:text-4xl">
+        <h1 className="mt-3 font-heading text-3xl font-bold tracking-tight text-[var(--color-ns-text)] sm:text-4xl">
           Chord Reference Library
         </h1>
-        <p className="mt-1 max-w-2xl text-sm text-content-muted">
-          {ALL_CHORD_SYMBOLS.length} chords — {CHORD_QUALITIES.length} chord types in all 12 keys, from basic triads to
-          altered jazz chords — with fingerings for guitar and ukulele, piano voicings and audio.
+        <p className="mt-1.5 max-w-2xl text-xs sm:text-sm text-[var(--color-ns-muted)]">
+          {ALL_CHORD_SYMBOLS.length} chords — {CHORD_QUALITIES.length} chord types across all 12 root keys, with interactive fingerings for guitar, ukulele, piano roll voicings, and real-time audio playback.
         </p>
       </div>
 
-      <div className="mb-5 flex flex-wrap items-center justify-between gap-4">
-        <div className="flex gap-2">
+      {/* Toolbar: View Switcher + Search */}
+      <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
+        <div className="flex gap-1.5 rounded-xl border border-[var(--color-ns-border)] bg-[var(--color-ns-bg)] p-1">
           {(["guitar", "ukulele", "piano"] as View[]).map((v) => (
             <button
               key={v}
               type="button"
               onClick={() => setView(v)}
-              className={`rounded-full px-4 py-1.5 text-xs font-semibold capitalize transition-all ${
+              className={`rounded-lg px-4 py-1.5 text-xs font-semibold capitalize transition-all ${
                 view === v
-                  ? "bg-primary text-white shadow-[0_2px_12px_rgba(124,92,255,0.4)]"
-                  : "border border-glass bg-white/[0.02] text-content-muted hover:border-glass-strong hover:text-content"
+                  ? "bg-[var(--color-ns-amber)] text-[var(--color-ns-ink)] font-bold shadow-sm"
+                  : "text-[var(--color-ns-muted)] hover:text-[var(--color-ns-text)]"
               }`}
             >
               {v}
             </button>
           ))}
         </div>
+
         <div className="relative w-full sm:w-72">
           <input
             type="text"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             aria-label="Search all chords"
-            placeholder="Search any chord (e.g. Bbm7, F#9, sus4)…"
-            className="input-base py-2 pl-3 pr-8 text-xs"
+            placeholder="Search chord (e.g. Bbm7, F#9, sus4)…"
+            className="input-base py-2 pl-3.5 pr-8 text-xs rounded-xl"
           />
           {query && (
             <button
               type="button"
               aria-label="Clear search"
               onClick={() => setQuery("")}
-              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-xs text-content-dim hover:text-content"
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-xs text-[var(--color-ns-muted)] hover:text-[var(--color-ns-text)]"
             >
               ✕
             </button>
@@ -131,10 +133,12 @@ export function ChordLibrary() {
         </div>
       </div>
 
-      {/* Filters — ignored while searching, which always covers every chord. */}
+      {/* Filters — Root Note & Chord Type */}
       <div className={`mb-6 space-y-3 transition-opacity ${searching ? "pointer-events-none opacity-40" : ""}`} aria-disabled={searching}>
         <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label="Root note">
-          <span className="mr-1 w-16 text-[10.5px] font-bold uppercase tracking-[0.12em] text-content-dim">Root</span>
+          <span className="mr-1 w-16 text-[10.5px] font-bold uppercase tracking-[0.12em] text-[var(--color-ns-muted)]">
+            Root
+          </span>
           <FilterPill selected={root === "all"} onClick={() => setRoot("all")}>
             All
           </FilterPill>
@@ -148,8 +152,11 @@ export function ChordLibrary() {
             );
           })}
         </div>
+
         <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label="Chord type">
-          <span className="mr-1 w-16 text-[10.5px] font-bold uppercase tracking-[0.12em] text-content-dim">Type</span>
+          <span className="mr-1 w-16 text-[10.5px] font-bold uppercase tracking-[0.12em] text-[var(--color-ns-muted)]">
+            Type
+          </span>
           {(["all", ...CHORD_CATEGORIES] as const).map((cat) => (
             <FilterPill key={cat} selected={category === cat} onClick={() => setCategory(cat)}>
               {cat === "all" ? "All types" : cat}
@@ -159,16 +166,16 @@ export function ChordLibrary() {
         </div>
       </div>
 
-      <p className="mb-4 text-xs text-content-dim" aria-live="polite">
+      <p className="mb-4 text-xs text-[var(--color-ns-muted)]" aria-live="polite">
         {searching
-          ? `${filtered.length} ${filtered.length === 1 ? "chord matches" : "chords match"} “${query.trim()}”`
+          ? `${filtered.length} ${filtered.length === 1 ? "chord match" : "chords match"} “${query.trim()}”`
           : `Showing ${filtered.length} of ${ALL_CHORD_SYMBOLS.length} chords`}
       </p>
 
       {filtered.length === 0 ? (
-        <div className="glass-card p-10 text-center text-sm text-content-muted">
-          No chord matches “{query.trim()}”. Try a root plus a type, like <span className="text-content">Ebmaj7</span> or{" "}
-          <span className="text-content">Gsus4</span>.
+        <div className="rounded-2xl border border-[var(--color-ns-border)] bg-[var(--color-ns-card)] p-12 text-center text-sm text-[var(--color-ns-muted)]">
+          No chords match “{query.trim()}”. Try a root plus type like <span className="font-semibold text-[var(--color-ns-text)]">Ebmaj7</span> or{" "}
+          <span className="font-semibold text-[var(--color-ns-text)]">Gsus4</span>.
         </div>
       ) : (
         <div className="grid grid-cols-2 gap-3.5 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
@@ -198,10 +205,10 @@ function FilterPill({
       title={title}
       aria-pressed={selected}
       onClick={onClick}
-      className={`rounded-full px-3 py-1 text-xs font-semibold transition-colors ${
+      className={`rounded-xl px-3 py-1 text-xs font-semibold transition-all ${
         selected
-          ? "bg-primary/20 text-content ring-1 ring-primary/50"
-          : "border border-glass bg-white/[0.02] text-content-muted hover:border-glass-strong hover:text-content"
+          ? "border border-[var(--color-ns-amber)]/60 bg-[var(--color-ns-amber)]/20 text-[var(--color-ns-amber)] font-bold shadow-sm"
+          : "border border-[var(--color-ns-border)] bg-[var(--color-ns-card)] text-[var(--color-ns-muted)] hover:border-[var(--color-ns-border-strong)] hover:text-[var(--color-ns-text)]"
       }`}
     >
       {children}
@@ -216,18 +223,22 @@ function ChordCard({ chord, view }: { chord: ParsedChord; view: View }) {
   const notes = spellChord(chord);
 
   return (
-    <div className="glass-card glass-card-hover flex flex-col items-center justify-between p-4 sm:p-5">
-      <h3 className="font-heading text-lg font-bold text-content sm:text-xl">{chord.label.replace("#", "♯")}</h3>
-      <p className="text-center text-[11px] capitalize text-content-dim">{chordFullName(chord).replace("#", "♯")}</p>
+    <div className="group flex flex-col items-center justify-between rounded-2xl border border-[var(--color-ns-border)] bg-[var(--color-ns-card)] p-4 sm:p-5 shadow-sm transition-all hover:border-[var(--color-ns-border-strong)] hover:bg-[var(--color-ns-raised)]">
+      <h3 className="font-heading text-lg font-bold text-[var(--color-ns-text)] sm:text-xl">
+        {chord.label.replace("#", "♯")}
+      </h3>
+      <p className="text-center text-[11px] capitalize text-[var(--color-ns-muted)]">
+        {chordFullName(chord).replace("#", "♯")}
+      </p>
 
-      <div className="my-2 flex flex-1 items-center justify-center">
+      <div className="my-3 flex flex-1 items-center justify-center">
         {view === "guitar" && voicing && <GuitarChordDiagram voicing={voicing} />}
         {view === "ukulele" && <UkuleleChordDiagram frets={getUkuleleShape(chord)} />}
         {view === "piano" && <PianoRoll activePitchClasses={chordMidiNotes(chord).map((m) => m % 12)} />}
       </div>
 
       {view === "guitar" && voicings.length > 1 && (
-        <div className="mb-2 flex items-center gap-1.5" role="group" aria-label={`${chord.label} voicings`}>
+        <div className="mb-2.5 flex items-center gap-1.5" role="group" aria-label={`${chord.label} voicings`}>
           {voicings.map((v, i) => (
             <button
               key={v.frets.join(",")}
@@ -236,21 +247,21 @@ function ChordCard({ chord, view }: { chord: ParsedChord; view: View }) {
               aria-pressed={i === voicingIndex}
               onClick={() => setVoicingIndex(i)}
               className={`h-2 rounded-full transition-all ${
-                i === voicingIndex ? "w-5 bg-primary-light" : "w-2 bg-white/20 hover:bg-white/40"
+                i === voicingIndex ? "w-5 bg-[var(--color-ns-amber)]" : "w-2 bg-[var(--color-ns-border)] hover:bg-[var(--color-ns-border-strong)]"
               }`}
             />
           ))}
         </div>
       )}
 
-      <p className="mb-2 text-center font-mono text-[11px] text-content-muted">{notes.join(" · ")}</p>
+      <p className="mb-3 text-center font-mono text-[11px] text-[var(--color-ns-muted)]">{notes.join(" · ")}</p>
 
       <button
         type="button"
         onClick={() => playChordLive(chord)}
-        className="flex items-center gap-1.5 rounded-full border border-glass bg-white/[0.02] px-3 py-1 text-[11px] font-medium text-content-muted transition-all hover:border-primary/50 hover:bg-white/[0.06] hover:text-content active:scale-95"
+        className="flex items-center gap-1.5 rounded-xl border border-[var(--color-ns-border)] bg-[var(--color-ns-bg)] px-3 py-1.5 text-[11px] font-medium text-[var(--color-ns-muted)] transition-all hover:border-[var(--color-ns-amber)]/60 hover:text-[var(--color-ns-text)] hover:bg-[var(--color-ns-card)] active:scale-95"
       >
-        <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor">
+        <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor" className="text-[var(--color-ns-amber)]">
           <polygon points="5 3 19 12 5 21 5 3" />
         </svg>
         Play Audio
@@ -258,3 +269,4 @@ function ChordCard({ chord, view }: { chord: ParsedChord; view: View }) {
     </div>
   );
 }
+

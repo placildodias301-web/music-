@@ -1,38 +1,32 @@
 @import "tailwindcss";
 
 @theme {
-  /* Brand — matched to the Wilsify AI reference prototype (Wilsify AI.html) */
-  --color-primary: #7c5cff;
-  --color-primary-dark: #6c4fe6;
-  --color-primary-light: #bfacff;
-  --color-violet-soft: #a78bff;
-  --color-cyan: #67e8f9;
-  --color-cyan-soft: #8ee7f5;
-  --color-pink: #ff6b9d;
-  --color-green: #3fd9a0;
-  --color-orange: #ffb347;
+  /* Brand — Night Studio Palette */
+  --color-primary: #ff6b57;
+  --color-primary-dark: #e85542;
+  --color-primary-light: #ff8a7a;
+  --color-violet-soft: #a597f5;
+  --color-cyan: #4da3ff;
+  --color-cyan-soft: #70b5ff;
+  --color-pink: #ff6b57;
+  --color-green: #62d6a7;
+  --color-orange: #f4b84a;
 
   /* Surfaces, darkest to lightest */
-  --color-bg: #070a12;
-  --color-bg-card: #111729;
-  --color-bg-raised: #141a2a;
-  --color-bg-hover: #192036;
+  --color-bg: #0b0f12;
+  --color-bg-card: #182027;
+  --color-bg-raised: #20282e;
+  --color-bg-hover: #262f36;
 
-  /* Lines. Registered as theme colours so `border-glass/80`, `bg-glass`
-     etc. generate real utilities (previously they silently fell back to
-     Tailwind's currentColor border). */
-  --color-glass: #1f2740;
-  --color-glass-strong: #2a3047;
+  /* Lines */
+  --color-glass: #29343d;
+  --color-glass-strong: #364550;
 
-  /* Text scale.
-     --color-content-dim deliberately deviates from the reference's #6E7591:
-     that value only reaches 3.9:1 on the card background, below the WCAG
-     AA 4.5:1 minimum, and it is used for 11-12px text. #8b93ad keeps the
-     same hue family at 5.8:1. */
-  --color-content: #f2f4fb;
-  --color-content-light: #d6daea;
-  --color-content-muted: #98a0ba;
-  --color-content-dim: #8b93ad;
+  /* Text scale */
+  --color-content: #f4f1ea;
+  --color-content-light: #e8e5de;
+  --color-content-muted: #9aa7b2;
+  --color-content-dim: #7c8b97;
 
   --font-heading: "Space Grotesk", "Plus Jakarta Sans", system-ui, sans-serif;
   --font-body: "Plus Jakarta Sans", system-ui, sans-serif;
@@ -42,10 +36,7 @@
   --radius-card-sm: 12px;
   --radius-pill: 99px;
 
-  /* ─── Night Studio — the new Wilsify design system ───
-     Introduced on Home + app shell first; other pages will migrate to it.
-     Kept separate from the legacy tokens above so un-migrated pages are
-     not recoloured by accident. */
+  /* ─── Night Studio aliases ─── */
   --color-ns-bg: #0b0f12;
   --color-ns-bg-2: #12181d;
   --color-ns-card: #182027;
@@ -126,39 +117,37 @@ h3 {
   /* Standard card. Flat surface + hairline border, as in the reference —
      depth comes from the border and a faint inset highlight, not blur. */
   .glass-card {
-    background: rgba(17, 23, 41, 0.86);
-    border: 1px solid var(--color-glass);
+    background: var(--color-ns-card);
+    border: 1px solid var(--color-ns-border);
     border-radius: var(--radius-card);
-    box-shadow: var(--shadow-card);
+    box-shadow: 0 1px 0 rgba(255, 255, 255, 0.025) inset, 0 12px 28px -18px rgba(0, 0, 0, 0.7);
   }
 
   .glass-card-hover {
-    transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease, background 0.2s ease;
+    transition: border-color 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease, background-color 0.18s ease;
   }
   .glass-card-hover:hover {
-    border-color: rgba(124, 92, 255, 0.4);
-    background: rgba(20, 26, 42, 0.95);
-    box-shadow: 0 12px 32px -12px rgba(124, 92, 255, 0.35);
+    border-color: var(--color-ns-border-strong);
+    background-color: #1b242b;
     transform: translateY(-2px);
   }
 
-  /* Feature surface — a card with a violet edge glow, for the one or two
-     hero elements per screen that should draw the eye. */
+  /* Feature surface — a card with a subtle audio-blue studio glow */
   .hero-card {
     position: relative;
     isolation: isolate;
     overflow: hidden;
     border-radius: var(--radius-card);
-    border: 1px solid rgba(124, 92, 255, 0.28);
+    border: 1px solid var(--color-ns-border);
     background:
-      radial-gradient(120% 90% at 0% 0%, rgba(124, 92, 255, 0.22), transparent 55%),
-      radial-gradient(90% 80% at 100% 100%, rgba(103, 232, 249, 0.1), transparent 60%),
-      var(--color-bg-card);
-    box-shadow: 0 20px 60px -24px rgba(124, 92, 255, 0.55), 0 1px 0 rgba(255, 255, 255, 0.05) inset;
+      radial-gradient(120% 90% at 0% 0%, rgba(77, 163, 255, 0.09), transparent 55%),
+      radial-gradient(90% 80% at 100% 100%, rgba(255, 107, 87, 0.06), transparent 60%),
+      var(--color-ns-card);
+    box-shadow: 0 1px 0 rgba(255, 255, 255, 0.025) inset, 0 20px 48px -20px rgba(0, 0, 0, 0.7);
   }
 
   .bottom-nav-blur {
-    background: rgba(9, 12, 22, 0.9);
+    background: rgba(11, 15, 18, 0.92);
     backdrop-filter: blur(20px);
     -webkit-backdrop-filter: blur(20px);
     border-top: 1px solid var(--color-glass);
@@ -166,7 +155,7 @@ h3 {
   }
 
   .bg-glass-heavy {
-    background: var(--glass-heavy);
+    background: var(--color-ns-bg-2);
   }
 
   .backdrop-blur-glass {
@@ -183,17 +172,17 @@ h3 {
     width: 40px;
     height: 40px;
     border-radius: 12px;
-    border: 1px solid var(--tint-border, rgba(124, 92, 255, 0.32));
-    background: var(--tint-bg, rgba(124, 92, 255, 0.12));
-    color: var(--tint-fg, var(--color-primary-light));
+    border: 1px solid var(--tint-border, rgba(77, 163, 255, 0.28));
+    background: var(--tint-bg, rgba(77, 163, 255, 0.12));
+    color: var(--tint-fg, var(--color-cyan));
   }
 
-  /* ─── Tints — one accent per semantic, applied via CSS vars ─── */
-  .tint-violet { --tint-bg: rgba(124, 92, 255, 0.12); --tint-border: rgba(124, 92, 255, 0.32); --tint-fg: #bfacff; }
-  .tint-cyan   { --tint-bg: rgba(103, 232, 249, 0.1);  --tint-border: rgba(103, 232, 249, 0.3); --tint-fg: #8ee7f5; }
-  .tint-green  { --tint-bg: rgba(63, 217, 160, 0.1);   --tint-border: rgba(63, 217, 160, 0.3);  --tint-fg: #3fd9a0; }
-  .tint-pink   { --tint-bg: rgba(255, 107, 157, 0.1);  --tint-border: rgba(255, 107, 157, 0.3); --tint-fg: #ff8fb4; }
-  .tint-orange { --tint-bg: rgba(255, 179, 71, 0.1);   --tint-border: rgba(255, 179, 71, 0.3);  --tint-fg: #ffc877; }
+  /* ─── Tints — Night Studio accents ─── */
+  .tint-violet { --tint-bg: rgba(165, 151, 245, 0.12); --tint-border: rgba(165, 151, 245, 0.28); --tint-fg: #a597f5; }
+  .tint-cyan   { --tint-bg: rgba(77, 163, 255, 0.12);  --tint-border: rgba(77, 163, 255, 0.28); --tint-fg: #4da3ff; }
+  .tint-green  { --tint-bg: rgba(98, 214, 167, 0.12);   --tint-border: rgba(98, 214, 167, 0.28);  --tint-fg: #62d6a7; }
+  .tint-pink   { --tint-bg: rgba(255, 107, 87, 0.12);  --tint-border: rgba(255, 107, 87, 0.28); --tint-fg: #ff8a7a; }
+  .tint-orange { --tint-bg: rgba(244, 184, 74, 0.12);   --tint-border: rgba(244, 184, 74, 0.28);  --tint-fg: #f4b84a; }
 
   /* ─── Chips ─── */
   .chip {
@@ -217,8 +206,8 @@ h3 {
     gap: 6px;
     padding: 5px 12px;
     border-radius: var(--radius-pill);
-    background: rgba(124, 92, 255, 0.12);
-    border: 1px solid rgba(124, 92, 255, 0.32);
+    background: rgba(255, 107, 87, 0.12);
+    border: 1px solid rgba(255, 107, 87, 0.28);
     font-size: 11px;
     font-weight: 700;
     color: var(--color-primary-light);
@@ -239,9 +228,9 @@ h3 {
     font-size: 13px;
     line-height: 1.5;
   }
-  .alert-error { --tint-bg: rgba(255, 107, 157, 0.1); --tint-border: rgba(255, 107, 157, 0.35); }
-  .alert-success { --tint-bg: rgba(63, 217, 160, 0.1); --tint-border: rgba(63, 217, 160, 0.35); }
-  .alert-info { --tint-bg: rgba(103, 232, 249, 0.08); --tint-border: rgba(103, 232, 249, 0.28); }
+  .alert-error { --tint-bg: rgba(255, 107, 87, 0.1); --tint-border: rgba(255, 107, 87, 0.35); }
+  .alert-success { --tint-bg: rgba(98, 214, 167, 0.1); --tint-border: rgba(98, 214, 167, 0.35); }
+  .alert-info { --tint-bg: rgba(77, 163, 255, 0.08); --tint-border: rgba(77, 163, 255, 0.28); }
 
   /* ─── Buttons ─── */
   .btn-primary {
@@ -249,23 +238,24 @@ h3 {
     align-items: center;
     justify-content: center;
     gap: 8px;
-    padding: 11px 22px;
+    padding: 10px 20px;
+    min-height: 44px;
     border-radius: var(--radius-card-sm);
     font-size: 14px;
     font-weight: 700;
     font-family: var(--font-body);
-    background: linear-gradient(135deg, #8a6dff 0%, var(--color-primary) 45%, var(--color-primary-dark) 100%);
-    color: #fff;
-    border: 1px solid rgba(191, 172, 255, 0.25);
+    background: var(--color-primary);
+    color: var(--color-ns-ink);
+    border: 1px solid rgba(255, 255, 255, 0.12);
     cursor: pointer;
-    box-shadow: 0 6px 20px -6px rgba(124, 92, 255, 0.6), 0 1px 0 rgba(255, 255, 255, 0.18) inset;
-    transition: transform 0.15s ease, box-shadow 0.15s ease, opacity 0.15s ease, filter 0.15s ease;
+    box-shadow: 0 8px 20px -12px rgba(255, 107, 87, 0.7);
+    transition: transform 0.15s ease, box-shadow 0.15s ease, opacity 0.15s ease, filter 0.15s ease, background-color 0.15s ease;
     text-decoration: none;
   }
   .btn-primary:hover {
     transform: translateY(-1px);
-    filter: brightness(1.06);
-    box-shadow: var(--shadow-primary), 0 1px 0 rgba(255, 255, 255, 0.18) inset;
+    background-color: var(--color-primary-light);
+    box-shadow: 0 10px 24px -10px rgba(255, 107, 87, 0.9);
   }
   .btn-primary:active {
     transform: translateY(0);
@@ -283,6 +273,7 @@ h3 {
     justify-content: center;
     gap: 8px;
     padding: 10px 20px;
+    min-height: 44px;
     border-radius: var(--radius-card-sm);
     font-size: 14px;
     font-weight: 700;
@@ -334,19 +325,20 @@ h3 {
     justify-content: center;
     gap: 8px;
     padding: 10px 20px;
+    min-height: 44px;
     border-radius: var(--radius-card-sm);
     font-size: 14px;
     font-weight: 700;
     font-family: var(--font-body);
-    background: rgba(255, 107, 157, 0.14);
-    color: #ffb3cc;
-    border: 1px solid rgba(255, 107, 157, 0.4);
+    background: rgba(255, 107, 87, 0.12);
+    color: #ff8a7a;
+    border: 1px solid rgba(255, 107, 87, 0.35);
     cursor: pointer;
     transition: background 0.15s, border-color 0.15s;
   }
   .btn-danger:hover {
-    background: rgba(255, 107, 157, 0.22);
-    border-color: rgba(255, 107, 157, 0.6);
+    background: rgba(255, 107, 87, 0.2);
+    border-color: rgba(255, 107, 87, 0.5);
   }
 
   .btn-cta-nav {
@@ -354,10 +346,10 @@ h3 {
     border-radius: 12px;
     font-size: 14px;
     font-weight: 700;
-    background: linear-gradient(135deg, var(--color-primary), var(--color-primary-dark));
-    color: #fff;
+    background: var(--color-primary);
+    color: var(--color-ns-ink);
     font-family: var(--font-body);
-    box-shadow: 0 4px 20px rgba(124, 92, 255, 0.35);
+    box-shadow: 0 4px 16px rgba(255, 107, 87, 0.35);
     transition: all 0.2s;
     border: none;
     cursor: pointer;
@@ -367,20 +359,21 @@ h3 {
   }
   .btn-cta-nav:hover {
     transform: translateY(-1px);
-    box-shadow: 0 8px 30px rgba(124, 92, 255, 0.5);
+    background: var(--color-primary-light);
+    box-shadow: 0 8px 24px rgba(255, 107, 87, 0.5);
   }
 
   /* Text link in section headers ("See all", "All tools"). */
   .link-accent {
     font-size: 12.5px;
     font-weight: 700;
-    color: var(--color-violet-soft);
+    color: var(--color-cyan);
     text-decoration: none;
     border-radius: 6px;
     transition: color 0.15s;
   }
   .link-accent:hover {
-    color: var(--color-primary-light);
+    color: var(--color-cyan-soft);
   }
 
   /* ─── Inputs ─── */
@@ -403,9 +396,9 @@ h3 {
     border-color: #3a4462;
   }
   .input-base:focus {
-    border-color: rgba(124, 92, 255, 0.6);
+    border-color: rgba(255, 107, 87, 0.6);
     background: var(--color-bg-hover);
-    box-shadow: 0 0 0 3px rgba(124, 92, 255, 0.18);
+    box-shadow: 0 0 0 3px rgba(255, 107, 87, 0.18);
   }
   .input-base:disabled {
     opacity: 0.5;

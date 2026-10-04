@@ -266,43 +266,50 @@ export function Practice() {
           analysis.chordProgression.length - 1,
           Math.floor((currentTime / duration) * analysis.chordProgression.length)
         )
-      : -1;
-
-  return (
+      : -1;  return (
     <div className="mx-auto flex min-h-[calc(100vh-140px)] max-w-4xl flex-col justify-center px-4 py-8 sm:px-6 sm:py-10 md:px-8">
+      {/* Header */}
       <div className="mb-6 sm:mb-8">
-        <div className="flex items-center gap-2">
-          <span className="rounded-full bg-orange/15 px-2.5 py-0.5 text-[11px] font-semibold text-orange">
-            Interactive Practice Suite
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="inline-flex items-center rounded-md border border-[var(--color-ns-amber)]/30 bg-[var(--color-ns-amber)]/10 px-2.5 py-0.5 text-[11px] font-semibold text-[var(--color-ns-amber)]">
+            Practice Studio
           </span>
           {bpm > 0 && (
-            <span className="rounded-full border border-glass bg-white/[0.04] px-2.5 py-0.5 font-mono text-[11px] font-semibold text-cyan">
+            <span className="inline-flex items-center rounded-md border border-[var(--color-ns-border)] bg-[var(--color-ns-raised)] px-2.5 py-0.5 font-mono text-[11px] font-semibold text-[var(--color-ns-blue)]">
               {bpm} BPM
             </span>
           )}
+          {speed !== 1 && (
+            <span className="inline-flex items-center rounded-md border border-[var(--color-ns-border)] bg-[var(--color-ns-raised)] px-2 py-0.5 font-mono text-[11px] font-semibold text-[var(--color-ns-amber)]">
+              {speed}x Playback
+            </span>
+          )}
         </div>
-        <h1 className="mt-2 font-heading text-2xl font-bold tracking-tight text-content sm:text-3xl">
-          Practice Mode
+        <h1 className="mt-2 font-heading text-2xl font-bold tracking-tight text-[var(--color-ns-text)] sm:text-3xl">
+          Interactive Practice Studio
         </h1>
-        <p className="mt-1 text-sm text-content-muted">
-          {fileName ? `Loaded: ${fileName}` : "No song loaded yet"}
-          {isSampleAudio && " (built-in sample clip)"}
+        <p className="mt-1 text-sm text-[var(--color-ns-muted)]">
+          {fileName ? `Track: ${fileName}` : "No song loaded yet"}
+          {isSampleAudio && " (sample audio)"}
         </p>
       </div>
 
       {!audioUrl && (
-        <div className="glass-card mb-6 flex flex-col items-center gap-3 p-8 text-center sm:p-10">
-          <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/15 text-primary-light">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+        <div className="mb-6 flex flex-col items-center gap-4 rounded-2xl border border-[var(--color-ns-border)] bg-[var(--color-ns-card)] p-8 text-center sm:p-12">
+          <div className="flex h-16 w-16 items-center justify-center rounded-2xl border border-[var(--color-ns-border)] bg-[var(--color-ns-raised)] text-[var(--color-ns-amber)] shadow-lg">
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="currentColor">
               <polygon points="6 4 19 12 6 20 6 4" />
             </svg>
           </div>
-          <p className="max-w-md text-sm text-content-muted">
-            Upload an audio or video file, or run the instant sample track from Studio to practice along with chords and speed controls.
-          </p>
-          <div className="mt-2 flex gap-3">
+          <div className="max-w-md">
+            <h3 className="font-heading text-lg font-bold text-[var(--color-ns-text)]">No Active Audio Loaded</h3>
+            <p className="mt-1.5 text-sm text-[var(--color-ns-muted)]">
+              Upload an audio or video track, or launch the instant sample clip in Studio to practice along with synchronized chord changes, tempo controls, and live pitch detection.
+            </p>
+          </div>
+          <div className="mt-2 flex flex-wrap gap-3">
             <Link to="/upload" className="btn-primary text-xs sm:text-sm">
-              Upload a Song
+              Upload Track
             </Link>
             <Link to="/studio" className="btn-secondary text-xs sm:text-sm">
               Return to Studio
@@ -312,7 +319,7 @@ export function Practice() {
       )}
 
       {audioUrl && (
-        <div className="glass-card mb-6 p-6 sm:p-7">
+        <div className="mb-6 rounded-2xl border border-[var(--color-ns-border)] bg-[var(--color-ns-card)] p-6 sm:p-7 shadow-lg">
           <audio ref={audioRef} src={audioUrl} preload="metadata" />
 
           {/* Primary Scrubber & Play Controls */}
@@ -320,7 +327,7 @@ export function Practice() {
             <button
               type="button"
               onClick={togglePlay}
-              className="flex h-14 w-14 flex-shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-primary to-primary-dark text-white shadow-[0_4px_24px_rgba(124,92,255,0.45)] transition-transform hover:scale-105 active:scale-95 self-center sm:self-auto"
+              className="flex h-14 w-14 flex-shrink-0 items-center justify-center rounded-2xl bg-[var(--color-ns-coral)] text-[var(--color-ns-ink)] shadow-[0_4px_20px_rgba(255,107,87,0.35)] transition-all hover:scale-105 active:scale-95 self-center sm:self-auto"
               aria-label={isPlaying ? "Pause" : "Play"}
             >
               {isPlaying ? (
@@ -330,12 +337,16 @@ export function Practice() {
                 </svg>
               ) : (
                 <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor" className="ml-1">
-                  <path d="M8 5v14l11-7z" />
+                  <polygon points="7 5 19 12 7 19 7 5" />
                 </svg>
               )}
             </button>
 
             <div className="flex-1 min-w-0">
+              <div className="flex justify-between font-mono text-xs text-[var(--color-ns-muted)] mb-1.5">
+                <span className="font-semibold text-[var(--color-ns-text)]">{formatTime(currentTime)}</span>
+                <span>{formatTime(duration)}</span>
+              </div>
               <input
                 type="range"
                 min={0}
@@ -344,20 +355,16 @@ export function Practice() {
                 value={currentTime}
                 onChange={handleSeek}
                 aria-label="Seek position in track"
-                className="w-full h-2 cursor-pointer rounded-lg bg-white/10 accent-[#7C5CFF]"
+                className="w-full h-2.5 cursor-pointer rounded-lg bg-[var(--color-ns-border)] accent-[var(--color-ns-coral)]"
               />
-              <div className="mt-2 flex justify-between font-mono text-xs text-content-dim">
-                <span>{formatTime(currentTime)}</span>
-                <span>{formatTime(duration)}</span>
-              </div>
             </div>
           </div>
 
           {/* Controls toolbar */}
-          <div className="mt-6 flex flex-wrap items-center justify-between gap-4 border-t border-glass/80 pt-5">
+          <div className="mt-6 flex flex-wrap items-center justify-between gap-4 border-t border-[var(--color-ns-border)] pt-5">
             <div>
-              <span className="mb-2 block text-xs font-semibold uppercase tracking-wider text-content-dim">
-                Tempo Rate
+              <span className="mb-2 block text-[11px] font-semibold uppercase tracking-wider text-[var(--color-ns-muted)]">
+                Playback Speed
               </span>
               <div className="flex flex-wrap gap-1.5 sm:gap-2">
                 {SPEEDS.map((s, i) => (
@@ -367,8 +374,8 @@ export function Practice() {
                     onClick={() => setSpeedIndex(i)}
                     className={`rounded-xl px-3 py-1.5 font-mono text-xs font-semibold transition-all ${
                       speedIndex === i
-                        ? "bg-primary text-white shadow-[0_2px_12px_rgba(124,92,255,0.35)]"
-                        : "border border-glass bg-white/[0.02] text-content-muted hover:border-glass-strong hover:text-content"
+                        ? "bg-[var(--color-ns-amber)] text-[var(--color-ns-ink)] font-bold shadow-sm"
+                        : "border border-[var(--color-ns-border)] bg-[var(--color-ns-raised)] text-[var(--color-ns-muted)] hover:border-[var(--color-ns-border-strong)] hover:text-[var(--color-ns-text)]"
                     }`}
                   >
                     {s}x
@@ -383,8 +390,8 @@ export function Practice() {
                 onClick={() => setLoop((l) => !l)}
                 className={`flex items-center gap-2 rounded-xl border px-3.5 py-2 text-xs font-semibold transition-all ${
                   loop
-                    ? "border-cyan/50 bg-cyan/15 text-cyan shadow-sm"
-                    : "border-glass bg-white/[0.02] text-content-muted hover:border-glass-strong hover:text-content"
+                    ? "border-[var(--color-ns-blue)]/50 bg-[var(--color-ns-blue)]/15 text-[var(--color-ns-blue)] shadow-sm"
+                    : "border-[var(--color-ns-border)] bg-[var(--color-ns-raised)] text-[var(--color-ns-muted)] hover:border-[var(--color-ns-border-strong)] hover:text-[var(--color-ns-text)]"
                 }`}
               >
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
@@ -393,7 +400,7 @@ export function Practice() {
                   <path d="M7 23l-4-4 4-4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
                   <path d="M21 13v2a4 4 0 0 1-4 4H3" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
                 </svg>
-                {loop ? "Looping On" : "Loop Off"}
+                {loop ? "Looping Active" : "Loop Off"}
               </button>
             </div>
           </div>
@@ -401,75 +408,93 @@ export function Practice() {
       )}
 
       {/* Metronome Console */}
-      <div className="glass-card mb-6 p-5 sm:p-6">
+      <div className="mb-6 rounded-2xl border border-[var(--color-ns-border)] bg-[var(--color-ns-card)] p-5 sm:p-6">
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3.5">
             <span
-              className={`flex h-10 w-10 items-center justify-center rounded-xl font-mono text-sm font-bold transition-all ${
+              className={`flex h-11 w-11 items-center justify-center rounded-xl font-mono text-base font-bold transition-all ${
                 metronome.isRunning
-                  ? "bg-primary text-white shadow-[0_0_16px_rgba(124,92,255,0.6)] animate-pulse"
-                  : "bg-white/[0.04] text-content-dim border border-glass"
+                  ? "bg-[var(--color-ns-amber)] text-[var(--color-ns-ink)] shadow-[0_0_16px_rgba(244,184,74,0.5)] animate-pulse"
+                  : "bg-[var(--color-ns-raised)] text-[var(--color-ns-muted)] border border-[var(--color-ns-border)]"
               }`}
             >
               ♩
             </span>
             <div>
-              <h2 className="font-heading text-sm font-bold text-content sm:text-base">Beat Metronome</h2>
-              <p className="font-mono text-xs text-content-dim">{bpm} BPM · Syncs with track tempo</p>
+              <h2 className="font-heading text-sm font-bold text-[var(--color-ns-text)] sm:text-base">Beat Metronome</h2>
+              <p className="font-mono text-xs text-[var(--color-ns-muted)]">{bpm} BPM · Synchronized click</p>
             </div>
           </div>
           <button
             type="button"
             onClick={metronome.toggle}
-            className={`px-4 py-2 text-xs font-semibold ${metronome.isRunning ? "btn-secondary text-pink border-pink/30" : "btn-primary"}`}
+            className={`px-4 py-2 text-xs font-semibold rounded-xl transition-all ${
+              metronome.isRunning
+                ? "border border-[var(--color-ns-coral)]/40 bg-[var(--color-ns-coral)]/10 text-[var(--color-ns-coral)] hover:bg-[var(--color-ns-coral)]/20"
+                : "btn-primary"
+            }`}
           >
             {metronome.isRunning ? "Stop Metronome" : "Start Metronome"}
           </button>
         </div>
       </div>
 
+      {/* Live Accuracy Tracking */}
       {analysis && (
-        <div className="glass-card mb-8 p-6">
+        <div className="mb-6 rounded-2xl border border-[var(--color-ns-border)] bg-[var(--color-ns-card)] p-6">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
-              <h2 className="font-heading text-lg font-semibold text-content">Live Accuracy Tracking</h2>
-              <p className="mt-1 text-xs text-content-dim">
-                Uses your mic to check the note you're playing against the expected chord at this
-                point in the song, then automatically ramps up playback speed as your accuracy
-                improves — real accuracy tracking, not a timer.
+              <div className="flex items-center gap-2">
+                <span className="rounded-md border border-[var(--color-ns-amber)]/30 bg-[var(--color-ns-amber)]/10 px-2 py-0.5 text-[10px] font-semibold text-[var(--color-ns-amber)]">
+                  Mic Feedback
+                </span>
+                <h2 className="font-heading text-lg font-bold text-[var(--color-ns-text)]">Live Accuracy Tracking</h2>
+              </div>
+              <p className="mt-1 text-xs text-[var(--color-ns-muted)] max-w-xl">
+                Uses microphone pitch detection to compare your playing against the expected chord at this exact moment, automatically ramping tempo as your accuracy sustains.
               </p>
             </div>
-            <button type="button" onClick={micActive ? stopMic : startMic} className={micActive ? "btn-ghost" : "btn-primary"}>
+            <button
+              type="button"
+              onClick={micActive ? stopMic : startMic}
+              className={micActive ? "btn-secondary" : "btn-primary"}
+            >
               {micActive ? "Stop Tracking" : "Start Accuracy Tracking"}
             </button>
           </div>
 
-          {micError && <p className="mt-3 text-sm text-pink">{micError}</p>}
+          {micError && <p className="mt-3 text-xs text-[var(--color-ns-coral)]">{micError}</p>}
 
           {micActive && (
-            <div className="mt-4 space-y-3">
-              <label className="flex items-center gap-2 text-sm text-content-muted">
+            <div className="mt-5 space-y-4 rounded-xl border border-[var(--color-ns-border)] bg-[var(--color-ns-raised)] p-4">
+              <label className="flex items-center gap-2.5 text-xs sm:text-sm text-[var(--color-ns-text)] cursor-pointer">
                 <input
                   type="checkbox"
                   checked={autoTempoEnabled}
                   onChange={(e) => setAutoTempoEnabled(e.target.checked)}
-                  className="h-4 w-4 accent-[#7C5CFF]"
+                  className="h-4 w-4 rounded border-[var(--color-ns-border)] bg-[var(--color-ns-bg)] accent-[var(--color-ns-amber)]"
                 />
-                Auto-increase tempo when accuracy stays above 70%
+                Auto-increase tempo when accuracy sustains above 70%
               </label>
 
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-content-muted">
-                  Expected chord right now: <span className="font-semibold text-content">{currentChordLabel ?? "—"}</span>
+              <div className="flex items-center justify-between text-xs sm:text-sm">
+                <span className="text-[var(--color-ns-muted)]">
+                  Target chord right now:{" "}
+                  <span className="font-heading text-base font-bold text-[var(--color-ns-amber)]">
+                    {currentChordLabel ?? "—"}
+                  </span>
                 </span>
-                <span className="text-content-muted">
-                  Accuracy: <span className="font-semibold text-content">{liveAccuracy !== null ? `${Math.round(liveAccuracy * 100)}%` : "—"}</span>
+                <span className="text-[var(--color-ns-muted)]">
+                  Accuracy:{" "}
+                  <span className="font-mono font-bold text-[var(--color-ns-mint)]">
+                    {liveAccuracy !== null ? `${Math.round(liveAccuracy * 100)}%` : "Listening…"}
+                  </span>
                 </span>
               </div>
 
-              <div className="h-2 w-full overflow-hidden rounded-full bg-white/5">
+              <div className="h-2.5 w-full overflow-hidden rounded-full bg-[var(--color-ns-bg)]">
                 <div
-                  className="h-full rounded-full bg-gradient-to-r from-pink via-orange to-green transition-all"
+                  className="h-full rounded-full bg-gradient-to-r from-[var(--color-ns-coral)] via-[var(--color-ns-amber)] to-[var(--color-ns-mint)] transition-all duration-200"
                   style={{ width: `${liveAccuracy !== null ? Math.round(liveAccuracy * 100) : 0}%` }}
                 />
               </div>
@@ -478,30 +503,31 @@ export function Practice() {
         </div>
       )}
 
+      {/* Chord Progression Display - Center Stage */}
       {analysis && (
-        <div className="glass-card p-6 sm:p-7">
+        <div className="rounded-2xl border border-[var(--color-ns-border)] bg-[var(--color-ns-card)] p-6 sm:p-7 shadow-lg">
           <div className="flex items-center justify-between">
             <div>
-              <h2 className="font-heading text-base font-bold text-content">Chord Progression</h2>
-              <p className="text-xs text-content-dim">Follow along as the track plays</p>
+              <h2 className="font-heading text-base sm:text-lg font-bold text-[var(--color-ns-text)]">Chord Progression</h2>
+              <p className="text-xs text-[var(--color-ns-muted)]">Follow along in real-time as the audio plays</p>
             </div>
             {activeChordIndex >= 0 && (
-              <span className="rounded-full bg-primary/20 px-3 py-1 font-mono text-xs font-bold text-primary-light animate-pulse">
+              <span className="rounded-full border border-[var(--color-ns-amber)]/40 bg-[var(--color-ns-amber)]/15 px-3 py-1 font-heading text-xs font-bold text-[var(--color-ns-amber)] animate-pulse">
                 Current: {analysis.chordProgression[activeChordIndex]}
               </span>
             )}
           </div>
-          <div className="mt-4 flex flex-wrap gap-2.5 sm:gap-3">
+          <div className="mt-5 flex flex-wrap gap-2.5 sm:gap-3">
             {analysis.chordProgression.map((chord, i) => {
               const isCurrent = i === activeChordIndex;
               return (
                 <div
                   key={`${chord}-${i}`}
-                  className={`flex h-12 min-w-12 items-center justify-center rounded-xl font-heading text-sm sm:text-base font-bold transition-all duration-150 ${
+                  className={`flex h-14 min-w-14 items-center justify-center rounded-xl font-heading text-sm sm:text-base font-bold transition-all duration-150 px-4 ${
                     isCurrent
-                      ? "scale-110 border-2 border-primary-light bg-primary text-white shadow-[0_0_20px_rgba(124,92,255,0.75)] z-10"
-                      : "border border-primary/25 bg-primary/10 text-primary-light hover:border-primary/50"
-                  } px-3.5`}
+                      ? "scale-110 border-2 border-[var(--color-ns-amber)] bg-[var(--color-ns-amber)] text-[var(--color-ns-ink)] shadow-[0_0_24px_rgba(244,184,74,0.6)] z-10 font-extrabold"
+                      : "border border-[var(--color-ns-border)] bg-[var(--color-ns-raised)] text-[var(--color-ns-text)] hover:border-[var(--color-ns-border-strong)]"
+                  }`}
                 >
                   {chord}
                 </div>
