@@ -260,13 +260,32 @@ export function Practice() {
     setCurrentTime(time);
   }
 
-  const activeChordIndex =
-    duration > 0 && analysis?.chordProgression?.length
-      ? Math.min(
-          analysis.chordProgression.length - 1,
-          Math.floor((currentTime / duration) * analysis.chordProgression.length)
-        )
-      : -1;  return (
+  const activeChordIndex = (() => {
+    if (!analysis?.chordProgression?.length) return -1;
+    if (analysis.chordTimeline?.length) {
+      const idx = analysis.chordTimeline.findIndex(
+        (seg) => currentTime >= seg.start && currentTime < seg.end
+      );
+      if (idx !== -1) return idx;
+      if (currentTime >= (analysis.chordTimeline[analysis.chordTimeline.length - 1]?.end ?? 0)) {
+        return Math.min(analysis.chordProgression.length - 1, analysis.chordTimeline.length - 1);
+      }
+      return 0;
+    }
+    if (duration > 0) {
+      return Math.min(
+        analysis.chordProgression.length - 1,
+        Math.floor((currentTime / duration) * analysis.chordProgression.length)
+      );
+    }
+    return 0;
+  })();
+
+  const currentDisplayChord =
+    (activeChordIndex >= 0 && analysis?.chordProgression ? analysis.chordProgression[activeChordIndex] : null) ??
+    currentChordLabel;
+
+  return (
     <div className="mx-auto flex min-h-[calc(100vh-140px)] max-w-4xl flex-col justify-center px-4 py-8 sm:px-6 sm:py-10 md:px-8">
       {/* Header */}
       <div className="mb-6 sm:mb-8">
@@ -481,7 +500,7 @@ export function Practice() {
                 <span className="text-[var(--color-ns-muted)]">
                   Target chord right now:{" "}
                   <span className="font-heading text-base font-bold text-[var(--color-ns-amber)]">
-                    {currentChordLabel ?? "—"}
+                    {currentDisplayChord ?? "—"}
                   </span>
                 </span>
                 <span className="text-[var(--color-ns-muted)]">

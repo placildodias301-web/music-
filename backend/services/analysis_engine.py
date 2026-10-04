@@ -103,7 +103,7 @@ def detect_key(y: np.ndarray, sr: int):
         return f"{key_name} Minor", "minor", f"{key_name} Aeolian (Natural Minor)"
 
 
-def detect_chord_timeline(y: np.ndarray, sr: int, beat_times: np.ndarray, max_segments: int = 12):
+def detect_chord_timeline(y: np.ndarray, sr: int, beat_times: np.ndarray, max_segments: int = 256):
     """
     Chroma-vs-template chord detection that returns each
     collapsed chord segment WITH its start/end time in the song. This
