@@ -476,6 +476,64 @@ h3 {
     animation: eq 1.6s ease-in-out infinite;
   }
 
+  /* ─── AI Assistant ─── */
+
+  /* Brand orb: a slowly turning violet→cyan gradient with an equaliser inside. */
+  .sound-orb {
+    position: relative;
+    display: inline-flex;
+    flex-shrink: 0;
+    align-items: center;
+    justify-content: center;
+    border-radius: 9999px;
+    isolation: isolate;
+    box-shadow: 0 0 0 1px rgba(191, 172, 255, 0.25), 0 8px 28px -6px rgba(124, 92, 255, 0.7);
+  }
+  .sound-orb::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    border-radius: inherit;
+    background: conic-gradient(from 0deg, #7c5cff, #67e8f9, #ff6b9d, #a78bff, #7c5cff);
+    animation: spin 8s linear infinite;
+  }
+  .sound-orb::after {
+    content: "";
+    position: absolute;
+    inset: 2px;
+    z-index: -1;
+    border-radius: inherit;
+    background: radial-gradient(circle at 35% 30%, rgba(124, 92, 255, 0.85), #1a1340 75%);
+  }
+
+  .send-btn {
+    background: linear-gradient(135deg, #8a6dff, var(--color-primary-dark));
+    box-shadow: 0 6px 18px -6px rgba(124, 92, 255, 0.9);
+  }
+  .send-btn:hover:not(:disabled) {
+    transform: translateY(-1px);
+    box-shadow: 0 8px 22px -6px rgba(124, 92, 255, 1);
+  }
+  .send-btn:disabled {
+    background: var(--color-bg-hover);
+    color: var(--color-content-dim);
+    box-shadow: none;
+  }
+
+  .composer {
+    box-shadow: 0 1px 0 rgba(255, 255, 255, 0.04) inset, 0 18px 50px -20px rgba(0, 0, 0, 0.8);
+  }
+
+  .thinking-text {
+    background: linear-gradient(90deg, var(--color-content-dim) 30%, var(--color-primary-light) 50%, var(--color-content-dim) 70%);
+    background-size: 200% 100%;
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    animation: shimmer 1.8s linear infinite;
+  }
+
   .animate-fadeIn {
     animation: fadeIn 0.3s ease-out;
   }

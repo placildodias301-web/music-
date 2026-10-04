@@ -11,9 +11,10 @@ const LEFT_MARGIN = 14;
 export function GuitarChordDiagram({ voicing, size = 1 }: { voicing: GuitarVoicing; size?: number }) {
   const frettedFrets = voicing.frets.filter((f): f is number => f !== null && f > 0);
   const minFret = frettedFrets.length ? Math.min(...frettedFrets) : 0;
-  // If the lowest fretted note is beyond the visible window, shift the
-  // diagram up (like a real chord chart showing "starts at fret N").
-  const startFret = minFret > FRET_COUNT - 1 ? minFret - 1 : 0;
+  const maxFret = frettedFrets.length ? Math.max(...frettedFrets) : 0;
+  // If the shape reaches past the first four frets, shift the diagram up
+  // (like a real chord chart showing "starts at fret N").
+  const startFret = maxFret > FRET_COUNT ? minFret - 1 : 0;
 
   const width = LEFT_MARGIN * 2 + STRING_SPACING * (STRING_COUNT - 1) + 16;
   const height = TOP_MARGIN + FRET_SPACING * FRET_COUNT + 20;

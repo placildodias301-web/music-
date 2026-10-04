@@ -130,7 +130,8 @@ const SECTION_META: Record<string, { title: string; subtitle: string }> = {
   "/account": { title: "Settings", subtitle: "Profile and preferences for this device." },
   "/upload": { title: "Upload & Analyze", subtitle: "Upload a song or video and Wilsify AI will analyze the real audio." },
   "/practice": { title: "Practice Mode", subtitle: "Practice along at your own speed, with live accuracy tracking." },
-  "/assistant": { title: "AI Assistant", subtitle: "Ask questions about the song you just analyzed or music theory." },
+  // The assistant is a full-height chat workspace with its own top bar.
+  "/assistant": { title: "", subtitle: "" },
   "/tuner": { title: "Chromatic Tuner", subtitle: "Live chromatic tuner — instrument presets and real-time pitch feedback." },
   "/chords": { title: "Chord Library", subtitle: "Browse chord shapes across guitar, ukulele and piano." },
   "/dashboard": { title: "Progress", subtitle: "Your practice history, streaks and weak chords." },
@@ -290,6 +291,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   const [prefs, setPrefs] = useState(loadPrefs);
 
   const meta = SECTION_META[location.pathname] ?? { title: "Wilsify AI", subtitle: "" };
+  const isChat = location.pathname === "/assistant";
   const profileSubtitle = [prefs.instruments, prefs.level].filter(Boolean).join(" · ");
 
   useEffect(() => {
@@ -375,7 +377,11 @@ export function AppShell({ children }: { children: ReactNode }) {
       )}
 
       {/* Main content area */}
-      <div className="flex min-h-screen min-w-0 flex-1 flex-col pb-24 md:pb-10">
+      <div
+        className={`flex min-w-0 flex-1 flex-col ${
+          isChat ? "h-[100dvh] overflow-hidden pb-16 md:pb-0" : "min-h-screen pb-24 md:pb-10"
+        }`}
+      >
         <header className="sticky top-0 z-30 flex items-center justify-between gap-3 border-b border-glass/70 bg-bg/80 px-4 py-3 backdrop-blur-md sm:px-6 md:px-8">
           <div className="flex min-w-0 items-center gap-3">
             <button
@@ -433,7 +439,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           </div>
         </header>
 
-        <main className="min-w-0 flex-1">{children}</main>
+        <main className={`min-w-0 flex-1 ${isChat ? "min-h-0" : ""}`}>{children}</main>
       </div>
 
       {/* Mobile bottom navigation with a raised centre upload action */}

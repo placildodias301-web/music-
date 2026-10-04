@@ -1,219 +1,940 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import type { ReactNode } from "react";
+import { Link } from "react-router-dom";
 import { askAssistant, type SongContext } from "../lib/api";
 import { useMvp } from "../lib/MvpContext";
 import { getWeakChords } from "../lib/practiceLog";
+import { firstNameOf, loadPrefs } from "../lib/account";
+import {
+  loadConversations,
+  newId,
+  saveConversations,
+  titleFrom,
+  type ChatMessage,
+  type Conversation,
+} from "../lib/assistantChats";
 
-interface ChatMessage {
-  id: string;
-  role: "user" | "assistant";
-  text: string;
+type Mode = "song" | "theory";
+
+interface Topic {
+  key: string;
+  label: string;
+  tint: string;
+  icon: ReactNode;
+  prompts: string[];
+  requiresSong?: boolean;
 }
 
-const SUGGESTED_QUESTIONS_GENERIC = [
-  "What is a C Major chord?",
-  "How do I play G Major?",
-  "What is BPM?",
-  "Explain the C-G-Am-F chord progression",
-  "What is a major scale?",
+function svg(children: ReactNode, size = 16) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true" className="flex-shrink-0">
+      {children}
+    </svg>
+  );
+}
+
+const S = { stroke: "currentColor", strokeWidth: 1.8, strokeLinecap: "round", strokeLinejoin: "round" } as const;
+
+const ICONS = {
+  panel: svg(
+    <>
+      <rect x="3.5" y="4.5" width="17" height="15" rx="3" {...S} />
+      <path d="M9.5 4.5v15" {...S} />
+    </>,
+    18
+  ),
+  compose: svg(
+    <>
+      <path d="M12 4.5H6.5a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2h11a2 2 0 0 0 2-2V12" {...S} />
+      <path d="M17.6 3.9a1.9 1.9 0 0 1 2.7 2.7L12.5 14.4 9 15l.6-3.5 8-7.6Z" {...S} />
+    </>,
+    18
+  ),
+  search: svg(
+    <>
+      <circle cx="11" cy="11" r="6.5" {...S} />
+      <path d="m20 20-4-4" {...S} />
+    </>,
+    15
+  ),
+  plus: svg(<path d="M12 5v14M5 12h14" {...S} strokeWidth={2} />, 18),
+  mic: svg(
+    <>
+      <rect x="9" y="3.5" width="6" height="11" rx="3" {...S} />
+      <path d="M5.5 11.5a6.5 6.5 0 0 0 13 0M12 18v2.5" {...S} />
+    </>,
+    18
+  ),
+  send: svg(<path d="M12 19V5M5.5 11.5 12 5l6.5 6.5" {...S} strokeWidth={2.2} />, 18),
+  pin: svg(<path d="M9 4h6l-1 5 3 3v2H7v-2l3-3-1-5ZM12 14v6" {...S} />, 14),
+  trash: svg(<path d="M5 7h14M10 11v6M14 11v6M6.5 7l1 12.5h9l1-12.5M9.5 7V4.5h5V7" {...S} />, 14),
+  copy: svg(
+    <>
+      <rect x="8.5" y="8.5" width="11" height="11" rx="2.5" {...S} />
+      <path d="M15.5 8.5V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v7.5a2 2 0 0 0 2 2h2.5" {...S} />
+    </>,
+    14
+  ),
+  check: svg(<path d="m5 12.5 4.5 4.5L19 7.5" {...S} strokeWidth={2.2} />, 14),
+  retry: svg(<path d="M4.5 12a7.5 7.5 0 1 0 2.2-5.3M4.5 4.5v4h4" {...S} />, 14),
+  chat: svg(<path d="M5 18.5V7a2.5 2.5 0 0 1 2.5-2.5h9A2.5 2.5 0 0 1 19 7v6.5a2.5 2.5 0 0 1-2.5 2.5H8.5L5 18.5Z" {...S} />, 14),
+  upload: svg(<path d="M12 15V4.5M7.5 9 12 4.5 16.5 9M5 15.5v2A2 2 0 0 0 7 19.5h10a2 2 0 0 0 2-2v-2" {...S} />, 16),
+  library: svg(<path d="M6 4h12v16l-6-3.5L6 20V4Z" {...S} />, 16),
+  note: svg(
+    <>
+      <circle cx="7.5" cy="17.5" r="2.5" {...S} />
+      <circle cx="17" cy="15.5" r="2.5" {...S} />
+      <path d="M10 17.5V6l9.5-2v11.5" {...S} />
+    </>,
+    15
+  ),
+  scale: svg(<path d="M4 18h3.5v-3H11v-3h3.5V9H18V6h2" {...S} />, 15),
+  rhythm: svg(<path d="M3.5 12h3l2-6 3.5 12 2.5-8 1.5 2h4.5" {...S} />, 15),
+  target: svg(
+    <>
+      <circle cx="12" cy="12" r="8" {...S} />
+      <circle cx="12" cy="12" r="4" {...S} />
+      <circle cx="12" cy="12" r="0.6" fill="currentColor" stroke="currentColor" />
+    </>,
+    15
+  ),
+  disc: svg(
+    <>
+      <circle cx="12" cy="12" r="8" {...S} />
+      <circle cx="12" cy="12" r="2.2" {...S} />
+    </>,
+    15
+  ),
+};
+
+const TOPICS: Topic[] = [
+  {
+    key: "song",
+    label: "This song",
+    tint: "tint-pink",
+    icon: ICONS.disc,
+    requiresSong: true,
+    prompts: ["What key is this song in?", "What chords are used in this song?", "How fast is this song?", "Is this song difficult?"],
+  },
+  {
+    key: "chords",
+    label: "Chords",
+    tint: "tint-violet",
+    icon: ICONS.note,
+    prompts: ["What is a C Major chord?", "How do I play G Major?", "What is an A minor chord?", "Explain the C-G-Am-F chord progression"],
+  },
+  {
+    key: "scales",
+    label: "Scales & keys",
+    tint: "tint-cyan",
+    icon: ICONS.scale,
+    prompts: ["What is a major scale?", "What is a minor scale?", "What is a key signature?"],
+  },
+  {
+    key: "rhythm",
+    label: "Rhythm",
+    tint: "tint-orange",
+    icon: ICONS.rhythm,
+    prompts: ["What is BPM?", "What is a time signature?", "How does a metronome help me practice?"],
+  },
+  {
+    key: "practice",
+    label: "Practice",
+    tint: "tint-green",
+    icon: ICONS.target,
+    prompts: ["How should I practice a hard section?", "Give me tips to improve my timing", "What chords have I been struggling with?"],
+  },
 ];
 
-const SUGGESTED_QUESTIONS_GROUNDED = [
-  "What key is this song in?",
-  "What chords are used in this song?",
-  "How fast is this song?",
-  "Is this song difficult?",
-  "What chords have I been struggling with?",
-];
+function greetingFor(name: string): string {
+  const hour = new Date().getHours();
+  const who = name ? `, ${firstNameOf(name)}` : "";
+  if (hour < 5) return `Late-night jam${who}?`;
+  if (hour < 12) return `Morning warm-up${who}?`;
+  if (hour < 17) return `Let's find the groove${who}`;
+  if (hour < 22) return `Evening session${who}?`;
+  return `Late-night jam${who}?`;
+}
+
+function isWide() {
+  return typeof window !== "undefined" && window.matchMedia("(min-width: 1024px)").matches;
+}
+
+function prefersReducedMotion() {
+  return typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+}
+
+/* ─── Browser speech recognition (Chrome/Edge/Safari), typed minimally ─── */
+interface SpeechRecognitionLike {
+  lang: string;
+  interimResults: boolean;
+  onresult: ((e: { results: ArrayLike<ArrayLike<{ transcript: string }>> }) => void) | null;
+  onend: (() => void) | null;
+  onerror: (() => void) | null;
+  start: () => void;
+  stop: () => void;
+}
+type SpeechCtor = new () => SpeechRecognitionLike;
+
+function getSpeechCtor(): SpeechCtor | null {
+  if (typeof window === "undefined") return null;
+  const w = window as unknown as { SpeechRecognition?: SpeechCtor; webkitSpeechRecognition?: SpeechCtor };
+  return w.SpeechRecognition ?? w.webkitSpeechRecognition ?? null;
+}
+
+/** Animated brand mark: a glowing orb with a live equaliser inside. */
+function SoundOrb({ size = 56, active = true }: { size?: number; active?: boolean }) {
+  const bars = [0.45, 0.8, 1, 0.65, 0.9];
+  return (
+    <span className="sound-orb" style={{ width: size, height: size }} aria-hidden="true">
+      <span className="flex h-[42%] items-end gap-[8%]" style={{ width: "46%" }}>
+        {bars.map((h, i) => (
+          <span
+            key={i}
+            className="eq-bar flex-1 bg-white"
+            style={{
+              height: `${h * 100}%`,
+              width: "auto",
+              animationDelay: `${i * 0.14}s`,
+              animationPlayState: active ? "running" : "paused",
+            }}
+          />
+        ))}
+      </span>
+    </span>
+  );
+}
+
+/** Reveals an answer word-by-word, like a streamed response. */
+function RevealText({ text, animate, onTick, onDone }: { text: string; animate: boolean; onTick: () => void; onDone: () => void }) {
+  const words = useMemo(() => text.split(/(\s+)/), [text]);
+  const [count, setCount] = useState(animate ? 0 : words.length);
+
+  useEffect(() => {
+    if (!animate) return;
+    if (prefersReducedMotion()) {
+      setCount(words.length);
+      onDone();
+      return;
+    }
+    const timer = window.setInterval(() => {
+      setCount((c) => {
+        const next = Math.min(c + 2, words.length);
+        if (next >= words.length) {
+          window.clearInterval(timer);
+          onDone();
+        }
+        return next;
+      });
+    }, 28);
+    return () => window.clearInterval(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [animate, words.length]);
+
+  useEffect(() => {
+    if (animate) onTick();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [count]);
+
+  const done = count >= words.length;
+  return (
+    <>
+      {words.slice(0, count).join("")}
+      {!done && <span className="ml-0.5 inline-block h-4 w-1.5 translate-y-0.5 animate-pulse rounded-sm bg-primary-light" />}
+    </>
+  );
+}
 
 export function Assistant() {
   const { fileName, analysis } = useMvp();
+  const [prefs] = useState(loadPrefs);
 
-  const songContext: SongContext | null = analysis
-    ? {
-        fileName: fileName ?? analysis.fileName,
-        key: analysis.key,
-        bpm: analysis.bpm,
-        timeSignature: analysis.timeSignature,
-        chordProgression: analysis.chordProgression,
-        difficultyLabel: analysis.difficulty?.difficultyLabel,
-        weakChords: getWeakChords().map((w) => w.chord),
-      }
-    : null;
+  const songContext: SongContext | null = useMemo(
+    () =>
+      analysis
+        ? {
+            fileName: fileName ?? analysis.fileName,
+            key: analysis.key,
+            bpm: analysis.bpm,
+            timeSignature: analysis.timeSignature,
+            chordProgression: analysis.chordProgression,
+            difficultyLabel: analysis.difficulty?.difficultyLabel,
+            weakChords: getWeakChords().map((w) => w.chord),
+          }
+        : null,
+    [analysis, fileName]
+  );
 
-  const [messages, setMessages] = useState<ChatMessage[]>([
-    {
-      id: "welcome",
-      role: "assistant",
-      text: songContext
-        ? `Hi! I'm the Wilsify AI Assistant. I can see you're viewing "${songContext.fileName}" — ask me about its key, chords, tempo, or difficulty, or ask a general music-theory question.`
-        : "Hi! I'm the Wilsify AI Assistant — a rule-based demo assistant covering the basics of chords, scales, BPM, and music theory. Upload a song first for answers grounded in its actual detected data, or ask me something general below.",
-    },
-  ]);
+  const [conversations, setConversations] = useState<Conversation[]>(loadConversations);
+  const [activeId, setActiveId] = useState<string | null>(null);
+  const [mode, setMode] = useState<Mode>(analysis ? "song" : "theory");
   const [input, setInput] = useState("");
-  const [isThinking, setIsThinking] = useState(false);
+  const [thinkingIn, setThinkingIn] = useState<string | null>(null);
+  const [revealId, setRevealId] = useState<string | null>(null);
+  const [railOpen, setRailOpen] = useState(isWide);
+  const [railQuery, setRailQuery] = useState("");
+  const [topicKey, setTopicKey] = useState<string | null>(null);
+  const [attachOpen, setAttachOpen] = useState(false);
+  const [listening, setListening] = useState(false);
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+
   const scrollRef = useRef<HTMLDivElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
+  const speechSupported = useMemo(() => getSpeechCtor() !== null, []);
+
+  const active = conversations.find((c) => c.id === activeId) ?? null;
+  const messages = active?.messages ?? [];
+  const isThinking = thinkingIn !== null;
+  const isEmpty = messages.length === 0;
+  // Song mode silently falls back to theory when no song is loaded.
+  const effectiveMode: Mode = songContext ? mode : "theory";
+  const songMode = effectiveMode === "song";
+
+  useEffect(() => saveConversations(conversations), [conversations]);
+
+  function scrollToBottom(smooth = true) {
+    const el = scrollRef.current;
+    if (el) el.scrollTo({ top: el.scrollHeight, behavior: smooth ? "smooth" : "auto" });
+  }
 
   useEffect(() => {
-    scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
-  }, [messages, isThinking]);
+    scrollToBottom(false);
+  }, [activeId]);
+
+  useEffect(() => {
+    scrollToBottom();
+  }, [messages.length, thinkingIn]);
+
+  // Auto-grow the composer up to a max height.
+  useEffect(() => {
+    const el = textareaRef.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${Math.min(el.scrollHeight, 200)}px`;
+  }, [input, isEmpty]);
+
+  useEffect(() => () => recognitionRef.current?.stop(), []);
+
+  function updateConversation(id: string, fn: (c: Conversation) => Conversation) {
+    setConversations((prev) => prev.map((c) => (c.id === id ? fn(c) : c)));
+  }
+
+  async function fetchAnswer(question: string): Promise<ChatMessage> {
+    const context = songMode ? songContext : null;
+    try {
+      const result = await askAssistant(question, context);
+      return { id: newId("a"), role: "assistant", text: result.answer, songLabel: context?.fileName };
+    } catch {
+      return {
+        id: newId("a"),
+        role: "assistant",
+        text: "I couldn't reach the Wilsify assistant service. Check that the backend is running, then try again.",
+      };
+    }
+  }
 
   async function sendQuestion(question: string) {
     const trimmed = question.trim();
     if (!trimmed || isThinking) return;
 
-    const userMessage: ChatMessage = { id: `${Date.now()}-user`, role: "user", text: trimmed };
-    setMessages((prev) => [...prev, userMessage]);
-    setInput("");
-    setIsThinking(true);
+    const userMessage: ChatMessage = { id: newId("u"), role: "user", text: trimmed };
+    let convId = activeId;
+    if (!convId) {
+      convId = newId("c");
+      const created: Conversation = {
+        id: convId,
+        title: titleFrom(trimmed),
+        pinned: false,
+        updatedAt: Date.now(),
+        messages: [userMessage],
+      };
+      setConversations((prev) => [created, ...prev]);
+      setActiveId(convId);
+    } else {
+      updateConversation(convId, (c) => ({ ...c, updatedAt: Date.now(), messages: [...c.messages, userMessage] }));
+    }
 
+    setInput("");
+    setTopicKey(null);
+    setThinkingIn(convId);
+    const answer = await fetchAnswer(trimmed);
+    updateConversation(convId, (c) => ({ ...c, updatedAt: Date.now(), messages: [...c.messages, answer] }));
+    setRevealId(answer.id);
+    setThinkingIn(null);
+  }
+
+  async function askAgain(messageId: string) {
+    if (!active || isThinking) return;
+    const index = active.messages.findIndex((m) => m.id === messageId);
+    const question = active.messages.slice(0, index).reverse().find((m) => m.role === "user");
+    if (!question) return;
+    const convId = active.id;
+    setThinkingIn(convId);
+    const answer = await fetchAnswer(question.text);
+    updateConversation(convId, (c) => ({
+      ...c,
+      updatedAt: Date.now(),
+      messages: c.messages.map((m) => (m.id === messageId ? answer : m)),
+    }));
+    setRevealId(answer.id);
+    setThinkingIn(null);
+  }
+
+  function startNewChat() {
+    setActiveId(null);
+    setInput("");
+    setTopicKey(null);
+    if (!isWide()) setRailOpen(false);
+    requestAnimationFrame(() => textareaRef.current?.focus());
+  }
+
+  function openConversation(id: string) {
+    setActiveId(id);
+    setRevealId(null);
+    if (!isWide()) setRailOpen(false);
+  }
+
+  function deleteConversation(id: string) {
+    setConversations((prev) => prev.filter((c) => c.id !== id));
+    if (activeId === id) setActiveId(null);
+  }
+
+  function togglePin(id: string) {
+    updateConversation(id, (c) => ({ ...c, pinned: !c.pinned }));
+  }
+
+  async function copyMessage(msg: ChatMessage) {
     try {
-      const result = await askAssistant(trimmed, songContext);
-      setMessages((prev) => [...prev, { id: `${Date.now()}-assistant`, role: "assistant", text: result.answer }]);
+      await navigator.clipboard.writeText(msg.text);
+      setCopiedId(msg.id);
+      window.setTimeout(() => setCopiedId((id) => (id === msg.id ? null : id)), 1500);
     } catch {
-      setMessages((prev) => [
-        ...prev,
-        { id: `${Date.now()}-error`, role: "assistant", text: "Sorry, I couldn't reach the assistant service. Please try again." },
-      ]);
-    } finally {
-      setIsThinking(false);
+      // clipboard unavailable — ignore
     }
   }
 
-  const suggestions = songContext
-    ? [...SUGGESTED_QUESTIONS_GROUNDED, ...SUGGESTED_QUESTIONS_GENERIC.slice(0, 2)]
-    : SUGGESTED_QUESTIONS_GENERIC;
+  function toggleListening() {
+    if (listening) {
+      recognitionRef.current?.stop();
+      return;
+    }
+    const Ctor = getSpeechCtor();
+    if (!Ctor) return;
+    const rec = new Ctor();
+    rec.lang = "en-US";
+    rec.interimResults = false;
+    rec.onresult = (e) => {
+      const transcript = Array.from(e.results)
+        .map((r) => r[0].transcript)
+        .join(" ");
+      setInput((prev) => (prev ? `${prev} ${transcript}` : transcript));
+    };
+    rec.onend = () => setListening(false);
+    rec.onerror = () => setListening(false);
+    recognitionRef.current = rec;
+    setListening(true);
+    rec.start();
+  }
 
-  return (
-    <div className="mx-auto flex h-[calc(100vh-80px)] max-w-4xl flex-col px-3 py-4 sm:px-6 sm:py-6 md:px-8">
-      {/* Header */}
-      <div className="mb-4 flex flex-col justify-between gap-3 border-b border-glass pb-4 sm:flex-row sm:items-center">
-        <div>
-          <div className="flex items-center gap-2">
-            <span className="flex h-5 w-5 items-center justify-center rounded-md bg-primary/20 text-primary-light">
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M12 2L14.4 9.6L22 12L14.4 14.4L12 22L9.6 14.4L2 12L9.6 9.6L12 2Z" />
-              </svg>
-            </span>
-            <span className="font-heading text-sm font-bold uppercase tracking-wider text-primary-light">
-              Wilsify Music AI
-            </span>
-            <span className="flex items-center gap-1.5 rounded-full border border-green/30 bg-green/10 px-2 py-0.5 text-[10px] font-semibold text-green">
-              <span className="h-1.5 w-1.5 rounded-full bg-green animate-pulse" />
-              Ready
-            </span>
-          </div>
-          <h1 className="mt-1 font-heading text-xl font-bold tracking-tight text-content sm:text-2xl">
-            Music Theory Assistant
-          </h1>
+  const filtered = conversations
+    .filter((c) => c.title.toLowerCase().includes(railQuery.trim().toLowerCase()))
+    .sort((a, b) => b.updatedAt - a.updatedAt);
+  const pinned = filtered.filter((c) => c.pinned);
+  const recents = filtered.filter((c) => !c.pinned);
+
+  const visibleTopics = TOPICS.filter((t) => !t.requiresSong || songContext);
+  const openTopic = visibleTopics.find((t) => t.key === topicKey) ?? null;
+
+  /* ─── Composer ─── */
+  const composer = (
+    <form
+      onSubmit={(e) => {
+        e.preventDefault();
+        sendQuestion(input);
+      }}
+      className={`composer relative w-full rounded-[26px] border bg-bg-raised/90 transition-colors ${
+        songMode ? "border-primary/35" : "border-glass-strong"
+      } focus-within:border-primary-light/60`}
+    >
+      <label htmlFor="assistant-input" className="sr-only">
+        Ask the Wilsify assistant
+      </label>
+      <textarea
+        id="assistant-input"
+        ref={textareaRef}
+        rows={1}
+        value={input}
+        onChange={(e) => setInput(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
+            e.preventDefault();
+            sendQuestion(input);
+          }
+        }}
+        placeholder={
+          listening
+            ? "Listening…"
+            : songMode
+              ? `Ask about “${songContext?.fileName}”…`
+              : isEmpty
+                ? "Ask about chords, scales, rhythm or practice…"
+                : "Reply to Wilsify…"
+        }
+        className={`block w-full resize-none bg-transparent px-5 text-[15px] leading-relaxed text-content placeholder:text-content-dim focus:outline-none focus-visible:shadow-none ${
+          isEmpty ? "min-h-[56px] pt-4 pb-2" : "pt-3.5 pb-1.5"
+        }`}
+      />
+
+      <div className="flex items-center gap-2 px-3 pb-3">
+        {/* Attach menu */}
+        <div className="relative">
+          <button
+            type="button"
+            aria-label="Add a song"
+            aria-expanded={attachOpen}
+            onClick={() => setAttachOpen((o) => !o)}
+            className="flex h-9 w-9 items-center justify-center rounded-full text-content-muted transition-colors hover:bg-white/[0.06] hover:text-content"
+          >
+            {ICONS.plus}
+          </button>
+          {attachOpen && (
+            <>
+              <div className="fixed inset-0 z-10" onClick={() => setAttachOpen(false)} />
+              <div
+                className={`animate-fadeIn absolute left-0 z-20 w-56 rounded-2xl border border-glass-strong bg-bg-card p-1.5 shadow-2xl ${
+                  isEmpty ? "top-11" : "bottom-11"
+                }`}
+              >
+                <Link
+                  to="/upload"
+                  className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm text-content-light hover:bg-white/[0.05]"
+                >
+                  <span className="text-primary-light">{ICONS.upload}</span>
+                  Analyze a new song
+                </Link>
+                <Link
+                  to="/library"
+                  className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm text-content-light hover:bg-white/[0.05]"
+                >
+                  <span className="text-cyan-soft">{ICONS.library}</span>
+                  Open from library
+                </Link>
+              </div>
+            </>
+          )}
         </div>
 
-        {songContext && (
-          <div className="flex items-center gap-2 rounded-xl border border-primary/20 bg-primary/10 px-3 py-1.5">
-            <span className="h-2 w-2 rounded-full bg-primary" />
-            <div className="text-xs">
-              <span className="font-semibold text-content">{songContext.fileName}</span>
-              <span className="text-content-dim ml-1.5">({songContext.key} · {songContext.bpm} BPM)</span>
-            </div>
-          </div>
-        )}
-      </div>
+        {/* Mode switch */}
+        <div role="radiogroup" aria-label="Answer mode" className="flex rounded-full border border-glass bg-bg/60 p-0.5">
+          {(["theory", "song"] as Mode[]).map((m) => {
+            const disabled = m === "song" && !songContext;
+            const selected = effectiveMode === m;
+            return (
+              <button
+                key={m}
+                type="button"
+                role="radio"
+                aria-checked={selected}
+                disabled={disabled}
+                title={disabled ? "Analyze a song to unlock song-grounded answers" : undefined}
+                onClick={() => setMode(m)}
+                className={`rounded-full px-3 py-1 text-xs font-semibold transition-colors ${
+                  selected
+                    ? "bg-white/[0.09] text-content shadow-sm"
+                    : "text-content-dim hover:text-content-light disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:text-content-dim"
+                }`}
+              >
+                {m === "theory" ? "Theory" : "Song"}
+              </button>
+            );
+          })}
+        </div>
 
-      {/* Chat Messages */}
-      <div ref={scrollRef} className="glass-card flex-1 space-y-4 overflow-y-auto p-4 sm:p-5">
-        {messages.map((msg) => (
-          <div
-            key={msg.id}
-            className={`flex items-start gap-2.5 ${
-              msg.role === "user" ? "flex-row-reverse" : "flex-row"
-            }`}
-          >
-            <div
-              className={`flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-xl text-xs font-bold ${
-                msg.role === "user"
-                  ? "bg-gradient-to-br from-primary to-primary-dark text-white shadow-md shadow-primary/20"
-                  : "border border-primary/30 bg-primary/10 text-primary-light"
+        <div className="ml-auto flex items-center gap-1.5">
+          {songMode && songContext && (
+            <span className="chip tint-violet hidden max-w-[220px] sm:inline-flex" title={songContext.fileName}>
+              <span className="h-1.5 w-1.5 flex-shrink-0 rounded-full bg-primary-light" />
+              <span className="truncate">
+                {songContext.key} · {songContext.bpm} BPM
+              </span>
+            </span>
+          )}
+          {speechSupported && (
+            <button
+              type="button"
+              aria-label={listening ? "Stop dictation" : "Dictate a question"}
+              aria-pressed={listening}
+              onClick={toggleListening}
+              className={`flex h-9 w-9 items-center justify-center rounded-full transition-colors ${
+                listening ? "bg-pink/15 text-pink" : "text-content-muted hover:bg-white/[0.06] hover:text-content"
               }`}
             >
-              {msg.role === "user" ? (
-                "You"
-              ) : (
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
-                  <path d="M12 2L14.4 9.6L22 12L14.4 14.4L12 22L9.6 14.4L2 12L9.6 9.6L12 2Z" />
-                </svg>
+              {listening ? <span className="h-2.5 w-2.5 animate-pulse rounded-full bg-pink" /> : ICONS.mic}
+            </button>
+          )}
+          <button
+            type="submit"
+            aria-label="Send"
+            disabled={!input.trim() || isThinking}
+            className="send-btn flex h-9 w-9 items-center justify-center rounded-full text-white transition-all disabled:cursor-not-allowed"
+          >
+            {input.trim() || isThinking ? ICONS.send : <SoundOrbIcon />}
+          </button>
+        </div>
+      </div>
+    </form>
+  );
+
+  /* ─── Chat rail ─── */
+  const rail = railOpen && (
+    <>
+      <div className="animate-fadeIn absolute inset-0 z-20 bg-black/60 lg:hidden" onClick={() => setRailOpen(false)} />
+      <aside
+        aria-label="Conversations"
+        className="absolute inset-y-0 left-0 z-30 flex w-[272px] flex-shrink-0 flex-col border-r border-glass bg-[#0a0e1a] lg:static lg:z-auto lg:w-[260px] lg:bg-[#090d18]/60"
+      >
+        <div className="flex items-center justify-between px-3 pt-3 pb-2">
+          <span className="px-1 font-heading text-sm font-bold text-content">Chats</span>
+          <button
+            type="button"
+            aria-label="Hide chat list"
+            onClick={() => setRailOpen(false)}
+            className="flex h-8 w-8 items-center justify-center rounded-lg text-content-dim hover:bg-white/[0.05] hover:text-content"
+          >
+            {ICONS.panel}
+          </button>
+        </div>
+
+        <div className="px-3">
+          <button
+            type="button"
+            onClick={startNewChat}
+            className="flex w-full items-center gap-2.5 rounded-xl bg-white/[0.05] px-3 py-2.5 text-sm font-semibold text-content transition-colors hover:bg-white/[0.08]"
+          >
+            <span className="text-primary-light">{ICONS.compose}</span>
+            New chat
+          </button>
+          <div className="mt-2 flex items-center gap-2 rounded-xl border border-glass px-3 py-2 focus-within:border-primary/50">
+            <span className="text-content-dim">{ICONS.search}</span>
+            <input
+              value={railQuery}
+              onChange={(e) => setRailQuery(e.target.value)}
+              aria-label="Search chats"
+              placeholder="Search chats"
+              className="w-full bg-transparent text-[13px] text-content placeholder:text-content-dim focus:outline-none focus-visible:shadow-none"
+            />
+          </div>
+        </div>
+
+        <div className="mt-3 flex-1 overflow-y-auto px-3 pb-4">
+          {songContext && (
+            <div className="mb-4 rounded-xl border border-primary/25 bg-gradient-to-br from-primary/15 to-transparent p-3">
+              <p className="text-[10.5px] font-bold uppercase tracking-[0.12em] text-primary-light">Now loaded</p>
+              <p className="mt-1 truncate text-sm font-semibold text-content" title={songContext.fileName}>
+                {songContext.fileName}
+              </p>
+              <p className="mt-0.5 text-xs text-content-muted">
+                {songContext.key} · {songContext.bpm} BPM · {songContext.timeSignature}
+              </p>
+            </div>
+          )}
+
+          {conversations.length === 0 ? (
+            <p className="px-2 pt-2 text-xs leading-relaxed text-content-dim">
+              Your conversations will appear here. They're saved on this device.
+            </p>
+          ) : filtered.length === 0 ? (
+            <p className="px-2 pt-2 text-xs text-content-dim">No chats match “{railQuery}”.</p>
+          ) : (
+            <>
+              {pinned.length > 0 && (
+                <RailGroup label="Pinned">
+                  {pinned.map((c) => (
+                    <RailItem key={c.id} c={c} active={c.id === activeId} onOpen={openConversation} onPin={togglePin} onDelete={deleteConversation} />
+                  ))}
+                </RailGroup>
+              )}
+              {recents.length > 0 && (
+                <RailGroup label="Recents">
+                  {recents.map((c) => (
+                    <RailItem key={c.id} c={c} active={c.id === activeId} onOpen={openConversation} onPin={togglePin} onDelete={deleteConversation} />
+                  ))}
+                </RailGroup>
+              )}
+            </>
+          )}
+        </div>
+      </aside>
+    </>
+  );
+
+  return (
+    <div className="relative flex h-full min-h-0 overflow-hidden">
+      {rail}
+
+      <section className="relative flex min-w-0 flex-1 flex-col">
+        {/* Top bar */}
+        <div className="flex h-14 flex-shrink-0 items-center gap-2 px-3 sm:px-5">
+          {!railOpen && (
+            <>
+              <button
+                type="button"
+                aria-label="Show chat list"
+                onClick={() => setRailOpen(true)}
+                className="flex h-9 w-9 items-center justify-center rounded-lg text-content-muted hover:bg-white/[0.05] hover:text-content"
+              >
+                {ICONS.panel}
+              </button>
+              <button
+                type="button"
+                aria-label="New chat"
+                onClick={startNewChat}
+                className="flex h-9 w-9 items-center justify-center rounded-lg text-content-muted hover:bg-white/[0.05] hover:text-content"
+              >
+                {ICONS.compose}
+              </button>
+            </>
+          )}
+          <p className="min-w-0 truncate px-1 text-sm font-semibold text-content-light">{active ? active.title : ""}</p>
+          <span className="chip tint-green ml-auto">
+            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-green" />
+            Wilsify Tutor
+          </span>
+        </div>
+
+        {isEmpty ? (
+          /* ─── Empty state ─── */
+          <div className="flex flex-1 flex-col items-center overflow-y-auto px-4 pb-10">
+            <div className="flex w-full max-w-[720px] flex-1 flex-col items-center justify-center py-8">
+              <div className="animate-slide-up flex flex-col items-center text-center">
+                <SoundOrb size={60} />
+                <h2 className="mt-5 font-heading text-[28px] font-bold tracking-tight text-content sm:text-4xl">
+                  {greetingFor(prefs.name)}
+                </h2>
+                <p className="mt-2 max-w-md text-sm text-content-muted">
+                  {songContext ? (
+                    <>
+                      Ready to break down <span className="font-semibold text-content-light">“{songContext.fileName}”</span> —{" "}
+                      {songContext.key}, {songContext.bpm} BPM.
+                    </>
+                  ) : (
+                    <>
+                      Ask about chords, scales, rhythm or practice.{" "}
+                      <Link to="/upload" className="link-accent">
+                        Analyze a song
+                      </Link>{" "}
+                      for answers grounded in real audio.
+                    </>
+                  )}
+                </p>
+              </div>
+
+              <div className="animate-slide-up mt-8 w-full" style={{ animationDelay: "60ms" }}>
+                {composer}
+              </div>
+
+              <div className="animate-slide-up mt-5 flex flex-wrap justify-center gap-2" style={{ animationDelay: "120ms" }}>
+                {visibleTopics.map((t) => {
+                  const selected = topicKey === t.key;
+                  return (
+                    <button
+                      key={t.key}
+                      type="button"
+                      aria-expanded={selected}
+                      onClick={() => setTopicKey(selected ? null : t.key)}
+                      className={`${t.tint} flex items-center gap-2 rounded-xl border px-3.5 py-2 text-sm font-semibold transition-all active:scale-95 ${
+                        selected
+                          ? "border-[var(--tint-border)] bg-[var(--tint-bg)] text-content"
+                          : "border-glass bg-bg-raised/70 text-content-light hover:border-glass-strong hover:bg-bg-hover"
+                      }`}
+                    >
+                      <span className="text-[var(--tint-fg)]">{t.icon}</span>
+                      {t.label}
+                    </button>
+                  );
+                })}
+              </div>
+
+              {openTopic && (
+                <div className="animate-fadeIn mt-4 w-full overflow-hidden rounded-2xl border border-glass bg-bg-card/80">
+                  {openTopic.prompts.map((p, i) => (
+                    <button
+                      key={p}
+                      type="button"
+                      onClick={() => sendQuestion(p)}
+                      className={`${openTopic.tint} group flex w-full items-center gap-3 px-4 py-3 text-left text-sm text-content-light transition-colors hover:bg-white/[0.04] ${
+                        i > 0 ? "border-t border-glass" : ""
+                      }`}
+                    >
+                      <span className="text-[var(--tint-fg)] opacity-70 group-hover:opacity-100">{openTopic.icon}</span>
+                      <span className="flex-1">{p}</span>
+                      <span className="text-content-dim opacity-0 transition-opacity group-hover:opacity-100">↵</span>
+                    </button>
+                  ))}
+                </div>
               )}
             </div>
-
-            <div
-              className={`max-w-[85%] sm:max-w-[75%] rounded-2xl px-4 py-3 text-sm leading-relaxed ${
-                msg.role === "user"
-                  ? "bg-gradient-to-br from-primary to-primary-dark text-white rounded-tr-sm shadow-lg shadow-primary/10"
-                  : "border border-glass bg-white/[0.04] text-content-light rounded-tl-sm backdrop-blur-md"
-              }`}
-            >
-              {msg.text}
-            </div>
           </div>
-        ))}
+        ) : (
+          /* ─── Conversation ─── */
+          <>
+            <div ref={scrollRef} className="flex-1 overflow-y-auto px-4">
+              <div className="mx-auto flex w-full max-w-[760px] flex-col gap-6 py-6">
+                {messages.map((msg) =>
+                  msg.role === "user" ? (
+                    <div key={msg.id} className="animate-fadeIn flex justify-end">
+                      <div className="max-w-[85%] whitespace-pre-wrap rounded-3xl rounded-br-lg border border-primary/20 bg-primary/[0.14] px-4 py-2.5 text-[15px] leading-relaxed text-content sm:max-w-[75%]">
+                        {msg.text}
+                      </div>
+                    </div>
+                  ) : (
+                    <div key={msg.id} className="group flex gap-3">
+                      <div className="mt-0.5">
+                        <SoundOrb size={28} active={revealId === msg.id} />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        {msg.songLabel && (
+                          <span className="chip tint-violet mb-2 max-w-full">
+                            {ICONS.disc}
+                            <span className="truncate">Grounded in {msg.songLabel}</span>
+                          </span>
+                        )}
+                        <div className="whitespace-pre-wrap text-[15px] leading-7 text-content-light">
+                          <RevealText
+                            text={msg.text}
+                            animate={revealId === msg.id}
+                            onTick={() => scrollToBottom(false)}
+                            onDone={() => setRevealId((id) => (id === msg.id ? null : id))}
+                          />
+                        </div>
+                        {revealId !== msg.id && (
+                          <div className="mt-2 flex gap-1 opacity-100 transition-opacity md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100">
+                            <ActionButton label={copiedId === msg.id ? "Copied" : "Copy"} onClick={() => copyMessage(msg)}>
+                              {copiedId === msg.id ? ICONS.check : ICONS.copy}
+                            </ActionButton>
+                            <ActionButton label="Ask again" onClick={() => askAgain(msg.id)} disabled={isThinking}>
+                              {ICONS.retry}
+                            </ActionButton>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )
+                )}
 
-        {isThinking && (
-          <div className="flex items-start gap-2.5">
-            <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-xl border border-primary/30 bg-primary/10 text-primary-light">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M12 2L14.4 9.6L22 12L14.4 14.4L12 22L9.6 14.4L2 12L9.6 9.6L12 2Z" />
-              </svg>
+                {thinkingIn === active?.id && (
+                  <div className="animate-fadeIn flex items-center gap-3">
+                    <SoundOrb size={28} />
+                    <span className="thinking-text text-sm font-medium">Listening for the answer…</span>
+                  </div>
+                )}
+              </div>
             </div>
-            <div className="flex items-center gap-2 rounded-2xl rounded-tl-sm border border-glass bg-white/[0.04] px-4 py-3">
-              <span className="spinner" />
-              <span className="text-xs text-content-muted">Analyzing audio context…</span>
+
+            <div className="flex-shrink-0 px-4 pb-4">
+              <div className="mx-auto w-full max-w-[760px]">
+                {composer}
+                <p className="mt-2 text-center text-[11px] text-content-dim">
+                  Wilsify Tutor is a rule-based demo — answers cover core music theory and your analyzed song.
+                </p>
+              </div>
             </div>
-          </div>
+          </>
         )}
-      </div>
-
-      {/* Suggestions */}
-      <div className="mt-3 flex flex-wrap gap-1.5">
-        {suggestions.map((q) => (
-          <button
-            key={q}
-            type="button"
-            onClick={() => sendQuestion(q)}
-            disabled={isThinking}
-            className="rounded-full border border-glass bg-white/[0.03] px-3 py-1.5 text-xs text-content-muted transition-all hover:border-primary/40 hover:bg-primary/5 hover:text-content active:scale-95 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            {q}
-          </button>
-        ))}
-      </div>
-
-      {/* Input Bar */}
-      <form
-        onSubmit={(e) => {
-          e.preventDefault();
-          sendQuestion(input);
-        }}
-        className="mt-3 flex gap-2 sm:gap-3"
-      >
-        <input
-          type="text"
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          aria-label="Ask the assistant a question"
-          placeholder="Ask about chords, scales, BPM, or music theory…"
-          className="input-base flex-1"
-          disabled={isThinking}
-        />
-        <button
-          type="submit"
-          disabled={!input.trim() || isThinking}
-          className="btn-primary px-4 sm:px-6"
-        >
-          <span>Send</span>
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-            <line x1="22" y1="2" x2="11" y2="13" />
-            <polygon points="22 2 15 22 11 13 2 9 22 2" />
-          </svg>
-        </button>
-      </form>
+      </section>
     </div>
+  );
+}
+
+/** Mini waveform glyph shown in the send button while the composer is empty. */
+function SoundOrbIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path d="M5 10v4M9.5 6.5v11M14.5 8.5v7M19 10.5v3" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function RailGroup({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <div className="mb-4">
+      <p className="mb-1 px-2 text-[10.5px] font-bold uppercase tracking-[0.12em] text-content-dim/80">{label}</p>
+      <div className="flex flex-col gap-0.5">{children}</div>
+    </div>
+  );
+}
+
+function RailItem({
+  c,
+  active,
+  onOpen,
+  onPin,
+  onDelete,
+}: {
+  c: Conversation;
+  active: boolean;
+  onOpen: (id: string) => void;
+  onPin: (id: string) => void;
+  onDelete: (id: string) => void;
+}) {
+  return (
+    <div
+      className={`group relative flex items-center rounded-lg transition-colors ${
+        active ? "bg-white/[0.07] text-content" : "text-content-muted hover:bg-white/[0.04] hover:text-content"
+      }`}
+    >
+      <button
+        type="button"
+        onClick={() => onOpen(c.id)}
+        aria-current={active ? "page" : undefined}
+        className="flex min-w-0 flex-1 items-center gap-2 px-2 py-2 text-left text-[13px]"
+      >
+        <span className={active ? "text-primary-light" : "text-content-dim"}>{c.pinned ? ICONS.pin : ICONS.chat}</span>
+        <span className="truncate">{c.title}</span>
+      </button>
+      <div className="flex flex-shrink-0 items-center pr-1 opacity-100 transition-opacity lg:opacity-0 lg:group-hover:opacity-100 lg:group-focus-within:opacity-100">
+        <button
+          type="button"
+          aria-label={c.pinned ? `Unpin ${c.title}` : `Pin ${c.title}`}
+          onClick={() => onPin(c.id)}
+          className="flex h-7 w-7 items-center justify-center rounded-md text-content-dim hover:bg-white/[0.06] hover:text-content"
+        >
+          {ICONS.pin}
+        </button>
+        <button
+          type="button"
+          aria-label={`Delete ${c.title}`}
+          onClick={() => onDelete(c.id)}
+          className="flex h-7 w-7 items-center justify-center rounded-md text-content-dim hover:bg-pink/10 hover:text-pink"
+        >
+          {ICONS.trash}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function ActionButton({
+  label,
+  onClick,
+  disabled,
+  children,
+}: {
+  label: string;
+  onClick: () => void;
+  disabled?: boolean;
+  children: ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      className="flex items-center gap-1.5 rounded-lg px-2 py-1 text-xs font-medium text-content-dim transition-colors hover:bg-white/[0.05] hover:text-content disabled:cursor-not-allowed disabled:opacity-50"
+    >
+      {children}
+      {label}
+    </button>
   );
 }
