@@ -6,8 +6,8 @@ export function Logo({ size = 32, withText = true }: { size?: number; withText?:
         style={{
           width: size,
           height: size,
-          background: "linear-gradient(135deg, var(--color-primary), var(--color-primary-dark))",
-          boxShadow: "0 0 20px rgba(124,92,255,0.4)",
+          background: "linear-gradient(135deg, var(--color-ns-coral-soft), var(--color-ns-coral))",
+          boxShadow: "0 1px 0 rgba(255,255,255,0.18) inset",
         }}
       >
         <img src="/wilsify-logo.svg" alt="" width={size * 0.6} height={size * 0.6} />
