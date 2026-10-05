@@ -17,6 +17,8 @@ export interface SavedAnalysis {
   fileName: string;
   savedAt: string; // ISO timestamp
   analysis: AnalysisResult;
+  favorite?: boolean;
+  lastPracticed?: string;
 }
 
 function readAll(): SavedAnalysis[] {
@@ -67,6 +69,24 @@ export function saveToLibrary(fileName: string, analysis: AnalysisResult): Saved
 
 export function removeFromLibrary(id: string) {
   writeAll(readAll().filter((item) => item.id !== id));
+}
+
+export function toggleFavorite(id: string): boolean {
+  const items = readAll();
+  const item = items.find((i) => i.id === id);
+  if (!item) return false;
+  item.favorite = !item.favorite;
+  writeAll(items);
+  return Boolean(item.favorite);
+}
+
+export function markPracticed(id: string) {
+  const items = readAll();
+  const item = items.find((i) => i.id === id);
+  if (item) {
+    item.lastPracticed = new Date().toISOString();
+    writeAll(items);
+  }
 }
 
 export function getSavedById(id: string): SavedAnalysis | null {

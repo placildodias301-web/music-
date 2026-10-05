@@ -21,7 +21,7 @@ function formatSeconds(seconds: number): string {
 const DIFFICULTY_BADGES: Record<string, { bg: string; text: string; border: string }> = {
   Beginner: { bg: "rgba(98, 214, 167, 0.12)", text: "#62D6A7", border: "rgba(98, 214, 167, 0.3)" },
   Intermediate: { bg: "rgba(244, 184, 74, 0.12)", text: "#F4B84A", border: "rgba(244, 184, 74, 0.3)" },
-  Advanced: { bg: "rgba(255, 107, 87, 0.12)", text: "#FF6B57", border: "rgba(255, 107, 87, 0.3)" },
+  Advanced: { bg: "rgba(255, 101, 120, 0.12)", text: "#FF6578", border: "rgba(255, 101, 120, 0.3)" },
 };
 
 export function Analysis() {

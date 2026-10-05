@@ -346,7 +346,7 @@ export function Practice() {
             <button
               type="button"
               onClick={togglePlay}
-              className="flex h-14 w-14 flex-shrink-0 items-center justify-center rounded-2xl bg-[var(--color-ns-coral)] text-[var(--color-ns-ink)] shadow-[0_4px_20px_rgba(255,107,87,0.35)] transition-all hover:scale-105 active:scale-95 self-center sm:self-auto"
+              className="flex h-14 w-14 flex-shrink-0 items-center justify-center rounded-2xl bg-[var(--color-ns-coral)] text-[var(--color-ns-ink)] shadow-[0_4px_20px_rgba(108,77,255,0.45)] transition-all hover:scale-105 active:scale-95 self-center sm:self-auto"
               aria-label={isPlaying ? "Pause" : "Play"}
             >
               {isPlaying ? (

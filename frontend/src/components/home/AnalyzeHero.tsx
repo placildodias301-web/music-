@@ -1,135 +1,30 @@
 import { useState } from "react";
-import type { ReactNode } from "react";
 import { Link } from "react-router-dom";
 import type { AnalysisResult } from "../../lib/api";
 import { ICON, Icon } from "./icons";
 import { stripExtension, topChords, waveHeights } from "./homeUtils";
 
 const FORMATS = ["MP3", "WAV", "M4A", "FLAC", "MP4", "MOV", "WEBM"];
-const WAVE_BARS = 56;
+const WAVE_BARS = 36;
 
 interface AnalyzeHeroProps {
-  /** Opens the existing file picker (owned by the Home page). */
   onPickFile: () => void;
-  /** Hands a dropped file to the existing upload flow. */
   onDropFile: (file: File) => void;
-  /** Starts the existing sample-track flow. */
   onTrySample: () => void;
-  /** The song currently loaded in the app, if any — real analysis data. */
   analysis: AnalysisResult | null;
   fileName: string | null;
 }
 
-function Readout({ label, value, icon, pending }: { label: string; value: ReactNode; icon: ReactNode; pending: boolean }) {
-  return (
-    <div className="min-w-0 rounded-xl border border-ns-border bg-ns-bg-2 px-3 py-2.5">
-      <div className="flex items-center gap-1.5 text-ns-blue">
-        <Icon size={13}>{icon}</Icon>
-        <span className="text-[10.5px] font-bold uppercase tracking-[0.12em] text-ns-muted">{label}</span>
-      </div>
-      <p
-        className={`mt-1 truncate font-heading text-[15px] font-bold ${pending ? "text-ns-muted/60" : "text-ns-text"}`}
-      >
-        {value}
-      </p>
-    </div>
-  );
-}
-
-/** Right-hand "track panel": real values when a song is loaded, neutral placeholders otherwise. */
-function TrackPanel({ analysis, fileName }: { analysis: AnalysisResult | null; fileName: string | null }) {
-  const title = analysis ? stripExtension(fileName ?? analysis.fileName) : null;
-  const bars = waveHeights(title ?? "wilsify", WAVE_BARS);
-  const chords = analysis ? topChords(analysis, 3) : [];
-  const timeline = analysis?.chordTimeline ?? [];
-  const total = analysis?.durationSeconds || timeline.at(-1)?.end || 0;
-
-  return (
-    <div className="rounded-2xl border border-ns-border bg-ns-bg/60 p-4 sm:p-5">
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <p className="ns-eyebrow">{analysis ? "Current track" : "Track preview"}</p>
-          <p className="mt-1 truncate text-sm font-bold text-ns-text" title={title ?? undefined}>
-            {title ?? "No song loaded yet"}
-          </p>
-        </div>
-        {analysis ? (
-          <span className="inline-flex flex-shrink-0 items-center gap-1 rounded-full border border-ns-mint/30 bg-ns-mint/10 px-2 py-0.5 text-[11px] font-bold text-ns-mint">
-            <Icon size={11}>{ICON.check}</Icon>
-            Analysed
-          </span>
-        ) : (
-          <span className="inline-flex flex-shrink-0 items-center gap-1.5 rounded-full border border-ns-border bg-ns-bg-2 px-2 py-0.5 text-[11px] font-semibold text-ns-muted">
-            <span className="h-1.5 w-1.5 rounded-full bg-ns-muted/60" aria-hidden="true" />
-            Waiting for audio
-          </span>
-        )}
-      </div>
-
-      {/* Decorative waveform motif — not measured audio. */}
-      <div className="mt-4 flex h-16 items-center gap-[3px]" aria-hidden="true">
-        {bars.map((h, i) => (
-          <span
-            key={i}
-            className="ns-wave-bar"
-            style={{ height: `${h}%`, opacity: analysis ? (i < WAVE_BARS * 0.38 ? 1 : 0.4) : 0.28 }}
-          />
-        ))}
-      </div>
-
-      {/* Chord timeline — real segments from the analysis when available. */}
-      {analysis && timeline.length > 0 && total > 0 ? (
-        <div className="mt-3 flex h-6 gap-[2px] overflow-hidden rounded-md" aria-label="Chord timeline" role="img">
-          {timeline.slice(0, 24).map((seg, i) => (
-            <span
-              key={`${seg.chord}-${i}`}
-              className="flex min-w-0 items-center justify-center bg-ns-blue/[0.14] font-mono text-[10px] font-medium text-ns-text/85 first:rounded-l-md last:rounded-r-md"
-              style={{ flexGrow: Math.max(seg.end - seg.start, 0.1), flexBasis: 0 }}
-              title={seg.chord}
-            >
-              <span className="truncate px-1">{seg.chord}</span>
-            </span>
-          ))}
-        </div>
-      ) : (
-        <div className="mt-3 flex h-6 items-center justify-center rounded-md border border-dashed border-ns-border text-[11px] text-ns-muted/80">
-          Chord timeline appears after analysis
-        </div>
-      )}
-
-      <div className="mt-4 grid grid-cols-2 gap-2">
-        <Readout label="Key" icon={ICON.key} pending={!analysis} value={analysis ? analysis.key : "—"} />
-        <Readout label="BPM" icon={ICON.metronome} pending={!analysis} value={analysis ? analysis.bpm : "—"} />
-        <Readout label="Scale" icon={ICON.scale} pending={!analysis} value={analysis ? analysis.scale : "—"} />
-        <Readout
-          label="Chords"
-          icon={ICON.chords}
-          pending={!analysis}
-          value={analysis && chords.length > 0 ? chords.join(" · ") : "—"}
-        />
-      </div>
-
-      {analysis && (
-        <div className="mt-3 grid grid-cols-2 gap-2">
-          <Link to="/analysis" className="ns-btn-secondary min-h-[40px] px-3 text-[13px]">
-            View analysis
-          </Link>
-          <Link to="/practice" className="ns-btn-secondary min-h-[40px] px-3 text-[13px]">
-            Practice
-          </Link>
-        </div>
-      )}
-    </div>
-  );
-}
-
 export function AnalyzeHero({ onPickFile, onDropFile, onTrySample, analysis, fileName }: AnalyzeHeroProps) {
   const [dragging, setDragging] = useState(false);
+  const title = analysis ? stripExtension(fileName ?? analysis.fileName) : null;
+  const bars = waveHeights(title ?? "wilsify-hero", WAVE_BARS);
+  const chords = analysis ? topChords(analysis, 3) : [];
 
   return (
     <section
       aria-labelledby="analyze-hero-title"
-      className="ns-card relative overflow-hidden p-5 sm:p-7"
+      className="relative overflow-hidden rounded-2xl border border-[#202E50] bg-gradient-to-br from-[#0D1630] via-[#0A1022] to-[#070D1C] p-6 shadow-2xl transition-all sm:p-8"
       onDragOver={(e) => {
         e.preventDefault();
         setDragging(true);
@@ -144,67 +39,163 @@ export function AnalyzeHero({ onPickFile, onDropFile, onTrySample, analysis, fil
         if (file) onDropFile(file);
       }}
     >
-      {/* One faint studio light behind the track panel — kept deliberately subtle. */}
+      {/* Background ambient glow highlights */}
       <div
         aria-hidden="true"
-        className="pointer-events-none absolute inset-0 bg-[radial-gradient(60%_80%_at_90%_10%,rgba(77,163,255,0.08),transparent_70%)]"
+        className="pointer-events-none absolute -right-16 -top-16 h-80 w-80 rounded-full bg-[#6C4DFF]/15 blur-3xl"
+      />
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute right-1/4 -bottom-16 h-64 w-64 rounded-full bg-[#22C7D9]/10 blur-3xl"
       />
 
-      <div className="relative grid items-center gap-7 lg:grid-cols-[minmax(0,1fr)_minmax(0,340px)] xl:gap-8">
+      <div className="relative z-10 grid items-center gap-8 lg:grid-cols-[1.1fr_0.9fr] xl:gap-12">
+        {/* Left Column: Heading and CTAs */}
         <div className="min-w-0">
-          <p className="ns-eyebrow flex items-center gap-2">
-            <span className="h-1.5 w-1.5 rounded-full bg-ns-blue" aria-hidden="true" />
-            Song analysis
-          </p>
+          <div className="inline-flex items-center gap-1.5 rounded-full border border-[#22C7D9]/35 bg-[#22C7D9]/10 px-3 py-1 text-[11px] font-bold uppercase tracking-wider text-[#22C7D9] shadow-sm">
+            <span className="text-[12px]">✦</span>
+            <span>AI POWERED</span>
+          </div>
+
           <h2
             id="analyze-hero-title"
-            className="mt-3 font-heading text-[30px] font-bold leading-[1.1] tracking-tight text-ns-text sm:text-[40px]"
+            className="mt-4 font-heading text-3xl font-extrabold leading-[1.1] tracking-tight text-[#F4F6FF] sm:text-4xl lg:text-[44px]"
           >
-            Analyze your <span className="text-ns-coral">next song</span>
+            Analyze <span className="bg-gradient-to-r from-[#6C4DFF] via-[#8B5CF6] to-[#A78BFA] bg-clip-text text-transparent drop-shadow-[0_2px_16px_rgba(108,77,255,0.4)]">your next song</span>
           </h2>
-          <p className="mt-3 max-w-md text-[15px] leading-relaxed text-ns-muted">
-            Upload audio or video and instantly discover its key, BPM, scale and chords.
+
+          <p className="mt-3.5 max-w-lg text-[15px] leading-relaxed text-[#A5B1CC]">
+            Upload audio or video and instantly discover its key, BPM, chords and more.
           </p>
 
-          <div className="mt-6 flex flex-col gap-2.5 sm:flex-row sm:flex-wrap">
-            <button type="button" onClick={onPickFile} className="ns-btn-primary px-6">
+          <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:items-center">
+            <button
+              type="button"
+              onClick={onPickFile}
+              className="ns-btn-primary flex items-center justify-center gap-2 rounded-xl px-6 py-3 text-sm font-bold shadow-[0_6px_24px_rgba(108,77,255,0.5)] transition-all hover:scale-105 active:scale-95"
+            >
               <Icon size={17}>{ICON.upload}</Icon>
-              Upload Song
+              <span>Upload Song</span>
             </button>
-            <button type="button" onClick={onTrySample} className="ns-btn-secondary px-5">
-              <Icon size={15} className="text-ns-blue">
+
+            <button
+              type="button"
+              onClick={onTrySample}
+              className="ns-btn-secondary flex items-center justify-center gap-2 rounded-xl px-5 py-3 text-sm font-semibold transition-all hover:bg-[#14203D]"
+            >
+              <Icon size={15} className="text-[#4DA3FF]">
                 {ICON.play}
               </Icon>
-              Try Sample Track
+              <span>Try Sample Track</span>
             </button>
           </div>
 
-          <div className="mt-6 flex flex-col gap-1.5 text-xs text-ns-muted sm:flex-row sm:flex-wrap sm:items-center sm:gap-x-4">
-            <div className="flex flex-wrap items-center gap-1.5">
-              <span className="text-ns-muted/80">Supported formats:</span>
-              <span className="font-mono tracking-wide text-ns-muted/90">{FORMATS.join(" · ")}</span>
-            </div>
-            <div className="flex items-center gap-1.5">
-              <span className="text-ns-muted/80">Maximum:</span>
-              <span className="font-semibold text-ns-text/90">100 MB</span>
-            </div>
+          <div className="mt-6 flex flex-wrap items-center gap-2 text-xs text-[#687797]">
+            <span className="font-mono tracking-wide text-[#A5B1CC]">{FORMATS.join("  ")}</span>
+            <span className="text-[#687797]">·</span>
+            <span className="text-[#A5B1CC]">(Max 100 MB)</span>
           </div>
-          <p className="mt-2 hidden text-xs text-ns-muted/70 sm:block">Or drag and drop a file onto this card.</p>
+          <p className="mt-2 text-xs text-[#687797]">Or drag and drop a file onto this card.</p>
         </div>
 
-        <TrackPanel analysis={analysis} fileName={fileName} />
+        {/* Right Column: Visual Stage with Guitar motif & Floating Badges */}
+        <div className="relative flex h-[260px] w-full items-center justify-center overflow-hidden rounded-2xl border border-[#202E50] bg-gradient-to-br from-[#0B132B]/80 via-[#070D1C]/90 to-[#050A18] p-5 shadow-inner sm:h-[280px]">
+          {/* Subtle electric guitar fretboard / neck silhouette illustration in background */}
+          <div aria-hidden="true" className="pointer-events-none absolute inset-0 opacity-25">
+            <svg viewBox="0 0 400 280" className="h-full w-full" preserveAspectRatio="xMidYMid slice">
+              <defs>
+                <linearGradient id="guitarGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                  <stop offset="0%" stopColor="#6C4DFF" stopOpacity="0.4" />
+                  <stop offset="50%" stopColor="#22C7D9" stopOpacity="0.2" />
+                  <stop offset="100%" stopColor="#050A18" stopOpacity="0" />
+                </linearGradient>
+              </defs>
+              <path d="M-50,220 C50,150 180,90 380,20 L400,60 C220,120 100,180 -30,260 Z" fill="url(#guitarGrad)" />
+              {/* Strings */}
+              <line x1="-30" y1="230" x2="380" y2="35" stroke="rgba(255,255,255,0.18)" strokeWidth="1" />
+              <line x1="-30" y1="235" x2="380" y2="40" stroke="rgba(255,255,255,0.18)" strokeWidth="1" />
+              <line x1="-30" y1="240" x2="380" y2="45" stroke="rgba(255,255,255,0.18)" strokeWidth="1.2" />
+              <line x1="-30" y1="245" x2="380" y2="50" stroke="rgba(255,255,255,0.18)" strokeWidth="1.4" />
+              <line x1="-30" y1="250" x2="380" y2="55" stroke="rgba(255,255,255,0.18)" strokeWidth="1.6" />
+            </svg>
+          </div>
+
+          {/* Central Animated Audio Waveform */}
+          <div className="relative z-10 flex h-28 items-center justify-center gap-1.5 px-4" aria-hidden="true">
+            {bars.map((h, i) => {
+              const isCenter = Math.abs(i - WAVE_BARS / 2) < 8;
+              return (
+                <div
+                  key={i}
+                  className="w-1.5 rounded-full transition-all duration-300"
+                  style={{
+                    height: `${Math.max(16, h)}%`,
+                    background: isCenter
+                      ? "linear-gradient(to top, #6C4DFF, #22C7D9)"
+                      : "linear-gradient(to top, rgba(108,77,255,0.4), rgba(77,163,255,0.7))",
+                    boxShadow: isCenter ? "0 0 12px rgba(34,199,217,0.4)" : "none",
+                  }}
+                />
+              );
+            })}
+          </div>
+
+          {/* Floating Badges exactly like reference screenshot: Key, BPM, Chords, Scale */}
+          <div className="pointer-events-none absolute inset-0 z-20 flex flex-col justify-between p-4 sm:p-5">
+            <div className="flex justify-between items-start">
+              {/* Key Badge */}
+              <div className="pointer-events-auto flex items-center gap-1.5 rounded-xl border border-[#22C7D9]/40 bg-[#070D1C]/90 px-3 py-1.5 text-xs font-bold text-[#22C7D9] shadow-lg backdrop-blur-md transition-transform hover:scale-105">
+                <Icon size={13}>{ICON.key}</Icon>
+                <span>{analysis ? analysis.key : "Key"}</span>
+              </div>
+
+              {/* BPM Badge */}
+              <div className="pointer-events-auto flex items-center gap-1.5 rounded-xl border border-[#4DA3FF]/40 bg-[#070D1C]/90 px-3 py-1.5 text-xs font-bold text-[#4DA3FF] shadow-lg backdrop-blur-md transition-transform hover:scale-105">
+                <Icon size={13}>{ICON.metronome}</Icon>
+                <span>{analysis ? `${analysis.bpm} BPM` : "BPM"}</span>
+              </div>
+            </div>
+
+            <div className="flex justify-between items-end">
+              {/* Chords Badge */}
+              <div className="pointer-events-auto flex items-center gap-1.5 rounded-xl border border-[#8B5CF6]/40 bg-[#070D1C]/90 px-3 py-1.5 text-xs font-bold text-[#8B5CF6] shadow-lg backdrop-blur-md transition-transform hover:scale-105">
+                <Icon size={13}>{ICON.chords}</Icon>
+                <span>{analysis && chords.length > 0 ? chords.join(" · ") : "Chords"}</span>
+              </div>
+
+              {/* Scale Badge */}
+              <div className="pointer-events-auto flex items-center gap-1.5 rounded-xl border border-[#55D69A]/40 bg-[#070D1C]/90 px-3 py-1.5 text-xs font-bold text-[#55D69A] shadow-lg backdrop-blur-md transition-transform hover:scale-105">
+                <Icon size={13}>{ICON.scale}</Icon>
+                <span>{analysis ? analysis.scale : "Scale"}</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Quick link to view analysis if a track is active */}
+          {analysis && (
+            <div className="absolute bottom-3 left-1/2 -translate-x-1/2 z-30">
+              <Link
+                to="/analysis"
+                className="flex items-center gap-1.5 rounded-full bg-gradient-to-r from-[#6C4DFF] to-[#8B5CF6] px-4 py-1 text-xs font-bold text-white shadow-md transition-transform hover:scale-105"
+              >
+                <span>View {title}</span>
+                <Icon size={12}>{ICON.arrowRight}</Icon>
+              </Link>
+            </div>
+          )}
+        </div>
       </div>
 
       {dragging && (
         <div
-          className="pointer-events-none absolute inset-2 z-10 flex items-center justify-center rounded-[14px] border-2 border-dashed border-ns-coral/70 bg-ns-bg/85"
+          className="pointer-events-none absolute inset-2 z-30 flex items-center justify-center rounded-xl border-2 border-dashed border-[#8B5CF6] bg-[#050A18]/90 backdrop-blur-sm"
           role="status"
         >
-          <p className="flex items-center gap-2 font-heading text-lg font-bold text-ns-text">
-            <Icon size={20} className="text-ns-coral">
+          <p className="flex items-center gap-2 font-heading text-lg font-bold text-white">
+            <Icon size={22} className="text-[#8B5CF6]">
               {ICON.upload}
             </Icon>
-            Release to analyse
+            Drop song to start analysis
           </p>
         </div>
       )}

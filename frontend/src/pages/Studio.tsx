@@ -33,7 +33,7 @@ export function Studio() {
 
     return {
       library,
-      recent: library.slice(0, 4),
+      recent: library.slice(0, 3),
       week,
       weekSeconds,
       streak,
@@ -76,7 +76,7 @@ export function Studio() {
   }
 
   return (
-    <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 sm:py-8 md:px-8 space-y-8">
+    <div className="mx-auto max-w-[1400px] px-4 py-5 sm:px-6 sm:py-7 md:px-8 space-y-6">
       {/* Hidden file input for native file dialog triggered by "Upload Song" or drop zone */}
       <input
         ref={fileInputRef}
@@ -89,7 +89,7 @@ export function Studio() {
       {/* Mobile search bar (desktop uses header search) */}
       <form onSubmit={handleMobileSearch} role="search" className="lg:hidden">
         <label className="ns-input">
-          <span className="text-ns-muted">
+          <span className="text-[#A5B1CC]">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" aria-hidden="true">
               <circle cx="11" cy="11" r="7" stroke="currentColor" strokeWidth="2" />
               <path d="m20 20-3-3" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
@@ -100,33 +100,24 @@ export function Studio() {
             onChange={(e) => setMobileQuery(e.target.value)}
             aria-label="Search songs, chords, or questions"
             placeholder="Search songs, chords, or questions…"
-            className="w-full bg-transparent text-[13px] text-ns-text placeholder:text-ns-muted/80 focus:outline-none"
+            className="w-full bg-transparent text-[13px] text-[#F4F6FF] placeholder:text-[#687797] focus:outline-none"
           />
         </label>
       </form>
 
-      {/* 1. HERO SECTION: Large premium analysis and upload card */}
-      <AnalyzeHero
-        onPickFile={() => fileInputRef.current?.click()}
-        onDropFile={(file) => handOff({ file })}
-        onTrySample={() => handOff({ sample: true })}
-        analysis={analysis}
-        fileName={fileName}
-      />
-
-      {/* 2. RECENT ANALYSES & PRACTICE THIS WEEK */}
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-12 lg:items-start">
-        {/* Left: Recent Analyses */}
-        <div className="lg:col-span-7 xl:col-span-7">
-          <RecentAnalyses
-            items={data.recent}
-            totalCount={data.library.length}
-            onOpenItem={openSaved}
+      {/* 1. TOP ROW: HERO (Left) & YOUR PRACTICE THIS WEEK (Right) */}
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-12 lg:items-stretch">
+        <div className="lg:col-span-7 xl:col-span-8 flex flex-col">
+          <AnalyzeHero
+            onPickFile={() => fileInputRef.current?.click()}
+            onDropFile={(file) => handOff({ file })}
+            onTrySample={() => handOff({ sample: true })}
+            analysis={analysis}
+            fileName={fileName}
           />
         </div>
 
-        {/* Right: Your Practice This Week */}
-        <div className="lg:col-span-5 xl:col-span-5">
+        <div className="lg:col-span-5 xl:col-span-4 flex flex-col">
           <PracticeWeekCard
             week={data.week}
             weekSeconds={data.weekSeconds}
@@ -137,10 +128,22 @@ export function Studio() {
         </div>
       </div>
 
-      {/* 3. QUICK TOOLS */}
-      <QuickTools />
+      {/* 2. SECOND ROW: RECENT ANALYSES (Left) & QUICK TOOLS (Right) */}
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-12 lg:items-stretch">
+        <div className="lg:col-span-7 xl:col-span-8">
+          <RecentAnalyses
+            items={data.recent}
+            totalCount={data.library.length}
+            onOpenItem={openSaved}
+          />
+        </div>
 
-      {/* 4. BOTTOM PRACTICE BANNER */}
+        <div className="lg:col-span-5 xl:col-span-4">
+          <QuickTools />
+        </div>
+      </div>
+
+      {/* 3. THIRD ROW: FULL-WIDTH BOTTOM PRACTICE BANNER */}
       <BottomBanner />
     </div>
   );

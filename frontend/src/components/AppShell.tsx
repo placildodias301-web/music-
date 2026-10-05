@@ -137,7 +137,6 @@ const FOOTER_ITEMS: NavItem[] = [
 ];
 
 const SECTION_META: Record<string, { title: string; subtitle: string }> = {
-  // Home renders its own greeting, so the header stays clean there.
   "/studio": { title: "", subtitle: "" },
   "/analysis": { title: "Analysis", subtitle: "Chord timeline, stems and export — everything from one analysis." },
   "/library": { title: "Library", subtitle: "Saved analyses keep their chords, tab and stems together." },
@@ -146,7 +145,6 @@ const SECTION_META: Record<string, { title: string; subtitle: string }> = {
   "/account": { title: "Settings", subtitle: "Profile and preferences for this device." },
   "/upload": { title: "Upload & Analyze", subtitle: "Upload a song or video and Wilsify AI will analyze the real audio." },
   "/practice": { title: "Practice Mode", subtitle: "Practice along at your own speed, with live accuracy tracking." },
-  // The assistant is a full-height chat workspace with its own top bar.
   "/assistant": { title: "", subtitle: "" },
   "/tuner": { title: "Chromatic Tuner", subtitle: "Live chromatic tuner — instrument presets and real-time pitch feedback." },
   "/chords": { title: "Chord Library", subtitle: "Browse chord shapes across guitar, ukulele and piano." },
@@ -167,7 +165,6 @@ function greeting(): string {
   return "Good evening";
 }
 
-/** Closes a popover on outside click or Escape. */
 function useDismiss(ref: RefObject<HTMLElement | null>, open: boolean, close: () => void) {
   useEffect(() => {
     if (!open) return;
@@ -202,17 +199,20 @@ function NavRow({
       to={item.to}
       onClick={onNavigate}
       aria-current={active ? "page" : undefined}
-      className={`group relative flex min-h-[38px] items-center justify-between rounded-[10px] px-3 py-2 text-sm font-semibold transition-colors ${
+      className={`group relative flex min-h-[40px] items-center justify-between rounded-xl px-3 py-2 text-sm font-semibold transition-all ${
         active
-          ? "bg-ns-coral/[0.09] text-ns-text"
-          : "text-ns-muted hover:bg-white/[0.04] hover:text-ns-text"
+          ? "bg-gradient-to-r from-[#6C4DFF]/30 to-[#8B5CF6]/15 text-[#F4F6FF] border border-[#6C4DFF]/40 shadow-[0_2px_12px_rgba(108,77,255,0.25)]"
+          : "text-[#A5B1CC] hover:bg-white/[0.04] hover:text-[#F4F6FF]"
       }`}
     >
       {active && (
-        <span aria-hidden="true" className="absolute -left-4 top-1/2 h-5 w-[3px] -translate-y-1/2 rounded-r-full bg-ns-coral" />
+        <span
+          aria-hidden="true"
+          className="absolute -left-3 top-1/2 h-5 w-[3px] -translate-y-1/2 rounded-r-full bg-[#8B5CF6] shadow-[0_0_8px_#8B5CF6]"
+        />
       )}
       <span className="flex items-center gap-3">
-        <span className={active ? "text-ns-coral" : "text-ns-muted/80 group-hover:text-ns-text"}>
+        <span className={active ? "text-[#8B5CF6] drop-shadow-[0_0_6px_rgba(139,92,246,0.6)]" : "text-[#A5B1CC] group-hover:text-[#F4F6FF]"}>
           {item.icon}
         </span>
         {item.label}
@@ -220,7 +220,7 @@ function NavRow({
       {badge !== undefined && badge > 0 && (
         <span
           className={`flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-[11px] font-bold ${
-            active ? "bg-ns-coral/20 text-ns-coral-soft" : "bg-white/[0.06] text-ns-muted"
+            active ? "bg-[#6C4DFF]/30 text-white border border-[#6C4DFF]/40" : "bg-white/[0.06] text-[#A5B1CC]"
           }`}
         >
           {badge}
@@ -244,18 +244,22 @@ function SidebarContent({
   onNavigate?: () => void;
 }) {
   return (
-    <>
+    <div className="flex flex-col h-full justify-between">
       <div>
-        <Link to="/upload" onClick={onNavigate} className="ns-btn-primary mb-6 w-full">
+        <Link
+          to="/upload"
+          onClick={onNavigate}
+          className="ns-btn-primary mb-6 flex w-full items-center justify-center gap-2 rounded-xl py-2.5 text-sm font-bold shadow-[0_6px_20px_rgba(108,77,255,0.45)] hover:shadow-[0_8px_24px_rgba(108,77,255,0.65)]"
+        >
           {icon(ICONS.plus, 16)}
-          Analyze a Song
+          <span>Analyze a Song</span>
         </Link>
 
         <nav aria-label="Main" className="flex flex-col gap-5">
           {NAV_GROUPS.map((group) => (
             <div key={group.label ?? "root"}>
               {group.label && (
-                <p className="mb-1.5 px-3 text-[10.5px] font-bold uppercase tracking-[0.14em] text-ns-muted/70">
+                <p className="mb-1.5 px-3 text-[10.5px] font-bold uppercase tracking-[0.14em] text-[#687797]">
                   {group.label}
                 </p>
               )}
@@ -276,27 +280,50 @@ function SidebarContent({
       </div>
 
       <div className="mt-6">
-        <p className="mb-1.5 px-3 text-[10.5px] font-bold uppercase tracking-[0.14em] text-ns-muted/70">Tools</p>
+        <p className="mb-1.5 px-3 text-[10.5px] font-bold uppercase tracking-[0.14em] text-[#687797]">Tools</p>
         <div className="flex flex-col gap-0.5">
           {FOOTER_ITEMS.map((item) => (
             <NavRow key={item.to} item={item} active={isActiveItem(pathname, item.to)} onNavigate={onNavigate} />
           ))}
         </div>
+
+        {/* Promo card matching reference screenshot */}
+        <div className="mt-4 rounded-xl border border-[#202E50] bg-gradient-to-br from-[#0D1630] to-[#101A34] p-3 shadow-md relative overflow-hidden">
+          <div className="flex items-center gap-3">
+            <span className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-[#6C4DFF] to-[#8B5CF6] text-white shadow-sm">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M9 18V5l12-2v13" />
+                <circle cx="6" cy="18" r="3" />
+                <circle cx="18" cy="16" r="3" />
+              </svg>
+            </span>
+            <div className="min-w-0">
+              <p className="text-xs font-bold text-[#F4F6FF]">Better practice.</p>
+              <p className="text-[11px] text-[#A5B1CC]">Bigger progress.</p>
+            </div>
+          </div>
+          <div className="mt-2 h-3 w-full opacity-40">
+            <svg viewBox="0 0 100 16" preserveAspectRatio="none" className="h-full w-full stroke-[#8B5CF6] fill-none">
+              <path d="M0,8 Q25,0 50,8 T100,8" strokeWidth="2.5" />
+            </svg>
+          </div>
+        </div>
+
         <Link
           to="/account"
           onClick={onNavigate}
-          className="mt-4 flex items-center gap-3 rounded-xl border border-ns-border bg-ns-card p-2.5 transition-colors hover:border-ns-border-strong"
+          className="mt-3 flex items-center gap-3 rounded-xl border border-[#202E50] bg-[#0D1630] p-2.5 transition-colors hover:border-[#293961] hover:bg-[#101A34]"
         >
-          <span className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-ns-raised text-xs font-bold text-ns-text ring-1 ring-ns-border-strong">
+          <span className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-[#101A34] text-xs font-bold text-[#F4F6FF] ring-1 ring-[#293961]">
             {initialsOf(name)}
           </span>
           <span className="min-w-0 flex-1">
-            <span className="block truncate text-xs font-bold text-ns-text">{name || "Musician"}</span>
-            <span className="block truncate text-[11px] text-ns-muted">{subtitle}</span>
+            <span className="block truncate text-xs font-bold text-[#F4F6FF]">{name || "Musician"}</span>
+            <span className="block truncate text-[11px] text-[#A5B1CC]">{subtitle}</span>
           </span>
         </Link>
       </div>
-    </>
+    </div>
   );
 }
 
@@ -307,7 +334,7 @@ function BottomLink({ item, pathname }: { item: NavItem; pathname: string }) {
       to={item.to}
       aria-current={active ? "page" : undefined}
       className={`flex flex-1 flex-col items-center gap-1 py-1.5 text-[11px] font-semibold transition-colors ${
-        active ? "text-ns-coral" : "text-ns-muted hover:text-ns-text"
+        active ? "text-[#8B5CF6]" : "text-[#A5B1CC] hover:text-[#F4F6FF]"
       }`}
     >
       {item.icon}
@@ -328,10 +355,6 @@ const PROFILE_LINKS: { to: string; label: string }[] = [
   { to: "/library", label: "Library" },
 ];
 
-/**
- * Notification bell + profile menu. The MVP has no notification feed, so the
- * bell opens an honest empty state rather than inventing alerts.
- */
 function HeaderActions({ name, subtitle, pathname }: { name: string; subtitle: string; pathname: string }) {
   const [open, setOpen] = useState<"notifications" | "profile" | null>(null);
   const notifRef = useRef<HTMLDivElement>(null);
@@ -341,7 +364,6 @@ function HeaderActions({ name, subtitle, pathname }: { name: string; subtitle: s
   useDismiss(notifRef, open === "notifications", close);
   useDismiss(profileRef, open === "profile", close);
 
-  // Close any open popover after navigating.
   useEffect(() => {
     setOpen(null);
   }, [pathname]);
@@ -355,24 +377,26 @@ function HeaderActions({ name, subtitle, pathname }: { name: string; subtitle: s
           aria-expanded={open === "notifications"}
           aria-controls="header-notifications"
           onClick={() => setOpen((v) => (v === "notifications" ? null : "notifications"))}
-          className="flex h-10 w-10 items-center justify-center rounded-xl border border-ns-border bg-ns-bg-2 text-ns-muted transition-colors hover:border-ns-border-strong hover:text-ns-text"
+          className="relative flex h-10 w-10 items-center justify-center rounded-xl border border-[#202E50] bg-[#070D1C] text-[#A5B1CC] transition-colors hover:border-[#293961] hover:text-[#F4F6FF]"
         >
           {icon(ICONS.bell, 18)}
+          {/* Notification dot matching reference screenshot */}
+          <span className="absolute top-2.5 right-2.5 h-2 w-2 rounded-full bg-[#FF6578] ring-2 ring-[#070D1C]" />
         </button>
         {open === "notifications" && (
           <div id="header-notifications" className="ns-popover w-[min(300px,calc(100vw-32px))]" role="region" aria-label="Notifications">
             <div className="px-3 pb-2 pt-2">
-              <p className="text-sm font-bold text-ns-text">Notifications</p>
+              <p className="text-sm font-bold text-[#F4F6FF]">Notifications</p>
             </div>
-            <div className="flex items-center gap-3 rounded-[10px] bg-ns-bg-2 px-3 py-3">
+            <div className="flex items-center gap-3 rounded-[10px] bg-[#070D1C] px-3 py-3">
               <span className="ns-icon-tile ns-accent-mint h-8 w-8 rounded-lg">
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" aria-hidden="true">
                   <path d="M20 6 9 17l-5-5" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
                 </svg>
               </span>
               <span className="min-w-0">
-                <span className="block text-[13px] font-semibold text-ns-text">You're all caught up</span>
-                <span className="block text-xs text-ns-muted">No new notifications.</span>
+                <span className="block text-[13px] font-semibold text-[#F4F6FF]">You're all caught up</span>
+                <span className="block text-xs text-[#A5B1CC]">No new notifications.</span>
               </span>
             </div>
           </div>
@@ -386,27 +410,27 @@ function HeaderActions({ name, subtitle, pathname }: { name: string; subtitle: s
           aria-expanded={open === "profile"}
           aria-controls="header-profile-menu"
           onClick={() => setOpen((v) => (v === "profile" ? null : "profile"))}
-          className="flex h-10 items-center gap-2 rounded-xl border border-ns-border bg-ns-bg-2 py-1 pl-1 pr-1.5 transition-colors hover:border-ns-border-strong sm:pr-2.5"
+          className="flex h-10 items-center gap-2 rounded-xl border border-[#202E50] bg-[#070D1C] py-1 pl-1 pr-1.5 transition-colors hover:border-[#293961] sm:pr-2.5"
         >
-          <span className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-[9px] bg-ns-raised text-[11px] font-bold text-ns-text ring-1 ring-ns-border-strong">
+          <span className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-[9px] bg-[#101A34] text-[11px] font-bold text-[#F4F6FF] ring-1 ring-[#293961]">
             {initialsOf(name)}
           </span>
-          <span className="hidden text-[13px] font-semibold text-ns-text sm:inline">{firstNameOf(name)}</span>
-          <span className={`text-ns-muted transition-transform ${open === "profile" ? "rotate-180" : ""}`}>
+          <span className="hidden text-[13px] font-semibold text-[#F4F6FF] sm:inline">{firstNameOf(name)}</span>
+          <span className={`text-[#A5B1CC] transition-transform ${open === "profile" ? "rotate-180" : ""}`}>
             {icon(ICONS.chevronDown, 15)}
           </span>
         </button>
         {open === "profile" && (
           <nav id="header-profile-menu" aria-label="Account" className="ns-popover">
-            <div className="mb-1 border-b border-ns-border px-3 pb-3 pt-2">
-              <p className="truncate text-sm font-bold text-ns-text">{name || "Musician"}</p>
-              {subtitle && <p className="truncate text-xs text-ns-muted">{subtitle}</p>}
+            <div className="mb-1 border-b border-[#202E50] px-3 pb-3 pt-2">
+              <p className="truncate text-sm font-bold text-[#F4F6FF]">{name || "Musician"}</p>
+              {subtitle && <p className="truncate text-xs text-[#A5B1CC]">{subtitle}</p>}
             </div>
             {PROFILE_LINKS.map((link) => (
               <Link
                 key={link.to}
                 to={link.to}
-                className="flex min-h-[40px] items-center rounded-[10px] px-3 text-[13px] font-semibold text-ns-muted transition-colors hover:bg-white/[0.05] hover:text-ns-text"
+                className="flex min-h-[40px] items-center rounded-[10px] px-3 text-[13px] font-semibold text-[#A5B1CC] transition-colors hover:bg-white/[0.05] hover:text-[#F4F6FF]"
               >
                 {link.label}
               </Link>
@@ -459,15 +483,11 @@ export function AppShell({ children }: { children: ReactNode }) {
   }
 
   return (
-    <div className="ns-scope flex min-h-screen">
+    <div className="ns-scope flex min-h-screen bg-[#050A18] text-[#F4F6FF]">
       {/* Desktop sidebar — visible at md (768px) and up */}
-      <aside className="sticky top-0 hidden h-screen w-[244px] flex-shrink-0 flex-col overflow-y-auto border-r border-ns-border bg-ns-bg-2 px-4 py-5 md:flex">
-        <Link to="/studio" className="mb-6 flex items-center gap-2.5 px-2 transition-opacity hover:opacity-90">
-          <Logo size={30} withText={false} />
-          <span className="font-heading text-[17px] font-bold tracking-tight text-ns-text">Wilsify</span>
-          <span className="rounded-md border border-ns-border-strong bg-ns-raised px-1.5 py-px text-[10px] font-bold text-ns-muted">
-            AI
-          </span>
+      <aside className="sticky top-0 hidden h-screen w-[248px] flex-shrink-0 flex-col overflow-y-auto border-r border-[#202E50] bg-[#070D1C] px-4 py-5 md:flex">
+        <Link to="/studio" className="mb-6 flex items-center px-1 transition-opacity hover:opacity-90">
+          <Logo size={32} withText={true} subtitle="AI that hears your stems" />
         </Link>
         <div className="flex flex-1 flex-col justify-between">
           <SidebarContent
@@ -482,18 +502,17 @@ export function AppShell({ children }: { children: ReactNode }) {
       {/* Mobile drawer */}
       {mobileNavOpen && (
         <div className="fixed inset-0 z-50 md:hidden" role="dialog" aria-modal="true" aria-label="Navigation">
-          <div className="animate-fadeIn absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={() => setMobileNavOpen(false)} />
-          <aside className="relative flex h-full w-[280px] flex-col overflow-y-auto border-r border-ns-border bg-ns-bg-2 px-4 py-5">
-            <div className="mb-6 flex items-center justify-between px-2">
-              <Link to="/studio" onClick={() => setMobileNavOpen(false)} className="flex items-center gap-2.5">
-                <Logo size={28} withText={false} />
-                <span className="font-heading text-base font-bold text-ns-text">Wilsify AI</span>
+          <div className="animate-fadeIn absolute inset-0 bg-black/75 backdrop-blur-sm" onClick={() => setMobileNavOpen(false)} />
+          <aside className="relative flex h-full w-[280px] flex-col overflow-y-auto border-r border-[#202E50] bg-[#070D1C] px-4 py-5">
+            <div className="mb-6 flex items-center justify-between px-1">
+              <Link to="/studio" onClick={() => setMobileNavOpen(false)}>
+                <Logo size={30} withText={true} subtitle="AI that hears your stems" />
               </Link>
               <button
                 type="button"
                 aria-label="Close menu"
                 onClick={() => setMobileNavOpen(false)}
-                className="flex h-10 w-10 items-center justify-center rounded-lg text-ns-muted hover:bg-white/[0.05] hover:text-ns-text"
+                className="flex h-9 w-9 items-center justify-center rounded-lg text-[#A5B1CC] hover:bg-white/[0.05] hover:text-[#F4F6FF]"
               >
                 <svg width="18" height="18" viewBox="0 0 20 20" fill="none" aria-hidden="true">
                   <path d="M5 5l10 10M15 5L5 15" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
@@ -519,55 +538,57 @@ export function AppShell({ children }: { children: ReactNode }) {
           isChat ? "h-[100dvh] overflow-hidden pb-16 md:pb-0" : "min-h-screen pb-24 md:pb-10"
         }`}
       >
-        <header className="sticky top-0 z-30 flex items-center justify-between gap-3 border-b border-ns-border/70 bg-ns-bg/85 px-4 py-3 backdrop-blur-md sm:px-6 md:px-8">
+        <header className="sticky top-0 z-30 flex items-center justify-between gap-3 border-b border-[#202E50]/80 bg-[#050A18]/85 px-4 py-3 backdrop-blur-xl sm:px-6 md:px-8">
           <div className="flex min-w-0 items-center gap-3">
             <button
               type="button"
               aria-label="Open menu"
               onClick={() => setMobileNavOpen(true)}
-              className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl border border-ns-border bg-ns-bg-2 text-ns-text transition-colors hover:border-ns-border-strong md:hidden"
+              className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl border border-[#202E50] bg-[#070D1C] text-[#F4F6FF] transition-colors hover:border-[#293961] md:hidden"
             >
               <svg width="18" height="18" viewBox="0 0 20 20" fill="none" aria-hidden="true">
                 <path d="M3 5h14M3 10h14M3 15h14" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
               </svg>
             </button>
             {isHome ? (
-              // Home's greeting is the page heading; the dashboard body starts at h2.
               <div className="min-w-0">
-                <h1 className="truncate font-heading text-base font-bold text-ns-text sm:text-xl">
+                <h1 className="truncate font-heading text-base font-bold text-[#F4F6FF] sm:text-xl">
                   {greeting()}, {firstNameOf(prefs.name)}{" "}
                   <span aria-hidden="true">👋</span>
                 </h1>
-                <p className="mt-0.5 hidden truncate text-[13px] text-ns-muted sm:block">
+                <p className="mt-0.5 hidden truncate text-[13px] text-[#A5B1CC] sm:block">
                   Ready to analyse your next song?
                 </p>
               </div>
             ) : meta.title ? (
               <div className="min-w-0">
-                <h1 className="truncate font-heading text-lg font-bold text-ns-text">{meta.title}</h1>
+                <h1 className="truncate font-heading text-lg font-bold text-[#F4F6FF]">{meta.title}</h1>
                 {meta.subtitle && (
-                  <p className="mt-0.5 hidden truncate text-xs text-ns-muted sm:block">{meta.subtitle}</p>
+                  <p className="mt-0.5 hidden truncate text-xs text-[#A5B1CC] sm:block">{meta.subtitle}</p>
                 )}
               </div>
             ) : (
               <Link to="/studio" className="flex items-center gap-2 md:hidden">
                 <Logo size={26} withText={false} />
-                <span className="font-heading text-base font-bold text-ns-text">Wilsify</span>
+                <span className="font-heading text-base font-bold text-[#F4F6FF]">Wilsify</span>
               </Link>
             )}
           </div>
 
-          <div className="flex flex-shrink-0 items-center gap-2 sm:gap-2.5">
+          <div className="flex flex-shrink-0 items-center gap-2 sm:gap-3">
             <form onSubmit={handleSearch} role="search" className="hidden lg:block">
-              <label className="ns-input">
-                <span className="text-ns-muted">{icon(ICONS.search, 15)}</span>
+              <label className="flex items-center gap-2.5 rounded-full border border-[#202E50] bg-[#070D1C]/90 px-3.5 py-1.5 backdrop-blur-md transition-colors focus-within:border-[#6C4DFF]/70 focus-within:bg-[#101A34]">
+                <span className="text-[#A5B1CC]">{icon(ICONS.search, 14)}</span>
                 <input
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
                   aria-label="Search songs, chords, or questions"
                   placeholder="Search songs, chords, or questions…"
-                  className="w-52 bg-transparent text-[13px] text-ns-text placeholder:text-ns-muted/80 focus:outline-none focus-visible:shadow-none xl:w-64"
+                  className="w-48 bg-transparent text-[13px] text-[#F4F6FF] placeholder:text-[#687797] focus:outline-none xl:w-64"
                 />
+                <kbd className="rounded border border-[#202E50] bg-[#101A34] px-1.5 py-0.5 text-[10px] font-mono text-[#A5B1CC]">
+                  Ctrl K
+                </kbd>
               </label>
             </form>
 
@@ -578,8 +599,8 @@ export function AppShell({ children }: { children: ReactNode }) {
         <main className={`min-w-0 flex-1 ${isChat ? "min-h-0" : ""}`}>{children}</main>
       </div>
 
-      {/* Mobile bottom navigation with a raised centre upload action */}
-      <nav aria-label="Primary" className="bottom-nav-blur fixed inset-x-0 bottom-0 z-40 border-ns-border bg-ns-bg/90 md:hidden">
+      {/* Mobile bottom navigation with raised center upload action */}
+      <nav aria-label="Primary" className="bottom-nav-blur fixed inset-x-0 bottom-0 z-40 border-t border-[#202E50] bg-[#070D1C]/95 backdrop-blur-xl md:hidden">
         <div className="flex h-16 items-center px-2">
           {BOTTOM_LEFT.map((item) => (
             <BottomLink key={item.to} item={item} pathname={location.pathname} />
@@ -588,7 +609,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             <Link
               to="/upload"
               aria-label="Analyze a song"
-              className="-mt-7 flex h-14 w-14 items-center justify-center rounded-2xl border border-white/15 bg-ns-coral text-ns-ink shadow-[0_10px_24px_-10px_rgba(255,107,87,0.8)] transition-transform active:scale-95"
+              className="-mt-7 flex h-14 w-14 items-center justify-center rounded-2xl border border-white/20 bg-gradient-to-br from-[#6C4DFF] to-[#8B5CF6] text-white shadow-[0_10px_24px_-8px_rgba(108,77,255,0.85)] transition-transform active:scale-95"
             >
               {icon(ICONS.plus, 24)}
             </Link>
@@ -599,7 +620,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           <button
             type="button"
             onClick={() => setMobileNavOpen(true)}
-            className="flex flex-1 flex-col items-center gap-1 py-1.5 text-[11px] font-semibold text-ns-muted transition-colors hover:text-ns-text"
+            className="flex flex-1 flex-col items-center gap-1 py-1.5 text-[11px] font-semibold text-[#A5B1CC] transition-colors hover:text-[#F4F6FF]"
           >
             {icon(ICONS.more, 21)}
             More

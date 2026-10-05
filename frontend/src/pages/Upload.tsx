@@ -10,7 +10,7 @@ function formatBytes(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
 }
 
-type Stage = "idle" | "uploading" | "analyzing" | "error";
+type Stage = "idle" | "uploading" | "preparing" | "analyzing" | "complete" | "error";
 
 /** Optional router state: Home's drop zone hands over a file or the sample choice. */
 export interface UploadLocationState {
@@ -54,7 +54,7 @@ export function Upload() {
 
     try {
       if (usingSample) {
-        setStage("analyzing");
+        setStage("preparing");
         const { blobUrl } = await generateSampleTrack();
 
         // Fetch the generated blob back as a File so we can send it through
@@ -71,8 +71,11 @@ export function Upload() {
         });
 
         void logRightsAttestation(sampleFile.name);
+        setStage("analyzing");
         const analysis = await analyzeFile(sampleFile);
         setAnalysis(analysis);
+        setStage("complete");
+        await new Promise((r) => setTimeout(r, 350));
         navigate("/analysis");
         return;
       }
@@ -89,9 +92,20 @@ export function Upload() {
       });
 
       void logRightsAttestation(selectedFile.name);
+      
+      const isVideo = selectedFile.type.startsWith("video/") || /\.(mp4|mov|webm|mkv|avi)$/i.test(selectedFile.name);
+      setStage("preparing");
+      if (isVideo) {
+        await new Promise((r) => setTimeout(r, 600));
+      } else {
+        await new Promise((r) => setTimeout(r, 300));
+      }
+
       setStage("analyzing");
       const analysis = await analyzeFile(selectedFile);
       setAnalysis(analysis);
+      setStage("complete");
+      await new Promise((r) => setTimeout(r, 350));
       navigate("/analysis");
     } catch (err) {
       setStage("error");
@@ -100,8 +114,17 @@ export function Upload() {
   }
 
   const canAnalyze =
-    (selectedFile !== null || usingSample) && rightsConfirmed && stage !== "uploading" && stage !== "analyzing";
-  const isBusy = stage === "uploading" || stage === "analyzing";
+    (selectedFile !== null || usingSample) && rightsConfirmed && (stage === "idle" || stage === "error");
+  const isBusy = stage !== "idle" && stage !== "error";
+
+  const stageProgress = {
+    idle: 0,
+    uploading: 25,
+    preparing: 55,
+    analyzing: 85,
+    complete: 100,
+    error: 0,
+  }[stage];
 
   return (
     <div className="mx-auto flex min-h-[calc(100vh-140px)] max-w-2xl flex-col justify-center px-4 py-8 sm:px-6 sm:py-12">
@@ -113,11 +136,11 @@ export function Upload() {
           Upload a Track
         </h1>
         <p className="mx-auto mt-2.5 max-w-lg text-sm leading-relaxed text-content-muted">
-          Select any music or video file from your device. Wilsify AI extracts the audio and performs real signal-processing to detect chords, key, and tempo.
+          Select any music or video file from your device. Wilsify AI automatically extracts audio, handles conversion, and performs real signal-processing to detect chords, key, and tempo.
         </p>
       </div>
 
-      <div className="glass-card relative overflow-hidden p-6 sm:p-8">
+      <div className="glass-card relative overflow-hidden p-6 sm:p-8 border border-ns-border bg-ns-card rounded-2xl shadow-xl">
         <input
           ref={fileInputRef}
           type="file"
@@ -146,11 +169,11 @@ export function Upload() {
           }}
           className={`group flex cursor-pointer flex-col items-center gap-3.5 rounded-2xl border-2 border-dashed px-6 py-10 text-center transition-all ${
             selectedFile
-              ? "border-ns-coral/50 bg-ns-coral/5"
-              : "border-ns-border bg-white/[0.015] hover:border-ns-coral/50 hover:bg-white/[0.03]"
+              ? "border-primary/50 bg-primary/5"
+              : "border-ns-border bg-white/[0.015] hover:border-primary/50 hover:bg-white/[0.03]"
           } ${isBusy ? "cursor-not-allowed opacity-50" : ""}`}
         >
-          <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-ns-coral/15 text-ns-coral transition-transform group-hover:scale-105">
+          <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-primary/15 text-primary transition-transform group-hover:scale-105">
             <svg width="26" height="26" viewBox="0 0 24 24" fill="none">
               <path d="M12 16V4m0 0L7 9m5-5l5 5M5 20h14" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
@@ -160,7 +183,7 @@ export function Upload() {
               {selectedFile ? "Change selected file" : "Choose a file or drag & drop"}
             </p>
             <p className="mt-1 text-xs text-content-dim">
-              Supports any audio or video recording
+              Supports MP3, WAV, M4A, FLAC, MP4, MOV, WEBM (auto-converted)
             </p>
           </div>
           <div className="flex flex-wrap justify-center gap-1.5 pt-1">
@@ -174,9 +197,9 @@ export function Upload() {
 
         {/* Selected File Card */}
         {selectedFile && (
-          <div className="mt-4 flex items-center justify-between rounded-xl border border-ns-coral/30 bg-ns-coral/10 p-3.5">
+          <div className="mt-4 flex items-center justify-between rounded-xl border border-primary/30 bg-primary/10 p-3.5">
             <div className="flex items-center gap-3 min-w-0">
-              <span className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg bg-ns-coral/20 text-ns-coral">
+              <span className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg bg-primary/20 text-primary">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
                   <path d="M9 18V5l12-2v13" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
                   <circle cx="6" cy="18" r="3" stroke="currentColor" strokeWidth="2" />
@@ -217,12 +240,12 @@ export function Upload() {
           disabled={isBusy}
           className={`flex w-full items-center justify-between rounded-xl border p-4 text-left transition-all disabled:cursor-not-allowed disabled:opacity-50 ${
             usingSample
-              ? "border-ns-blue/60 bg-ns-blue/10 shadow-[0_2px_16px_rgba(77,163,255,0.15)]"
+              ? "border-primary/60 bg-primary/10 shadow-[0_2px_16px_rgba(108,77,255,0.15)]"
               : "border-ns-border bg-white/[0.02] hover:border-ns-border-strong hover:bg-white/[0.04]"
           }`}
         >
           <div className="flex items-center gap-3 min-w-0">
-            <span className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl bg-ns-blue/15 text-ns-blue">
+            <span className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl bg-primary/15 text-primary">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
                 <polygon points="5 3 19 12 5 21 5 3" fill="currentColor" />
               </svg>
@@ -235,7 +258,7 @@ export function Upload() {
             </div>
           </div>
           {usingSample && (
-            <span className="rounded-full bg-ns-blue/20 px-2.5 py-0.5 text-[11px] font-semibold text-ns-blue">
+            <span className="rounded-full bg-primary/20 px-2.5 py-0.5 text-[11px] font-semibold text-primary">
               Selected
             </span>
           )}
@@ -248,7 +271,7 @@ export function Upload() {
             checked={rightsConfirmed}
             onChange={(e) => setRightsConfirmed(e.target.checked)}
             disabled={isBusy}
-            className="mt-0.5 h-4 w-4 rounded border-glass bg-transparent accent-[#FF6B57]"
+            className="mt-0.5 h-4 w-4 rounded border-glass bg-transparent accent-[#6C4DFF]"
           />
           <span className="text-xs leading-relaxed text-content-muted">
             I confirm I own this audio or have the right to analyze it for personal practice. Attestations are logged with timestamps — no raw audio is retained beyond analysis.
@@ -256,8 +279,8 @@ export function Upload() {
         </label>
 
         {errorMessage && (
-          <div role="alert" className="alert alert-error mt-4">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" className="mt-px flex-shrink-0 text-ns-coral" aria-hidden="true">
+          <div role="alert" className="alert alert-error mt-4 flex items-center gap-2 rounded-xl border border-pink/30 bg-pink/10 p-3 text-xs text-pink">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" className="mt-px flex-shrink-0 text-pink" aria-hidden="true">
               <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="2" />
               <path d="M12 7.5v5.5M12 16.5v.01" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
             </svg>
@@ -269,27 +292,48 @@ export function Upload() {
           type="button"
           onClick={handleAnalyze}
           disabled={!canAnalyze}
-          className="btn-primary mt-6 w-full py-3 text-sm sm:text-base font-bold shadow-[0_4px_24px_rgba(255,107,87,0.35)]"
+          className="btn-primary mt-6 w-full py-3.5 text-sm sm:text-base font-bold shadow-[0_4px_24px_rgba(108,77,255,0.4)]"
         >
           {stage === "uploading" && (
             <>
-              <span className="spinner" /> Uploading audio…
+              <span className="spinner" /> Uploading track…
+            </>
+          )}
+          {stage === "preparing" && (
+            <>
+              <span className="spinner" /> Preparing audio…
             </>
           )}
           {stage === "analyzing" && (
             <>
-              <span className="spinner" /> Analyzing audio (extracting MIR features, key, tempo, chords)…
+              <span className="spinner" /> Analyzing audio (detecting key, BPM & chords)…
+            </>
+          )}
+          {stage === "complete" && (
+            <>
+              <span className="text-ns-mint">✓</span> Analysis complete!
             </>
           )}
           {(stage === "idle" || stage === "error") && "Analyze Song"}
         </button>
 
         {isBusy && (
-          <div className="mt-4 h-1.5 w-full overflow-hidden rounded-full bg-white/5">
-            <div
-              className="h-full rounded-full bg-gradient-to-r from-ns-coral via-ns-amber to-ns-blue transition-all duration-500"
-              style={{ width: stage === "uploading" ? "40%" : "85%" }}
-            />
+          <div className="mt-4">
+            <div className="flex justify-between text-xs text-content-muted mb-1.5 font-medium">
+              <span>
+                {stage === "uploading" && "Uploading track..."}
+                {stage === "preparing" && "Preparing audio..."}
+                {stage === "analyzing" && "Analyzing audio..."}
+                {stage === "complete" && "Analysis complete"}
+              </span>
+              <span>{stageProgress}%</span>
+            </div>
+            <div className="h-1.5 w-full overflow-hidden rounded-full bg-white/5">
+              <div
+                className="h-full rounded-full bg-gradient-to-r from-primary via-secondary to-cyan transition-all duration-300"
+                style={{ width: `${stageProgress}%` }}
+              />
+            </div>
           </div>
         )}
       </div>
