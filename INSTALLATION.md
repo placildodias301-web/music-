@@ -1,4 +1,4 @@
-# Wilsify AI — MVP: Installation & Setup Guide
+p# Wilsify AI — MVP: Installation & Setup Guide
 
 This is the complete, standalone MVP: one Python/FastAPI backend that does
 **real audio analysis** (not mock data) and one Vite/React frontend. No
