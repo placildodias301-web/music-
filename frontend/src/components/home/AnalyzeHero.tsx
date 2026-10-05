@@ -127,9 +127,10 @@ export function AnalyzeHero({ onPickFile, onDropFile, onTrySample, analysis, fil
               return (
                 <div
                   key={i}
-                  className="w-1.5 rounded-full transition-all duration-300"
+                  className="w-1.5 rounded-full transition-[height] duration-300"
                   style={{
                     height: `${Math.max(16, h)}%`,
+                    animation: `heroWave ${1.1 + (i % 5) * 0.18}s ease-in-out ${-((i * 0.137) % 1.2).toFixed(2)}s infinite`,
                     background: isCenter
                       ? "linear-gradient(to top, #6C4DFF, #22C7D9)"
                       : "linear-gradient(to top, rgba(108,77,255,0.4), rgba(77,163,255,0.7))",

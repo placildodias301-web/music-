@@ -446,6 +446,13 @@ h3 {
   0%, 100% { transform: scaleY(0.45); }
   50% { transform: scaleY(1); }
 }
+@keyframes heroWave {
+  0%, 100% { transform: scaleY(1); }
+  20% { transform: scaleY(0.4); }
+  45% { transform: scaleY(1.15); }
+  70% { transform: scaleY(0.6); }
+  85% { transform: scaleY(0.9); }
+}
 @keyframes pulseGlow {
   0%, 100% { opacity: 0.8; transform: scale(1); }
   50% { opacity: 1; transform: scale(1.02); }
