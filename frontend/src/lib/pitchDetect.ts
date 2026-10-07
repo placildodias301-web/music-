@@ -22,11 +22,11 @@ export interface InstrumentRange {
 }
 
 export const INSTRUMENT_RANGES: InstrumentRange[] = [
-  { id: "guitar", label: "Guitar", fmin: 82, fmax: 1319 },
+  { id: "guitar", label: "Acoustic Guitar", fmin: 82, fmax: 1319 },
   { id: "violin", label: "Violin", fmin: 196, fmax: 3520 },
-  { id: "voice", label: "Voice", fmin: 80, fmax: 1100 },
-  { id: "ukulele", label: "Ukulele", fmin: 196, fmax: 880 },
-  { id: "bass", label: "Bass Guitar", fmin: 41, fmax: 400 },
+  { id: "bass", label: "Bass", fmin: 41, fmax: 400 },
+  { id: "mandolin", label: "Mandolin", fmin: 196, fmax: 2100 },
+  { id: "electric-guitar", label: "Electric Guitar", fmin: 82, fmax: 1319 },
 ];
 
 const NOTE_NAMES = ["A", "A#", "B", "C", "C#", "D", "D#", "E", "F", "F#", "G", "G#"];

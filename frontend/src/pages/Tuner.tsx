@@ -262,7 +262,7 @@ export function Tuner() {
         </button>
 
         {/* Reference Pitch String Buttons */}
-        {instrumentId === "guitar" && (
+        {(instrumentId === "guitar" || instrumentId === "electric-guitar") && (
           <div className="mt-6 border-t border-[var(--color-ns-border)] pt-5">
             <p className="mb-2.5 text-center text-xs font-semibold uppercase tracking-wider text-[var(--color-ns-muted)]">
               Reference String Tones (Tune by Ear)
