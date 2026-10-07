@@ -92,6 +92,25 @@ export async function analyzeFile(file: File): Promise<AnalysisResult> {
 }
 
 /**
+ * Downloads the audio behind a pasted link (direct media file, YouTube,
+ * Shorts, Instagram Reels, TikTok, SoundCloud, ...) via the backend and
+ * returns it as a File, ready for `analyzeFile` and local playback.
+ */
+export async function fetchMediaFromLink(url: string): Promise<File> {
+  const res = await fetch(`${API_URL}/api/fetch-media`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ url }),
+  });
+  if (!res.ok) await parseJsonOrThrow(res);
+
+  const blob = await res.blob();
+  const header = res.headers.get("X-Media-Name");
+  const name = header ? decodeURIComponent(header) : "Linked track";
+  return new File([blob], name, { type: blob.type || "audio/mpeg" });
+}
+
+/**
  * Asks the AI Assistant a question. When `context` is provided, the
  * assistant grounds its answer in the actual detected song data (its
  * chords, key, tempo, and the user's logged weak chords) instead of

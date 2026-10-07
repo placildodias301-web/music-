@@ -73,6 +73,32 @@ def test_analyze_detects_key_of_a_real_c_major_tone(client, tmp_path):
     assert body["difficulty"]["difficultyLabel"] in {"Beginner", "Intermediate", "Advanced"}
 
 
+# --- fetch media from link ---------------------------------------------
+
+@pytest.mark.parametrize("url", ["http://127.0.0.1:8000/x.mp3", "http://localhost/a.wav", "http://10.0.0.5/song.mp3"])
+def test_fetch_media_blocks_private_addresses(client, url):
+    r = client.post("/api/fetch-media", json={"url": url})
+    assert r.status_code == 400
+    assert "private or local" in r.json()["detail"]
+
+
+@pytest.mark.parametrize("url", ["", "ftp://example.com/song.mp3", "file:///etc/passwd"])
+def test_fetch_media_rejects_invalid_links(client, url):
+    r = client.post("/api/fetch-media", json={"url": url})
+    assert r.status_code == 400
+
+
+def test_social_hosts_are_routed_to_ytdlp():
+    from services.media_fetch import is_social_url
+
+    assert is_social_url("https://www.youtube.com/shorts/abc123")
+    assert is_social_url("youtu.be/abc123")
+    assert is_social_url("https://www.instagram.com/reel/xyz/")
+    assert is_social_url("https://vm.tiktok.com/ZM123/")
+    assert not is_social_url("https://cdn.example.com/song.mp3")
+    assert not is_social_url("https://notyoutube.com/watch?v=1")
+
+
 # --- assistant --------------------------------------------------------
 
 def test_assistant_answers_known_topic(client):

@@ -232,8 +232,8 @@ export function AudioReactiveWaveform({
         if (!loaded) {
           // State 1: NO AUDIO - Ambient idle pulse
           const wavePhase = idleWaveTime + (i / count) * Math.PI * 2.5;
-          const wave = 0.55 + 0.45 * Math.sin(wavePhase);
-          targetPercent = Math.max(14, baseH * 0.4 * wave * envelope);
+          const wave = 0.7 + 0.3 * Math.sin(wavePhase);
+          targetPercent = Math.max(12, baseH * wave * (0.6 + 0.4 * envelope));
         } else if (!activePlaying) {
           // State 2 / 4: LOADED BUT NOT PLAYING / PAUSED
           // Stable waveform with subtle musical breath
@@ -276,89 +276,74 @@ export function AudioReactiveWaveform({
         heights[i] = currentH + (targetPercent - currentH) * Math.min(1, delta * speed);
       }
 
-      // Draw bars onto the canvas
-      // Total available width & bar layout calculation
-      const gap = Math.max(2, Math.min(5, width / (count * 3)));
-      const totalGaps = (count - 1) * gap;
-      const barWidth = Math.max(2, Math.min(6, (width - totalGaps) / count));
-      const totalWaveWidth = count * barWidth + totalGaps;
-      const startX = (width - totalWaveWidth) / 2;
-      const centerY = h / 2;
+      // Draw bars onto the canvas: thin neon spikes on a glowing center line,
+      // sweeping cyan → blue → violet from left to right.
+      // Canvas is DPR-scaled, so lay out in CSS pixels.
+      const dpr = window.devicePixelRatio || 1;
+      const cssW = width / dpr;
+      const cssH = h / dpr;
+      const barWidth = Math.max(2, Math.min(3.5, cssW / (count * 2.6)));
+      const gap = Math.max(2, (cssW - count * barWidth) / Math.max(1, count - 1));
+      const centerY = cssH / 2;
+
+      // Faint center line with soft glow
+      const lineGrad = ctx.createLinearGradient(0, 0, cssW, 0);
+      lineGrad.addColorStop(0, "rgba(34, 199, 217, 0)");
+      lineGrad.addColorStop(0.3, "rgba(34, 199, 217, 0.35)");
+      lineGrad.addColorStop(0.75, "rgba(139, 92, 246, 0.45)");
+      lineGrad.addColorStop(1, "rgba(139, 92, 246, 0)");
+      ctx.save();
+      ctx.fillStyle = lineGrad;
+      ctx.shadowColor = "rgba(108, 77, 255, 0.6)";
+      ctx.shadowBlur = 10;
+      ctx.fillRect(0, centerY - 1, cssW, 2);
+      ctx.restore();
+
+      const spectrum = (t: number, alpha: number) => {
+        // cyan (34,199,217) → blue (77,163,255) → violet (168,85,247)
+        const cyan = [34, 199, 217];
+        const blue = [77, 163, 255];
+        const violet = [168, 85, 247];
+        const a = t < 0.5 ? cyan : blue;
+        const b = t < 0.5 ? blue : violet;
+        const k = t < 0.5 ? t / 0.5 : (t - 0.5) / 0.5;
+        const c = (n: number) => Math.round(a[n] + (b[n] - a[n]) * k);
+        return `rgba(${c(0)}, ${c(1)}, ${c(2)}, ${alpha})`;
+      };
 
       for (let i = 0; i < count; i++) {
-        const barHeight = Math.max(6, (heights[i] / 100) * (h * 0.88));
-        const x = startX + i * (barWidth + gap);
+        // Interleave short "ghost" bars between tall spikes for the jagged look
+        const spike = i % 2 === 0 ? 1 : 0.38;
+        const barHeight = Math.max(4, (heights[i] / 100) * (cssH * 0.95) * spike);
+        const x = i * (barWidth + gap);
         const y = centerY - barHeight / 2;
 
         const barProgress = i / (count - 1);
         const isPlayed = loaded && barProgress <= progress;
         const isHovered = hoverPercentRef.current !== null && barProgress <= hoverPercentRef.current;
-        const isCenter = Math.abs(i - count / 2) < 6;
+        // Fade the outer edges into the background
+        const edgeFade = Math.min(1, Math.min(barProgress, 1 - barProgress) * 6 + 0.25);
+
+        let alpha = loaded && !isPlayed && !isHovered ? 0.55 : 0.95;
+        alpha *= edgeFade * (spike < 1 ? 0.6 : 1);
 
         ctx.save();
-
-        // Create sleek vertical gradient matching Wilsify Night Studio design
-        const gradient = ctx.createLinearGradient(x, y + barHeight, x, y);
-
-        if (isPlayed) {
-          // Played portion: Vibrant Cyan to Electric Purple with soft neon glow
-          gradient.addColorStop(0, "#6C4DFF"); // Deep Violet
-          gradient.addColorStop(0.5, "#8B5CF6"); // Electric Purple
-          gradient.addColorStop(1, isCenter ? "#22C7D9" : "#38BDF8"); // Vibrant Cyan
-
-          ctx.shadowColor = "rgba(34, 199, 217, 0.55)";
-          ctx.shadowBlur = 10;
-        } else if (isHovered) {
-          // Hover preview scrub portion
-          gradient.addColorStop(0, "rgba(108, 77, 255, 0.7)");
-          gradient.addColorStop(1, "rgba(34, 199, 217, 0.85)");
-          ctx.shadowColor = "rgba(34, 199, 217, 0.4)";
-          ctx.shadowBlur = 6;
-        } else if (loaded) {
-          // Loaded unplayed portion: Sleek Night Studio violet/blue with subtle depth
-          gradient.addColorStop(0, "rgba(108, 77, 255, 0.4)");
-          gradient.addColorStop(1, "rgba(77, 163, 255, 0.65)");
-          ctx.shadowColor = "rgba(108, 77, 255, 0.25)";
-          ctx.shadowBlur = 4;
-        } else {
-          // Idle state (no audio loaded): Ambient violet-cyan shimmer
-          gradient.addColorStop(0, "rgba(108, 77, 255, 0.35)");
-          gradient.addColorStop(1, "rgba(34, 199, 217, 0.6)");
-          ctx.shadowColor = "rgba(108, 77, 255, 0.2)";
-          ctx.shadowBlur = 4;
-        }
-
+        const gradient = ctx.createLinearGradient(x, y, x, y + barHeight);
+        gradient.addColorStop(0, spectrum(barProgress, alpha * 0.35));
+        gradient.addColorStop(0.5, spectrum(barProgress, alpha));
+        gradient.addColorStop(1, spectrum(barProgress, alpha * 0.35));
         ctx.fillStyle = gradient;
+        ctx.shadowColor = spectrum(barProgress, isPlayed && activePlaying ? 0.9 : 0.55);
+        ctx.shadowBlur = isPlayed && activePlaying ? 14 : 8;
 
-        // Draw rounded bar
         const radius = barWidth / 2;
         ctx.beginPath();
         if (typeof ctx.roundRect === "function") {
           ctx.roundRect(x, y, barWidth, barHeight, radius);
         } else {
-          // Fallback rounded rectangle
-          ctx.moveTo(x + radius, y);
-          ctx.lineTo(x + barWidth - radius, y);
-          ctx.quadraticCurveTo(x + barWidth, y, x + barWidth, y + radius);
-          ctx.lineTo(x + barWidth, y + barHeight - radius);
-          ctx.quadraticCurveTo(x + barWidth, y + barHeight, x + barWidth - radius, y + barHeight);
-          ctx.lineTo(x + radius, y + barHeight);
-          ctx.quadraticCurveTo(x, y + barHeight, x, y + barHeight - radius);
-          ctx.lineTo(x, y + radius);
-          ctx.quadraticCurveTo(x, y, x + radius, y);
+          ctx.rect(x, y, barWidth, barHeight);
         }
         ctx.fill();
-
-        // Extra luminous cap for center bars when playing
-        if (isPlayed && isCenter && activePlaying) {
-          ctx.fillStyle = "#A5F3FC";
-          ctx.shadowColor = "#22C7D9";
-          ctx.shadowBlur = 8;
-          ctx.beginPath();
-          ctx.arc(x + barWidth / 2, y + radius, radius * 0.85, 0, Math.PI * 2);
-          ctx.fill();
-        }
-
         ctx.restore();
       }
 
