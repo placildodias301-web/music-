@@ -4,6 +4,8 @@ import { useMvp } from "../lib/MvpContext";
 import { analyzeFile, fetchMediaFromLink, logRightsAttestation } from "../lib/api";
 import { generateSampleTrack } from "../lib/generateSampleTrack";
 import { MicRecorder } from "../components/upload/MicRecorder";
+import { YouTubeBrowser } from "../components/upload/YouTubeBrowser";
+import type { YouTubeVideo } from "../lib/api";
 
 function formatBytes(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
@@ -98,6 +100,7 @@ export function Upload() {
   const [selectedFile, setSelectedFile] = useState<File | null>(handoff.file instanceof File ? handoff.file : null);
   const [recordedFile, setRecordedFile] = useState<File | null>(null);
   const [linkUrl, setLinkUrl] = useState("");
+  const [ytVideo, setYtVideo] = useState<YouTubeVideo | null>(null);
   const [usingSample, setUsingSample] = useState(Boolean(handoff.sample) && !(handoff.file instanceof File));
   const [stage, setStage] = useState<Stage>("idle");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -108,6 +111,7 @@ export function Upload() {
     setSelectedFile(file);
     setUsingSample(false);
     setErrorMessage(null);
+    e.target.value = "";
   }
 
   function handleUseSample() {
@@ -249,7 +253,24 @@ export function Upload() {
                 onClick={() => {
                   setSource(s.id);
                   setErrorMessage(null);
+                  if (s.id === "files") fileInputRef.current?.click();
                 }}
+                onDragOver={s.id === "files" ? (e) => e.preventDefault() : undefined}
+                onDrop={
+                  s.id === "files"
+                    ? (e) => {
+                        e.preventDefault();
+                        if (isBusy) return;
+                        const file = e.dataTransfer.files?.[0];
+                        if (file) {
+                          setSource("files");
+                          setSelectedFile(file);
+                          setUsingSample(false);
+                          setErrorMessage(null);
+                        }
+                      }
+                    : undefined
+                }
                 className={`flex flex-col items-center gap-2 rounded-2xl border px-3 py-5 text-center transition-all disabled:cursor-not-allowed disabled:opacity-60 sm:py-6 ${
                   active
                     ? "border-primary/60 bg-primary/10 text-content shadow-[0_4px_20px_rgba(108,77,255,0.25)]"
@@ -266,10 +287,24 @@ export function Upload() {
 
         {source === "mic" && <MicRecorder onRecorded={setRecordedFile} disabled={isBusy} />}
 
+        {source === "social" && (
+          <div className="mb-4">
+            <YouTubeBrowser
+              selected={ytVideo}
+              disabled={isBusy}
+              onSelect={(video) => {
+                setYtVideo(video);
+                setLinkUrl(video?.url ?? "");
+                setErrorMessage(null);
+              }}
+            />
+          </div>
+        )}
+
         {(source === "link" || source === "social") && (
           <div className="rounded-2xl border border-ns-border bg-white/[0.015] p-5">
             <label htmlFor="media-link" className="text-xs font-semibold uppercase tracking-wider text-content-muted">
-              {source === "social" ? "Video or post link" : "Audio / video file link"}
+              {source === "social" ? "Or paste a video / post link" : "Audio / video file link"}
             </label>
             <div className="mt-2 flex items-center gap-2 rounded-xl border border-ns-border bg-ns-raised px-3 focus-within:border-primary/60">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" className="flex-shrink-0 text-content-dim" aria-hidden="true">
@@ -285,6 +320,7 @@ export function Upload() {
                 disabled={isBusy}
                 onChange={(e) => {
                   setLinkUrl(e.target.value);
+                  setYtVideo(null);
                   setErrorMessage(null);
                 }}
                 onKeyDown={(e) => {
@@ -324,52 +360,6 @@ export function Upload() {
 
         {source === "files" && (
         <>
-        {/* Drop zone with drag-and-drop */}
-        <div
-          onClick={() => !isBusy && fileInputRef.current?.click()}
-          onDragOver={(e) => {
-            e.preventDefault();
-            e.stopPropagation();
-          }}
-          onDrop={(e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            if (isBusy) return;
-            const file = e.dataTransfer.files?.[0];
-            if (file) {
-              setSelectedFile(file);
-              setUsingSample(false);
-              setErrorMessage(null);
-            }
-          }}
-          className={`group flex cursor-pointer flex-col items-center gap-3.5 rounded-2xl border-2 border-dashed px-6 py-10 text-center transition-all ${
-            selectedFile
-              ? "border-primary/50 bg-primary/5"
-              : "border-ns-border bg-white/[0.015] hover:border-primary/50 hover:bg-white/[0.03]"
-          } ${isBusy ? "cursor-not-allowed opacity-50" : ""}`}
-        >
-          <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-primary/15 text-primary transition-transform group-hover:scale-105">
-            <svg width="26" height="26" viewBox="0 0 24 24" fill="none">
-              <path d="M12 16V4m0 0L7 9m5-5l5 5M5 20h14" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-          </div>
-          <div>
-            <p className="font-heading text-base font-semibold text-content">
-              {selectedFile ? "Change selected file" : "Choose a file or drag & drop"}
-            </p>
-            <p className="mt-1 text-xs text-content-dim">
-              Supports MP3, WAV, M4A, FLAC, MP4, MOV, WEBM (auto-converted)
-            </p>
-          </div>
-          <div className="flex flex-wrap justify-center gap-1.5 pt-1">
-            {["MP3", "WAV", "M4A", "FLAC", "MP4", "MOV", "WEBM"].map((fmt) => (
-              <span key={fmt} className="rounded-md border border-ns-border bg-ns-raised px-2 py-0.5 text-[10px] font-mono font-medium text-content-muted">
-                {fmt}
-              </span>
-            ))}
-          </div>
-        </div>
-
         {/* Selected File Card */}
         {selectedFile && (
           <div className="mt-4 flex items-center justify-between rounded-xl border border-primary/30 bg-primary/10 p-3.5">

@@ -224,6 +224,61 @@ def _download_social(url: str) -> tuple[str, str]:
     return path, _safe_name(info.get("title") or info.get("id") or "") + ext
 
 
+MAX_SEARCH_RESULTS = 24
+_YT_ID_RE = re.compile(r"^[A-Za-z0-9_-]{11}$")
+
+
+def search_youtube(query: str, limit: int = 12) -> list[dict]:
+    """
+    Searches YouTube via yt-dlp (no API key needed) and returns lightweight
+    result cards. Only metadata is read - nothing is downloaded.
+    """
+    query = re.sub(r"\s+", " ", query or "").strip()[:200]
+    if not query:
+        raise MediaFetchError("Type something to search for.")
+    limit = max(1, min(limit, MAX_SEARCH_RESULTS))
+
+    try:
+        import yt_dlp
+    except ImportError:  # pragma: no cover - dependency missing
+        raise MediaFetchError("YouTube search isn't available on this server (yt-dlp is not installed).")
+
+    opts = {
+        "extract_flat": "in_playlist",
+        "skip_download": True,
+        "socket_timeout": 15,
+        "quiet": True,
+        "no_warnings": True,
+        "cachedir": False,
+        "http_headers": {"User-Agent": USER_AGENT},
+    }
+    try:
+        with yt_dlp.YoutubeDL(opts) as ydl:
+            info = ydl.extract_info(f"ytsearch{limit}:{query}", download=False)
+    except Exception:
+        logger.exception("YouTube search failed for %r", query)
+        raise MediaFetchError("YouTube search failed. Please try again.")
+
+    results = []
+    for entry in (info or {}).get("entries") or []:
+        vid = (entry or {}).get("id") or ""
+        if not _YT_ID_RE.match(vid):
+            continue  # channels / playlists in results
+        duration = entry.get("duration")
+        results.append({
+            "id": vid,
+            "title": entry.get("title") or "Untitled",
+            "channel": entry.get("channel") or entry.get("uploader") or "",
+            "durationSeconds": int(duration) if duration else None,
+            "views": entry.get("view_count"),
+            "thumbnail": f"https://i.ytimg.com/vi/{vid}/mqdefault.jpg",
+            "url": f"https://www.youtube.com/watch?v={vid}",
+            "isLive": entry.get("live_status") == "is_live",
+            "tooLong": bool(duration and duration > MAX_DURATION_SECONDS),
+        })
+    return results
+
+
 def _explain_ytdlp_error(message: str) -> str:
     m = message.lower()
     if "unsupported url" in m or "no suitable extractor" in m:

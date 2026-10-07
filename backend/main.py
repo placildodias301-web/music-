@@ -28,7 +28,7 @@ from services.analysis_engine import analyze, analyze_from_array
 from services.assistant_engine import answer_question
 from services.audio_extract import TMP_DIR, AudioExtractionError, cleanup, extract_audio_to_wav
 from services.difficulty import rate_difficulty
-from services.media_fetch import MediaFetchError, fetch_media
+from services.media_fetch import MediaFetchError, fetch_media, search_youtube
 from services.midi_export import build_midi_bytes
 from services.pdf_export import build_chord_chart_pdf
 
@@ -48,8 +48,9 @@ MAX_UPLOAD_BYTES = 100 * 1024 * 1024  # 100MB
 # it, low enough that a script cannot pin the CPU. Set to 0 to disable.
 ANALYZE_RATE_LIMIT_PER_MINUTE = int(os.environ.get("ANALYZE_RATE_LIMIT_PER_MINUTE", "60"))
 _request_times: dict[str, deque] = defaultdict(deque)
-# Fetching a link downloads media on the server, so it shares the same cap.
-RATE_LIMITED_PATHS = {"/api/analyze", "/api/fetch-media"}
+# Fetching a link downloads media on the server, and YouTube search makes
+# outbound requests, so both share the same cap.
+RATE_LIMITED_PATHS = {"/api/analyze", "/api/fetch-media", "/api/youtube/search"}
 
 # Broad accept list - ffmpeg handles the actual decoding, this is just a
 # first-pass sanity filter so obviously-wrong files are rejected early.
@@ -91,7 +92,7 @@ app.add_middleware(
 
 @app.middleware("http")
 async def rate_limit_analysis(request: Request, call_next):
-    if ANALYZE_RATE_LIMIT_PER_MINUTE > 0 and request.url.path in RATE_LIMITED_PATHS and request.method == "POST":
+    if ANALYZE_RATE_LIMIT_PER_MINUTE > 0 and request.url.path in RATE_LIMITED_PATHS and request.method in ("GET", "POST"):
         client = request.client.host if request.client else "unknown"
         now = time.time()
         hits = _request_times[client]
@@ -226,6 +227,15 @@ def fetch_media_from_link(req: FetchMediaRequest):
         background=BackgroundTask(cleanup, path),
         headers={"X-Media-Name": quote(name)},
     )
+
+
+@app.get("/api/youtube/search")
+def youtube_search(q: str = "", limit: int = 12):
+    """YouTube search results (metadata only) for the in-app video browser."""
+    try:
+        return {"results": search_youtube(q, limit)}
+    except MediaFetchError as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 
 @app.post("/api/assistant")

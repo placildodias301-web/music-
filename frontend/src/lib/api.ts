@@ -110,6 +110,29 @@ export async function fetchMediaFromLink(url: string): Promise<File> {
   return new File([blob], name, { type: blob.type || "audio/mpeg" });
 }
 
+export interface YouTubeVideo {
+  id: string;
+  title: string;
+  channel: string;
+  durationSeconds: number | null;
+  views: number | null;
+  thumbnail: string;
+  url: string;
+  isLive: boolean;
+  tooLong: boolean;
+}
+
+/** Searches YouTube through the backend (metadata only, nothing downloaded). */
+export async function searchYouTube(query: string, limit = 12, signal?: AbortSignal): Promise<YouTubeVideo[]> {
+  const params = new URLSearchParams({ q: query, limit: String(limit) });
+  const res = await fetch(`${API_URL}/api/youtube/search?${params}`, { signal });
+  if (res.status === 404) {
+    throw new Error("YouTube search isn't available yet — restart the backend server to enable it.");
+  }
+  const body = (await parseJsonOrThrow(res)) as { results: YouTubeVideo[] };
+  return body.results;
+}
+
 /**
  * Asks the AI Assistant a question. When `context` is provided, the
  * assistant grounds its answer in the actual detected song data (its
