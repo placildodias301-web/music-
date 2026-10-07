@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { askAssistant, type SongContext } from "../lib/api";
 import { useMvp } from "../lib/MvpContext";
 import { getWeakChords } from "../lib/practiceLog";
@@ -97,6 +97,23 @@ const ICONS = {
       <circle cx="12" cy="12" r="0.6" fill="currentColor" stroke="currentColor" />
     </>,
     15
+  ),
+  chordGrid: svg(
+    <>
+      <path d="M6 4.5h12M6 4.5v15M10 4.5v15M14 4.5v15M18 4.5v15M6 9.5h12M6 14.5h12" {...S} />
+      <circle cx="10" cy="12" r="1.3" fill="currentColor" stroke="none" />
+      <circle cx="14" cy="7" r="1.3" fill="currentColor" stroke="none" />
+    </>,
+    16
+  ),
+  tuner: svg(
+    <>
+      <path d="M4 15a8 8 0 0 1 16 0" {...S} />
+      <path d="m12 15 3.5-5" {...S} />
+      <circle cx="12" cy="15" r="1.2" fill="currentColor" stroke="none" />
+      <path d="M4 19h16" {...S} />
+    </>,
+    16
   ),
   disc: svg(
     <>
@@ -247,6 +264,7 @@ function RevealText({ text, animate, onTick, onDone }: { text: string; animate: 
 
 export function Assistant() {
   const { fileName, analysis } = useMvp();
+  const navigate = useNavigate();
   const [prefs] = useState(loadPrefs);
 
   const songContext: SongContext | null = useMemo(
@@ -315,6 +333,20 @@ export function Assistant() {
   }, [input, isEmpty]);
 
   useEffect(() => () => recognitionRef.current?.stop(), []);
+
+  // Ctrl/Cmd+U jumps to song upload (shown as a hint in the + menu); Escape closes the menu.
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "u") {
+        e.preventDefault();
+        navigate("/upload");
+      } else if (e.key === "Escape") {
+        setAttachOpen(false);
+      }
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [navigate]);
 
   function updateConversation(id: string, fn: (c: Conversation) => Conversation) {
     setConversations((prev) => prev.map((c) => (c.id === id ? fn(c) : c)));
@@ -501,25 +533,61 @@ export function Assistant() {
           {attachOpen && (
             <>
               <div className="fixed inset-0 z-10" onClick={() => setAttachOpen(false)} />
+              {/* Spans the composer's full width, like the + menus in other AI chats. */}
               <div
-                className={`animate-fadeIn absolute left-0 z-20 w-56 rounded-2xl border border-[var(--color-ns-border)] bg-[var(--color-ns-card)] p-1.5 shadow-2xl ${
-                  isEmpty ? "top-11" : "bottom-11"
+                role="menu"
+                aria-label="Add to chat"
+                className={`animate-fadeIn absolute -left-3 z-20 w-[calc(100vw-2rem)] max-w-[min(760px,calc(100vw-2rem))] rounded-2xl border border-[var(--color-ns-border)] bg-[var(--color-ns-card)] p-1.5 shadow-2xl sm:w-[460px] ${
+                  isEmpty ? "top-12" : "bottom-12"
                 }`}
               >
-                <Link
-                  to="/upload"
-                  className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-xs sm:text-sm text-[var(--color-ns-text)] hover:bg-[var(--color-ns-raised)]"
-                >
-                  <span className="text-[var(--color-ns-coral)]">{ICONS.upload}</span>
-                  Analyze a new song
-                </Link>
-                <Link
-                  to="/library"
-                  className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-xs sm:text-sm text-[var(--color-ns-text)] hover:bg-[var(--color-ns-raised)]"
-                >
-                  <span className="text-[var(--color-ns-blue)]">{ICONS.library}</span>
-                  Open from library
-                </Link>
+                <MenuLink to="/upload" icon={ICONS.upload} tint="text-[var(--color-ns-coral)]" title="Analyze a new song" hint="Upload audio for chords, key & tempo" shortcut="Ctrl+U" />
+                <MenuLink to="/library" icon={ICONS.library} tint="text-[var(--color-ns-blue)]" title="Add from library" hint="Pick a song you've already analyzed" />
+                {songContext && (
+                  <MenuButton
+                    icon={ICONS.disc}
+                    tint="text-[var(--color-ns-violet)]"
+                    title="Use current song"
+                    hint={`Ground answers in ${songContext.fileName}`}
+                    checked={songMode}
+                    onClick={() => {
+                      setMode(songMode ? "theory" : "song");
+                      setAttachOpen(false);
+                    }}
+                  />
+                )}
+
+                <div className="my-1.5 h-px bg-[var(--color-ns-border)]" />
+
+                <MenuLink to="/chords" icon={ICONS.chordGrid} tint="text-[var(--color-ns-amber)]" title="Chord lookup" hint="Diagrams for guitar, ukulele & piano" />
+                <MenuLink to="/tuner" icon={ICONS.tuner} tint="text-[var(--color-ns-mint)]" title="Tuner" hint="Tune up before you play" />
+                <MenuLink to="/practice" icon={ICONS.target} tint="text-[var(--color-ns-blue)]" title="Practice mode" hint="Drill chords with live feedback" />
+
+                <div className="my-1.5 h-px bg-[var(--color-ns-border)]" />
+
+                <MenuButton
+                  icon={ICONS.target}
+                  tint="text-[var(--color-ns-coral)]"
+                  title="Practice plan"
+                  hint="Tips for the parts you're stuck on"
+                  onClick={() => {
+                    setAttachOpen(false);
+                    sendQuestion("How should I practice a hard section?");
+                  }}
+                />
+                {speechSupported && (
+                  <MenuButton
+                    icon={ICONS.mic}
+                    tint="text-[var(--color-ns-muted)]"
+                    title="Voice input"
+                    hint="Speak your question instead of typing"
+                    checked={listening}
+                    onClick={() => {
+                      setAttachOpen(false);
+                      toggleListening();
+                    }}
+                  />
+                )}
               </div>
             </>
           )}
@@ -705,8 +773,8 @@ export function Assistant() {
 
         {isEmpty ? (
           /* ─── Empty state ─── */
-          <div className="flex flex-1 flex-col items-center overflow-y-auto px-4 pb-10">
-            <div className="flex w-full max-w-[720px] flex-1 flex-col items-center justify-center py-8">
+          <div className="flex flex-1 flex-col items-center overflow-y-auto px-4 pb-[12vh]">
+            <div className="flex w-full max-w-[760px] flex-1 flex-col items-center justify-center py-8">
               <div className="animate-slide-up flex flex-col items-center text-center">
                 <SoundOrb size={60} />
                 <h2 className="mt-5 font-heading text-[28px] font-bold tracking-tight text-content sm:text-4xl">
@@ -730,7 +798,9 @@ export function Assistant() {
                 </p>
               </div>
 
-              <div className="animate-slide-up mt-8 w-full" style={{ animationDelay: "60ms" }}>
+              {/* relative z-10: the slide-up transform makes this its own stacking layer, so the
+                  attach menu inside would otherwise render beneath the topic chips below. */}
+              <div className="animate-slide-up relative z-10 mt-8 w-full" style={{ animationDelay: "60ms" }}>
                 {composer}
               </div>
 
@@ -846,6 +916,54 @@ export function Assistant() {
         )}
       </section>
     </div>
+  );
+}
+
+const MENU_ROW =
+  "flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition-colors hover:bg-[var(--color-ns-raised)] focus-visible:bg-[var(--color-ns-raised)]";
+
+interface MenuRowProps {
+  icon: ReactNode;
+  tint: string;
+  title: string;
+  hint: string;
+}
+
+function MenuRowBody({ icon, tint, title, hint, trailing }: MenuRowProps & { trailing?: ReactNode }) {
+  return (
+    <>
+      <span className={tint}>{icon}</span>
+      <span className="min-w-0 flex-1 truncate">
+        <span className="text-sm font-medium text-[var(--color-ns-text)]">{title}</span>
+        <span className="ml-2 hidden text-xs text-[var(--color-ns-muted)] sm:inline">{hint}</span>
+      </span>
+      {trailing}
+    </>
+  );
+}
+
+function MenuLink({ to, shortcut, ...row }: MenuRowProps & { to: string; shortcut?: string }) {
+  return (
+    <Link to={to} role="menuitem" className={MENU_ROW}>
+      <MenuRowBody
+        {...row}
+        trailing={shortcut && <kbd className="hidden font-mono text-[10px] text-[var(--color-ns-muted)] sm:inline">{shortcut}</kbd>}
+      />
+    </Link>
+  );
+}
+
+function MenuButton({ onClick, checked, ...row }: MenuRowProps & { onClick: () => void; checked?: boolean }) {
+  return (
+    <button
+      type="button"
+      role={checked === undefined ? "menuitem" : "menuitemcheckbox"}
+      aria-checked={checked}
+      onClick={onClick}
+      className={MENU_ROW}
+    >
+      <MenuRowBody {...row} trailing={checked && <span className="text-[var(--color-ns-blue)]">{ICONS.check}</span>} />
+    </button>
   );
 }
 
