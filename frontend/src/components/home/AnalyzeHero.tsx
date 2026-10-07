@@ -203,19 +203,19 @@ export function AnalyzeHero({
           </div>
 
           {/* Central Real Audio-Reactive Waveform */}
-    <div className="relative z-10 w-full max-w-[360px] px-2 sm:px-4 flex items-center justify-center">
-      <AudioReactiveWaveform
-        audioRef={audioRef}
-        isPlaying={isPlaying}
-        currentTime={currentTime}
-        duration={duration}
-        onSeek={audioUrl ? handleSeek : undefined}
-        barCount={WAVE_BARS}
-        bpm={analysis?.bpm ?? 120}
-        seed={title ?? (fileName ? stripExtension(fileName) : "wilsify-hero")}
-        height={116}
-      />
-    </div>
+          <div className="relative z-10 w-full max-w-[360px] px-2 sm:px-4 flex items-center justify-center">
+            <AudioReactiveWaveform
+              audioRef={audioRef}
+              isPlaying={isPlaying}
+              currentTime={currentTime}
+              duration={duration}
+              onSeek={audioUrl ? handleSeek : undefined}
+              barCount={WAVE_BARS}
+              bpm={analysis?.bpm ?? 120}
+              seed={title ?? (fileName ? stripExtension(fileName) : "wilsify-hero")}
+              height={116}
+            />
+          </div>
 
     {/* Floating Badges: Key, BPM, Chords, Scale */}
     <div className="pointer-events-none absolute inset-0 z-20 flex flex-col justify-between p-4 sm:p-5">
