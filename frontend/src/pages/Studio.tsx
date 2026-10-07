@@ -18,7 +18,7 @@ import type { UploadLocationState } from "./Upload";
 
 export function Studio() {
   const navigate = useNavigate();
-  const { analysis, fileName, setSong, setAnalysis } = useMvp();
+  const { analysis, fileName, audioUrl, setSong, setAnalysis } = useMvp();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Compute real dashboard data from browser-persisted state
@@ -114,6 +114,7 @@ export function Studio() {
             onTrySample={() => handOff({ sample: true })}
             analysis={analysis}
             fileName={fileName}
+            audioUrl={audioUrl}
           />
         </div>
 

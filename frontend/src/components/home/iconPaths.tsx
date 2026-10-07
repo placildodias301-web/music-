@@ -5,6 +5,12 @@ const stroke = { stroke: "currentColor", strokeWidth: 1.9, strokeLinecap: "round
 export const ICON_PATHS = {
   upload: <path d="M12 16V4m0 0L7 9m5-5 5 5M5 20h14" {...stroke} />,
   play: <path d="M8 5.5v13a.6.6 0 0 0 .9.5l10.2-6.5a.6.6 0 0 0 0-1L8.9 5a.6.6 0 0 0-.9.5Z" fill="currentColor" />,
+  pause: (
+    <>
+      <rect x="7" y="5.5" width="3.2" height="13" rx="1" fill="currentColor" />
+      <rect x="13.8" y="5.5" width="3.2" height="13" rx="1" fill="currentColor" />
+    </>
+  ),
   arrowRight: <path d="M5 12h14m-5-5 5 5-5 5" {...stroke} />,
   sparkle: (
     <>

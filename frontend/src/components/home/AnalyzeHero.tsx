@@ -1,11 +1,19 @@
-import { useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import type { AnalysisResult } from "../../lib/api";
 import { ICON, Icon } from "./icons";
-import { stripExtension, topChords, waveHeights } from "./homeUtils";
+import { stripExtension, topChords } from "./homeUtils";
+import { AudioReactiveWaveform } from "./AudioReactiveWaveform";
 
 const FORMATS = ["MP3", "WAV", "M4A", "FLAC", "MP4", "MOV", "WEBM"];
 const WAVE_BARS = 36;
+
+function formatSeconds(seconds: number): string {
+  if (!Number.isFinite(seconds)) return "00:00";
+  const m = Math.floor(seconds / 60);
+  const s = Math.floor(seconds % 60);
+  return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+}
 
 interface AnalyzeHeroProps {
   onPickFile: () => void;
@@ -13,13 +21,76 @@ interface AnalyzeHeroProps {
   onTrySample: () => void;
   analysis: AnalysisResult | null;
   fileName: string | null;
+  audioUrl?: string | null;
 }
 
-export function AnalyzeHero({ onPickFile, onDropFile, onTrySample, analysis, fileName }: AnalyzeHeroProps) {
+export function AnalyzeHero({
+  onPickFile,
+  onDropFile,
+  onTrySample,
+  analysis,
+  fileName,
+  audioUrl = null,
+}: AnalyzeHeroProps) {
   const [dragging, setDragging] = useState(false);
+  const audioRef = useRef<HTMLAudioElement>(null);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [currentTime, setCurrentTime] = useState(0);
+  const [duration, setDuration] = useState(0);
+
   const title = analysis ? stripExtension(fileName ?? analysis.fileName) : null;
-  const bars = waveHeights(title ?? "wilsify-hero", WAVE_BARS);
   const chords = analysis ? topChords(analysis, 3) : [];
+
+  // Manage HTMLAudioElement event listeners when audio element or URL changes
+  useEffect(() => {
+    const audio = audioRef.current;
+    if (!audio) return;
+
+    const onTimeUpdate = () => setCurrentTime(audio.currentTime);
+    const onLoadedMetadata = () => setDuration(audio.duration || 0);
+    const onDurationChange = () => setDuration(audio.duration || 0);
+    const onPlay = () => setIsPlaying(true);
+    const onPause = () => setIsPlaying(false);
+    const onEnded = () => {
+      setIsPlaying(false);
+      setCurrentTime(0);
+    };
+
+    audio.addEventListener("timeupdate", onTimeUpdate);
+    audio.addEventListener("loadedmetadata", onLoadedMetadata);
+    audio.addEventListener("durationchange", onDurationChange);
+    audio.addEventListener("play", onPlay);
+    audio.addEventListener("pause", onPause);
+    audio.addEventListener("ended", onEnded);
+
+    return () => {
+      audio.removeEventListener("timeupdate", onTimeUpdate);
+      audio.removeEventListener("loadedmetadata", onLoadedMetadata);
+      audio.removeEventListener("durationchange", onDurationChange);
+      audio.removeEventListener("play", onPlay);
+      audio.removeEventListener("pause", onPause);
+      audio.removeEventListener("ended", onEnded);
+    };
+  }, [audioUrl]);
+
+  const togglePlay = useCallback(() => {
+    const audio = audioRef.current;
+    if (!audio) return;
+    if (isPlaying) {
+      audio.pause();
+    } else {
+      audio.play().catch((err: unknown) => {
+        console.warn("Audio playback failed:", err);
+      });
+    }
+  }, [isPlaying]);
+
+  const handleSeek = useCallback((time: number) => {
+    const audio = audioRef.current;
+    if (!audio) return;
+    audio.currentTime = time;
+    setCurrentTime(time);
+  }, []);
 
   return (
     <section
@@ -39,6 +110,14 @@ export function AnalyzeHero({ onPickFile, onDropFile, onTrySample, analysis, fil
         if (file) onDropFile(file);
       }}
     >
+      {/* Hidden audio element bound to active audioUrl */}
+      <audio
+        ref={audioRef}
+        src={audioUrl ?? undefined}
+        preload="metadata"
+        className="hidden"
+      />
+
       {/* Background ambient glow highlights */}
       <div
         aria-hidden="true"
@@ -61,7 +140,10 @@ export function AnalyzeHero({ onPickFile, onDropFile, onTrySample, analysis, fil
             id="analyze-hero-title"
             className="mt-4 font-heading text-3xl font-extrabold leading-[1.1] tracking-tight text-[#F4F6FF] sm:text-4xl lg:text-[44px]"
           >
-            Analyze <span className="bg-gradient-to-r from-[#6C4DFF] via-[#8B5CF6] to-[#A78BFA] bg-clip-text text-transparent drop-shadow-[0_2px_16px_rgba(108,77,255,0.4)]">your next song</span>
+            Analyze{" "}
+            <span className="bg-gradient-to-r from-[#6C4DFF] via-[#8B5CF6] to-[#A78BFA] bg-clip-text text-transparent drop-shadow-[0_2px_16px_rgba(108,77,255,0.4)]">
+              your next song
+            </span>
           </h2>
 
           <p className="mt-3.5 max-w-lg text-[15px] leading-relaxed text-[#A5B1CC]">
@@ -98,7 +180,7 @@ export function AnalyzeHero({ onPickFile, onDropFile, onTrySample, analysis, fil
           <p className="mt-2 text-xs text-[#687797]">Or drag and drop a file onto this card.</p>
         </div>
 
-        {/* Right Column: Visual Stage with Guitar motif & Floating Badges */}
+        {/* Right Column: Visual Stage with Guitar motif, Reactive Waveform & Floating Badges */}
         <div className="relative flex h-[260px] w-full items-center justify-center overflow-hidden rounded-2xl border border-[#202E50] bg-gradient-to-br from-[#0B132B]/80 via-[#070D1C]/90 to-[#050A18] p-5 shadow-inner sm:h-[280px]">
           {/* Subtle electric guitar fretboard / neck silhouette illustration in background */}
           <div aria-hidden="true" className="pointer-events-none absolute inset-0 opacity-25">
@@ -120,86 +202,125 @@ export function AnalyzeHero({ onPickFile, onDropFile, onTrySample, analysis, fil
             </svg>
           </div>
 
-          {/* Central Animated Audio Waveform */}
-          <div className="relative z-10 flex h-28 items-center justify-center gap-1.5 px-4" aria-hidden="true">
-            {bars.map((h, i) => {
-              const isCenter = Math.abs(i - WAVE_BARS / 2) < 8;
-              return (
-                <div
-                  key={i}
-                  className="w-1.5 rounded-full transition-[height] duration-300"
-                  style={{
-                    height: `${Math.max(16, h)}%`,
-                    animation: `heroWave ${1.1 + (i % 5) * 0.18}s ease-in-out ${-((i * 0.137) % 1.2).toFixed(2)}s infinite`,
-                    background: isCenter
-                      ? "linear-gradient(to top, #6C4DFF, #22C7D9)"
-                      : "linear-gradient(to top, rgba(108,77,255,0.4), rgba(77,163,255,0.7))",
-                    boxShadow: isCenter ? "0 0 12px rgba(34,199,217,0.4)" : "none",
-                  }}
-                />
-              );
-            })}
-          </div>
+<<<<<<< HEAD
+  {/* Central Animated Audio Waveform */ }
+  <div className="relative z-10 flex h-28 items-center justify-center gap-1.5 px-4" aria-hidden="true">
+    {bars.map((h, i) => {
+      const isCenter = Math.abs(i - WAVE_BARS / 2) < 8;
+      return (
+        <div
+          key={i}
+          className="w-1.5 rounded-full transition-[height] duration-300"
+          style={{
+            height: `${Math.max(16, h)}%`,
+            animation: `heroWave ${1.1 + (i % 5) * 0.18}s ease-in-out ${-((i * 0.137) % 1.2).toFixed(2)}s infinite`,
+            background: isCenter
+              ? "linear-gradient(to top, #6C4DFF, #22C7D9)"
+              : "linear-gradient(to top, rgba(108,77,255,0.4), rgba(77,163,255,0.7))",
+            boxShadow: isCenter ? "0 0 12px rgba(34,199,217,0.4)" : "none",
+          }}
+        />
+      );
+    })}
+=======
+          {/* Central Real Audio-Reactive Waveform */}
+    <div className="relative z-10 w-full max-w-[360px] px-2 sm:px-4 flex items-center justify-center">
+      <AudioReactiveWaveform
+        audioRef={audioRef}
+        isPlaying={isPlaying}
+        currentTime={currentTime}
+        duration={duration}
+        onSeek={audioUrl ? handleSeek : undefined}
+        barCount={WAVE_BARS}
+        bpm={analysis?.bpm ?? 120}
+        seed={title ?? (fileName ? stripExtension(fileName) : "wilsify-hero")}
+        height={116}
+      />
+>>>>>>> 3b853f7 (feat(ui): add audio reactive hero waveform)
+    </div>
 
-          {/* Floating Badges exactly like reference screenshot: Key, BPM, Chords, Scale */}
-          <div className="pointer-events-none absolute inset-0 z-20 flex flex-col justify-between p-4 sm:p-5">
-            <div className="flex justify-between items-start">
-              {/* Key Badge */}
-              <div className="pointer-events-auto flex items-center gap-1.5 rounded-xl border border-[#22C7D9]/40 bg-[#070D1C]/90 px-3 py-1.5 text-xs font-bold text-[#22C7D9] shadow-lg backdrop-blur-md transition-transform hover:scale-105">
-                <Icon size={13}>{ICON.key}</Icon>
-                <span>{analysis ? analysis.key : "Key"}</span>
-              </div>
+    {/* Floating Badges: Key, BPM, Chords, Scale */}
+    <div className="pointer-events-none absolute inset-0 z-20 flex flex-col justify-between p-4 sm:p-5">
+      <div className="flex justify-between items-start">
+        {/* Key Badge */}
+        <div className="pointer-events-auto flex items-center gap-1.5 rounded-xl border border-[#22C7D9]/40 bg-[#070D1C]/90 px-3 py-1.5 text-xs font-bold text-[#22C7D9] shadow-lg backdrop-blur-md transition-transform hover:scale-105">
+          <Icon size={13}>{ICON.key}</Icon>
+          <span>{analysis ? analysis.key : "Key"}</span>
+        </div>
 
-              {/* BPM Badge */}
-              <div className="pointer-events-auto flex items-center gap-1.5 rounded-xl border border-[#4DA3FF]/40 bg-[#070D1C]/90 px-3 py-1.5 text-xs font-bold text-[#4DA3FF] shadow-lg backdrop-blur-md transition-transform hover:scale-105">
-                <Icon size={13}>{ICON.metronome}</Icon>
-                <span>{analysis ? `${analysis.bpm} BPM` : "BPM"}</span>
-              </div>
-            </div>
-
-            <div className="flex justify-between items-end">
-              {/* Chords Badge */}
-              <div className="pointer-events-auto flex items-center gap-1.5 rounded-xl border border-[#8B5CF6]/40 bg-[#070D1C]/90 px-3 py-1.5 text-xs font-bold text-[#8B5CF6] shadow-lg backdrop-blur-md transition-transform hover:scale-105">
-                <Icon size={13}>{ICON.chords}</Icon>
-                <span>{analysis && chords.length > 0 ? chords.join(" · ") : "Chords"}</span>
-              </div>
-
-              {/* Scale Badge */}
-              <div className="pointer-events-auto flex items-center gap-1.5 rounded-xl border border-[#55D69A]/40 bg-[#070D1C]/90 px-3 py-1.5 text-xs font-bold text-[#55D69A] shadow-lg backdrop-blur-md transition-transform hover:scale-105">
-                <Icon size={13}>{ICON.scale}</Icon>
-                <span>{analysis ? analysis.scale : "Scale"}</span>
-              </div>
-            </div>
-          </div>
-
-          {/* Quick link to view analysis if a track is active */}
-          {analysis && (
-            <div className="absolute bottom-3 left-1/2 -translate-x-1/2 z-30">
-              <Link
-                to="/analysis"
-                className="flex items-center gap-1.5 rounded-full bg-gradient-to-r from-[#6C4DFF] to-[#8B5CF6] px-4 py-1 text-xs font-bold text-white shadow-md transition-transform hover:scale-105"
-              >
-                <span>View {title}</span>
-                <Icon size={12}>{ICON.arrowRight}</Icon>
-              </Link>
-            </div>
-          )}
+        {/* BPM Badge */}
+        <div className="pointer-events-auto flex items-center gap-1.5 rounded-xl border border-[#4DA3FF]/40 bg-[#070D1C]/90 px-3 py-1.5 text-xs font-bold text-[#4DA3FF] shadow-lg backdrop-blur-md transition-transform hover:scale-105">
+          <Icon size={13}>{ICON.metronome}</Icon>
+          <span>{analysis ? `${analysis.bpm} BPM` : "BPM"}</span>
         </div>
       </div>
 
-      {dragging && (
-        <div
-          className="pointer-events-none absolute inset-2 z-30 flex items-center justify-center rounded-xl border-2 border-dashed border-[#8B5CF6] bg-[#050A18]/90 backdrop-blur-sm"
-          role="status"
-        >
-          <p className="flex items-center gap-2 font-heading text-lg font-bold text-white">
-            <Icon size={22} className="text-[#8B5CF6]">
-              {ICON.upload}
-            </Icon>
-            Drop song to start analysis
-          </p>
+      <div className="flex justify-between items-end">
+        {/* Chords Badge */}
+        <div className="pointer-events-auto flex items-center gap-1.5 rounded-xl border border-[#8B5CF6]/40 bg-[#070D1C]/90 px-3 py-1.5 text-xs font-bold text-[#8B5CF6] shadow-lg backdrop-blur-md transition-transform hover:scale-105">
+          <Icon size={13}>{ICON.chords}</Icon>
+          <span>{analysis && chords.length > 0 ? chords.join(" · ") : "Chords"}</span>
         </div>
-      )}
-    </section>
+
+        {/* Scale Badge */}
+        <div className="pointer-events-auto flex items-center gap-1.5 rounded-xl border border-[#55D69A]/40 bg-[#070D1C]/90 px-3 py-1.5 text-xs font-bold text-[#55D69A] shadow-lg backdrop-blur-md transition-transform hover:scale-105">
+          <Icon size={13}>{ICON.scale}</Icon>
+          <span>{analysis ? analysis.scale : "Scale"}</span>
+        </div>
+      </div>
+    </div>
+
+    {/* Bottom control strip / playback action */}
+    {(audioUrl || analysis) && (
+      <div className="pointer-events-auto absolute bottom-3 left-1/2 -translate-x-1/2 z-30 flex items-center gap-2">
+        {audioUrl && (
+          <button
+            type="button"
+            onClick={togglePlay}
+            className="flex items-center gap-1.5 rounded-full bg-gradient-to-r from-[#22C7D9] via-[#4DA3FF] to-[#6C4DFF] px-3.5 py-1 text-xs font-bold text-[#050A18] shadow-[0_2px_14px_rgba(34,199,217,0.4)] transition-all hover:scale-105 active:scale-95 cursor-pointer"
+            aria-label={isPlaying ? "Pause track" : "Play track"}
+          >
+            <Icon size={12}>{isPlaying ? ICON.pause : ICON.play}</Icon>
+            <span>{isPlaying ? "Pause" : "Play"}</span>
+            {duration > 0 && (
+              <span className="font-mono text-[10px] text-[#050A18]/80 ml-0.5">
+                {formatSeconds(currentTime)} / {formatSeconds(duration)}
+              </span>
+            )}
+          </button>
+        )}
+
+        {analysis && (
+          <Link
+            to="/analysis"
+            className={`flex items-center gap-1.5 rounded-full ${audioUrl
+                ? "border border-[#6C4DFF]/40 bg-[#070D1C]/90 px-3 py-1 text-xs font-semibold text-[#A78BFA] shadow-md backdrop-blur-md hover:bg-[#6C4DFF]/20 hover:text-white"
+                : "bg-gradient-to-r from-[#6C4DFF] to-[#8B5CF6] px-4 py-1 text-xs font-bold text-white shadow-md hover:scale-105"
+              } transition-all`}
+          >
+            <span>View {audioUrl ? "Analysis" : title}</span>
+            <Icon size={12}>{ICON.arrowRight}</Icon>
+          </Link>
+        )}
+      </div>
+    )}
+  </div>
+      </div >
+
+    { dragging && (
+      <div
+        className="pointer-events-none absolute inset-2 z-30 flex items-center justify-center rounded-xl border-2 border-dashed border-[#8B5CF6] bg-[#050A18]/90 backdrop-blur-sm"
+        role="status"
+      >
+        <p className="flex items-center gap-2 font-heading text-lg font-bold text-white">
+          <Icon size={22} className="text-[#8B5CF6]">
+            {ICON.upload}
+          </Icon>
+          Drop song to start analysis
+        </p>
+      </div>
+    )
+}
+    </section >
   );
 }
