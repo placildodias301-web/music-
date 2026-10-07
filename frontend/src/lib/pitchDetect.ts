@@ -14,19 +14,54 @@
  * feature, not an optional nicety.
  */
 
+export interface TuningString {
+  note: string;
+  freq: number;
+}
+
 export interface InstrumentRange {
   id: string;
   label: string;
   fmin: number;
   fmax: number;
+  /** Standard tuning, lowest string first. */
+  strings: TuningString[];
 }
 
+const GUITAR_STANDARD: TuningString[] = [
+  { note: "E2", freq: 82.41 },
+  { note: "A2", freq: 110.0 },
+  { note: "D3", freq: 146.83 },
+  { note: "G3", freq: 196.0 },
+  { note: "B3", freq: 246.94 },
+  { note: "E4", freq: 329.63 },
+];
+
+// Violin and mandolin share GDAE tuning.
+const GDAE: TuningString[] = [
+  { note: "G3", freq: 196.0 },
+  { note: "D4", freq: 293.66 },
+  { note: "A4", freq: 440.0 },
+  { note: "E5", freq: 659.26 },
+];
+
 export const INSTRUMENT_RANGES: InstrumentRange[] = [
-  { id: "guitar", label: "Guitar", fmin: 82, fmax: 1319 },
-  { id: "violin", label: "Violin", fmin: 196, fmax: 3520 },
-  { id: "voice", label: "Voice", fmin: 80, fmax: 1100 },
-  { id: "ukulele", label: "Ukulele", fmin: 196, fmax: 880 },
-  { id: "bass", label: "Bass Guitar", fmin: 41, fmax: 400 },
+  { id: "guitar", label: "Acoustic Guitar", fmin: 75, fmax: 1319, strings: GUITAR_STANDARD },
+  { id: "violin", label: "Violin", fmin: 180, fmax: 3520, strings: GDAE },
+  {
+    id: "bass",
+    label: "Bass",
+    fmin: 37,
+    fmax: 400,
+    strings: [
+      { note: "E1", freq: 41.2 },
+      { note: "A1", freq: 55.0 },
+      { note: "D2", freq: 73.42 },
+      { note: "G2", freq: 98.0 },
+    ],
+  },
+  { id: "mandolin", label: "Mandolin", fmin: 180, fmax: 2100, strings: GDAE },
+  { id: "electric-guitar", label: "Electric Guitar", fmin: 75, fmax: 1319, strings: GUITAR_STANDARD },
 ];
 
 const NOTE_NAMES = ["A", "A#", "B", "C", "C#", "D", "D#", "E", "F", "F#", "G", "G#"];

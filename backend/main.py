@@ -16,16 +16,19 @@ import uuid
 from collections import defaultdict, deque
 from contextlib import asynccontextmanager
 from typing import Optional
+from urllib.parse import quote
 
 from fastapi import FastAPI, File, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse, Response
+from fastapi.responses import FileResponse, JSONResponse, Response
+from starlette.background import BackgroundTask
 from pydantic import BaseModel, Field
 
 from services.analysis_engine import analyze, analyze_from_array
 from services.assistant_engine import answer_question
 from services.audio_extract import TMP_DIR, AudioExtractionError, cleanup, extract_audio_to_wav
 from services.difficulty import rate_difficulty
+from services.media_fetch import MediaFetchError, fetch_media, search_youtube
 from services.midi_export import build_midi_bytes
 from services.pdf_export import build_chord_chart_pdf
 
@@ -34,7 +37,7 @@ logger = logging.getLogger("wilsify")
 
 FRONTEND_ORIGIN = os.environ.get(
     "FRONTEND_ORIGIN",
-    "http://localhost:5173,http://localhost:4173,http://127.0.0.1:5173,http://127.0.0.1:4173",
+    "http://localhost:5173,http://localhost:5174,http://localhost:4173,http://127.0.0.1:5173,http://127.0.0.1:5174,http://127.0.0.1:4173",
 )
 ALLOWED_ORIGINS = [origin.strip() for origin in FRONTEND_ORIGIN.split(",") if origin.strip()]
 
@@ -45,6 +48,9 @@ MAX_UPLOAD_BYTES = 100 * 1024 * 1024  # 100MB
 # it, low enough that a script cannot pin the CPU. Set to 0 to disable.
 ANALYZE_RATE_LIMIT_PER_MINUTE = int(os.environ.get("ANALYZE_RATE_LIMIT_PER_MINUTE", "60"))
 _request_times: dict[str, deque] = defaultdict(deque)
+# Fetching a link downloads media on the server, and YouTube search makes
+# outbound requests, so both share the same cap.
+RATE_LIMITED_PATHS = {"/api/analyze", "/api/fetch-media", "/api/youtube/search"}
 
 # Broad accept list - ffmpeg handles the actual decoding, this is just a
 # first-pass sanity filter so obviously-wrong files are rejected early.
@@ -80,12 +86,13 @@ app.add_middleware(
     allow_origins=ALLOWED_ORIGINS,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["X-Media-Name"],
 )
 
 
 @app.middleware("http")
 async def rate_limit_analysis(request: Request, call_next):
-    if ANALYZE_RATE_LIMIT_PER_MINUTE > 0 and request.url.path == "/api/analyze" and request.method == "POST":
+    if ANALYZE_RATE_LIMIT_PER_MINUTE > 0 and request.url.path in RATE_LIMITED_PATHS and request.method in ("GET", "POST"):
         client = request.client.host if request.client else "unknown"
         now = time.time()
         hits = _request_times[client]
@@ -117,6 +124,10 @@ class PdfExportRequest(BaseModel):
     bpm: float = Field(gt=0, le=400)
     timeSignature: str = Field(max_length=16)
     chordProgression: list[str] = Field(max_length=512)
+
+
+class FetchMediaRequest(BaseModel):
+    url: str = Field(max_length=2048)
 
 
 class RightsAttestationRequest(BaseModel):
@@ -192,6 +203,39 @@ async def analyze_upload(file: UploadFile = File(...)):
         )
     finally:
         cleanup(tmp_input_path, wav_path)
+
+
+@app.post("/api/fetch-media")
+def fetch_media_from_link(req: FetchMediaRequest):
+    """
+    Downloads the audio behind a pasted link (direct file, YouTube, Shorts,
+    Instagram Reels, TikTok, SoundCloud, ...) and streams it back, so the
+    browser can play it and send it through /api/analyze like any upload.
+    The server copy is deleted as soon as the response has been sent.
+    """
+    try:
+        path, name = fetch_media(req.url)
+    except MediaFetchError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception:
+        logger.exception("Fetching media failed for %r", req.url)
+        raise HTTPException(status_code=500, detail="Couldn't get audio from that link. Please try another one.")
+
+    return FileResponse(
+        path,
+        filename=name,
+        background=BackgroundTask(cleanup, path),
+        headers={"X-Media-Name": quote(name)},
+    )
+
+
+@app.get("/api/youtube/search")
+def youtube_search(q: str = "", limit: int = 12):
+    """YouTube search results (metadata only) for the in-app video browser."""
+    try:
+        return {"results": search_youtube(q, limit)}
+    except MediaFetchError as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 
 @app.post("/api/assistant")

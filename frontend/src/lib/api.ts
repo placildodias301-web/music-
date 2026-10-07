@@ -5,7 +5,7 @@
  * is genuinely decoded and analyzed, not matched against canned data.
  */
 
-export const API_URL = import.meta.env.VITE_API_URL ?? "http://localhost:8000";
+export const API_URL = import.meta.env.VITE_API_URL ?? "";
 
 export interface ChordSegment {
   chord: string;
@@ -89,6 +89,48 @@ export async function analyzeFile(file: File): Promise<AnalysisResult> {
   });
 
   return parseJsonOrThrow(res) as Promise<AnalysisResult>;
+}
+
+/**
+ * Downloads the audio behind a pasted link (direct media file, YouTube,
+ * Shorts, Instagram Reels, TikTok, SoundCloud, ...) via the backend and
+ * returns it as a File, ready for `analyzeFile` and local playback.
+ */
+export async function fetchMediaFromLink(url: string): Promise<File> {
+  const res = await fetch(`${API_URL}/api/fetch-media`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ url }),
+  });
+  if (!res.ok) await parseJsonOrThrow(res);
+
+  const blob = await res.blob();
+  const header = res.headers.get("X-Media-Name");
+  const name = header ? decodeURIComponent(header) : "Linked track";
+  return new File([blob], name, { type: blob.type || "audio/mpeg" });
+}
+
+export interface YouTubeVideo {
+  id: string;
+  title: string;
+  channel: string;
+  durationSeconds: number | null;
+  views: number | null;
+  thumbnail: string;
+  url: string;
+  isLive: boolean;
+  tooLong: boolean;
+}
+
+/** Searches YouTube through the backend (metadata only, nothing downloaded). */
+export async function searchYouTube(query: string, limit = 12, signal?: AbortSignal): Promise<YouTubeVideo[]> {
+  const params = new URLSearchParams({ q: query, limit: String(limit) });
+  const res = await fetch(`${API_URL}/api/youtube/search?${params}`, { signal });
+  if (res.status === 404) {
+    throw new Error("YouTube search isn't available yet — restart the backend server to enable it.");
+  }
+  const body = (await parseJsonOrThrow(res)) as { results: YouTubeVideo[] };
+  return body.results;
 }
 
 /**
