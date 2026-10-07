@@ -2,6 +2,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { ReactNode, RefObject } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { Logo } from "./Logo";
+
+const CHORD_SYMBOL = /^[A-G][#b♯♭]?(?:maj|min|dim|aug|sus|add|m|M|\+|°|ø|\d|b|#|♭|♯)*(?:\/[A-G][#b♯♭]?)?$/;
 import { getLibrary } from "../lib/library";
 import { ACCOUNT_CHANGED_EVENT, firstNameOf, initialsOf, loadPrefs } from "../lib/account";
 
@@ -446,6 +448,20 @@ export function AppShell({ children }: { children: ReactNode }) {
   const location = useLocation();
   const navigate = useNavigate();
   const [query, setQuery] = useState("");
+  const searchInputRef = useRef<HTMLInputElement>(null);
+
+  // Ctrl+K / Cmd+K focuses the header search, as the hint promises.
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        searchInputRef.current?.focus();
+        searchInputRef.current?.select();
+      }
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [libraryCount, setLibraryCount] = useState(0);
   const [prefs, setPrefs] = useState(loadPrefs);
@@ -479,7 +495,10 @@ export function AppShell({ children }: { children: ReactNode }) {
     e.preventDefault();
     const trimmed = query.trim();
     if (!trimmed) return;
-    navigate(`/library?q=${encodeURIComponent(trimmed)}`);
+    // Chord symbols (Am7, F#9, Bbmaj7, C/G) go to the chord library; everything else searches saved songs.
+    const target = CHORD_SYMBOL.test(trimmed) ? "/chords" : "/library";
+    navigate(`${target}?q=${encodeURIComponent(trimmed)}`);
+    searchInputRef.current?.blur();
   }
 
   return (
@@ -577,14 +596,17 @@ export function AppShell({ children }: { children: ReactNode }) {
 
           <div className="flex flex-shrink-0 items-center gap-2 sm:gap-3">
             <form onSubmit={handleSearch} role="search" className="hidden lg:block">
-              <label className="flex items-center gap-2.5 rounded-full border border-[#202E50] bg-[#070D1C]/90 px-3.5 py-1.5 backdrop-blur-md transition-colors focus-within:border-[#6C4DFF]/70 focus-within:bg-[#101A34]">
+              <label className="flex cursor-text items-center gap-2.5 rounded-full border border-[#202E50] bg-[#070D1C]/90 px-3.5 py-1.5 backdrop-blur-md transition-all focus-within:border-[#6C4DFF]/70 focus-within:bg-[#101A34] focus-within:shadow-[0_0_0_3px_rgba(108,77,255,0.18)]">
                 <span className="text-[#A5B1CC]">{icon(ICONS.search, 14)}</span>
                 <input
+                  ref={searchInputRef}
+                  type="search"
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
+                  onKeyDown={(e) => e.key === "Escape" && e.currentTarget.blur()}
                   aria-label="Search songs, chords, or questions"
                   placeholder="Search songs, chords, or questions…"
-                  className="w-48 bg-transparent text-[13px] text-[#F4F6FF] placeholder:text-[#687797] focus:outline-none xl:w-64"
+                  className="w-48 bg-transparent text-[13px] text-[#F4F6FF] placeholder:text-[#687797] focus:outline-none focus-visible:rounded-none focus-visible:shadow-none [&::-webkit-search-cancel-button]:hidden xl:w-64"
                 />
                 <kbd className="rounded border border-[#202E50] bg-[#101A34] px-1.5 py-0.5 text-[10px] font-mono text-[#A5B1CC]">
                   Ctrl K

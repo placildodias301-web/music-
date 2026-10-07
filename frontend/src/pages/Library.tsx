@@ -23,6 +23,14 @@ export function Library() {
   const [searchParams] = useSearchParams();
   const [query, setQuery] = useState(searchParams.get("q") ?? "");
 
+  // Follow new searches from the header bar while already on this page.
+  const urlQuery = searchParams.get("q");
+  const [seenUrlQuery, setSeenUrlQuery] = useState(urlQuery);
+  if (urlQuery !== seenUrlQuery) {
+    setSeenUrlQuery(urlQuery);
+    if (urlQuery !== null) setQuery(urlQuery);
+  }
+
   useEffect(() => {
     setItems(getLibrary());
   }, []);

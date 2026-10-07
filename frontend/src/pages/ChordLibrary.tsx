@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import type { ReactNode } from "react";
 import {
   ALL_CHORD_SYMBOLS,
@@ -43,10 +44,25 @@ function searchNames(chord: ParsedChord): string[] {
   return [...roots.flatMap((r) => suffixes.map((s) => `${r}${s}`.toLowerCase())), chordFullName(chord).toLowerCase()];
 }
 
+// Optional alphabetical order: root pills and the "All" listing run A → G♯ instead of C → B.
+const A_PC = 9;
+const ROOTS_FROM_C = Array.from({ length: 12 }, (_, i) => i);
+const ROOTS_FROM_A = Array.from({ length: 12 }, (_, i) => (A_PC + i) % 12);
+
 export function ChordLibrary() {
   const [view, setView] = useState<View>("guitar");
-  const [query, setQuery] = useState("");
+  const [searchParams] = useSearchParams();
+  const [query, setQuery] = useState(searchParams.get("q") ?? "");
+
+  // Follow new searches from the header bar while already on this page.
+  const urlQuery = searchParams.get("q");
+  const [seenUrlQuery, setSeenUrlQuery] = useState(urlQuery);
+  if (urlQuery !== seenUrlQuery) {
+    setSeenUrlQuery(urlQuery);
+    if (urlQuery !== null) setQuery(urlQuery);
+  }
   const [root, setRoot] = useState<number | "all">(0);
+  const [alphabetical, setAlphabetical] = useState(false);
   const [category, setCategory] = useState<ChordCategory | "all">("all");
 
   const searching = query.trim().length > 0;
@@ -68,10 +84,13 @@ export function ChordLibrary() {
         return ea - eb;
       });
     }
-    return ALL_CHORDS.filter(
+    const byFilter = ALL_CHORDS.filter(
       (c) => (root === "all" || c.root === root) && (category === "all" || c.quality.category === category)
     );
-  }, [query, searching, root, category]);
+    if (!alphabetical) return byFilter;
+    const fromA = (pc: number) => (pc - A_PC + 12) % 12;
+    return byFilter.sort((a, b) => fromA(a.root) - fromA(b.root));
+  }, [query, searching, root, category, alphabetical]);
 
   const qualitiesPerCategory = (cat: ChordCategory) => CHORD_QUALITIES.filter((q) => q.category === cat).length;
   const totalFor = (cat: ChordCategory | "all") =>
@@ -112,13 +131,24 @@ export function ChordLibrary() {
         </div>
 
         <div className="relative w-full sm:w-72">
+          <svg
+            width="14"
+            height="14"
+            viewBox="0 0 24 24"
+            fill="none"
+            aria-hidden="true"
+            className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[var(--color-ns-muted)]"
+          >
+            <circle cx="11" cy="11" r="7" stroke="currentColor" strokeWidth="2" />
+            <path d="m20 20-3-3" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+          </svg>
           <input
             type="text"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             aria-label="Search all chords"
             placeholder="Search chord (e.g. Bbm7, F#9, sus4)…"
-            className="input-base py-2 pl-3.5 pr-8 text-xs rounded-xl"
+            className="input-base py-2 pl-9 pr-8 text-xs rounded-xl"
           />
           {query && (
             <button
@@ -142,7 +172,8 @@ export function ChordLibrary() {
           <FilterPill selected={root === "all"} onClick={() => setRoot("all")}>
             All
           </FilterPill>
-          {NOTE_NAMES.map((n, pc) => {
+          {(alphabetical ? ROOTS_FROM_A : ROOTS_FROM_C).map((pc) => {
+            const n = NOTE_NAMES[pc];
             const flat = enharmonicRoot(pc);
             return (
               <FilterPill key={n} selected={root === pc} onClick={() => setRoot(pc)} title={flat ? `${n} / ${flat}` : n}>
@@ -151,6 +182,19 @@ export function ChordLibrary() {
               </FilterPill>
             );
           })}
+          <button
+            type="button"
+            aria-pressed={alphabetical}
+            onClick={() => setAlphabetical((v) => !v)}
+            title={alphabetical ? "Back to normal order (C → B)" : "Sort alphabetically (A → G)"}
+            className={`ml-1 rounded-lg border px-2.5 py-1 text-[11px] font-semibold transition-all ${
+              alphabetical
+                ? "border-[var(--color-ns-amber)] bg-[var(--color-ns-amber)]/15 text-[var(--color-ns-amber)]"
+                : "border-[var(--color-ns-border)] text-[var(--color-ns-muted)] hover:text-[var(--color-ns-text)]"
+            }`}
+          >
+            {alphabetical ? "A → G ✓" : "A → G"}
+          </button>
         </div>
 
         <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label="Chord type">
