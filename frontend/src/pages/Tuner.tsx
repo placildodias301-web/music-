@@ -6,6 +6,8 @@ export function Tuner() {
   const [isListening, setIsListening] = useState(false);
   const [pitch, setPitch] = useState<PitchResult | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [isAuto, setIsAuto] = useState(true);
+  const [selectedString, setSelectedString] = useState(0);
 
   const audioCtxRef = useRef<AudioContext | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
@@ -14,6 +16,9 @@ export function Tuner() {
   const bufferRef = useRef<Float32Array<ArrayBuffer> | null>(null);
 
   const instrument = INSTRUMENT_RANGES.find((r) => r.id === instrumentId) ?? INSTRUMENT_RANGES[0];
+  // The rAF loop outlives renders, so it reads the instrument through a ref.
+  const instrumentRef = useRef(instrument);
+  instrumentRef.current = instrument;
 
   async function start() {
     setErrorMessage(null);
@@ -60,7 +65,7 @@ export function Tuner() {
     if (!analyser || !buffer || !ctx) return;
 
     analyser.getFloatTimeDomainData(buffer);
-    const result = detectPitch(buffer, ctx.sampleRate, instrument);
+    const result = detectPitch(buffer, ctx.sampleRate, instrumentRef.current);
     setPitch(result);
 
     rafRef.current = requestAnimationFrame(loop);
@@ -71,11 +76,38 @@ export function Tuner() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const cents = pitch?.cents ?? 0;
+  const strings = instrument.strings;
+  // AUTO: lock onto the string nearest the detected pitch. Manual: tune toward the tapped string.
+  const autoIndex = pitch
+    ? strings.reduce(
+        (best, s, i) =>
+          Math.abs(Math.log2(pitch.frequency / s.freq)) < Math.abs(Math.log2(pitch.frequency / strings[best].freq))
+            ? i
+            : best,
+        0,
+      )
+    : null;
+  const targetIndex = isAuto ? autoIndex : selectedString;
+  const target = targetIndex !== null ? strings[targetIndex] : null;
+
+  const cents = pitch && target ? Math.round(1200 * Math.log2(pitch.frequency / target.freq)) : 0;
   const clampedCents = Math.max(-50, Math.min(50, cents));
   const needleRotation = clampedCents * 0.9; // degrees, +-45deg swing
 
   const inTune = pitch !== null && Math.abs(cents) <= 5;
+  const isFlat = pitch !== null && cents < -5;
+  const isSharp = pitch !== null && cents > 5;
+
+  function selectInstrument(id: string) {
+    setInstrumentId(id);
+    setSelectedString(0);
+  }
+
+  function selectString(index: number) {
+    setIsAuto(false);
+    setSelectedString(index);
+    playReferenceTone(strings[index].freq);
+  }
 
   // Reference tone playback for tuning by ear
   function playReferenceTone(freq: number) {
@@ -97,15 +129,6 @@ export function Tuner() {
       // AudioContext unavailable
     }
   }
-
-  const STANDARD_GUITAR_STRINGS = [
-    { note: "E2", freq: 82.41, label: "6th String" },
-    { note: "A2", freq: 110.00, label: "5th String" },
-    { note: "D3", freq: 146.83, label: "4th String" },
-    { note: "G3", freq: 196.00, label: "3rd String" },
-    { note: "B3", freq: 246.94, label: "2nd String" },
-    { note: "E4", freq: 329.63, label: "1st String" },
-  ];
 
   return (
     <div className="mx-auto flex min-h-[calc(100vh-140px)] max-w-xl flex-col justify-center px-4 py-8 sm:px-6 sm:py-12">
@@ -140,7 +163,7 @@ export function Tuner() {
             <button
               key={r.id}
               type="button"
-              onClick={() => setInstrumentId(r.id)}
+              onClick={() => selectInstrument(r.id)}
               className={`rounded-xl px-4 py-1.5 text-xs font-semibold transition-all ${
                 instrumentId === r.id
                   ? "bg-[var(--color-ns-blue)] text-[var(--color-ns-ink)] font-bold shadow-md shadow-[var(--color-ns-blue)]/20"
@@ -152,8 +175,47 @@ export function Tuner() {
           ))}
         </div>
 
-        {/* Needle Gauge Display */}
-        <div className="relative mx-auto mb-4 h-40 w-64 sm:h-44 sm:w-72">
+        {/* Tuning label + AUTO toggle */}
+        <div className="mb-4 flex items-center justify-between">
+          <div>
+            <p className="font-heading text-sm font-bold text-[var(--color-ns-text)]">{instrument.label}</p>
+            <p className="text-xs text-[var(--color-ns-muted)]">
+              Standard · {strings.map((s) => s.note.replace(/\d/, "")).join(" ")}
+            </p>
+          </div>
+          <button
+            type="button"
+            role="switch"
+            aria-checked={isAuto}
+            onClick={() => setIsAuto((v) => !v)}
+            className="flex items-center gap-2.5"
+          >
+            <span className="text-xs font-semibold uppercase tracking-wider text-[var(--color-ns-muted)]">Auto</span>
+            <span
+              className={`relative h-7 w-12 rounded-full transition-colors ${
+                isAuto ? "bg-[var(--color-ns-mint)]" : "bg-[var(--color-ns-border-strong)]"
+              }`}
+            >
+              <span
+                className={`absolute top-1 h-5 w-5 rounded-full bg-white shadow transition-all ${
+                  isAuto ? "left-6" : "left-1"
+                }`}
+              />
+            </span>
+          </button>
+        </div>
+
+        {/* Needle Gauge Display, flanked by flat / sharp indicators */}
+        <div className="mb-4 flex items-center justify-between gap-2">
+          <span
+            className={`w-10 text-center font-heading text-4xl font-bold transition-colors duration-150 ${
+              isFlat ? "text-[var(--color-ns-coral)]" : "text-[var(--color-ns-border-strong)]"
+            }`}
+            aria-label="Flat"
+          >
+            ♭
+          </span>
+        <div className="relative mx-auto h-40 w-64 sm:h-44 sm:w-72">
           <svg viewBox="0 0 200 110" className="h-full w-full drop-shadow">
             {/* Arc Track */}
             <path
@@ -209,6 +271,15 @@ export function Tuner() {
             />
           </svg>
         </div>
+          <span
+            className={`w-10 text-center font-heading text-4xl font-bold transition-colors duration-150 ${
+              isSharp ? "text-[var(--color-ns-coral)]" : "text-[var(--color-ns-border-strong)]"
+            }`}
+            aria-label="Sharp"
+          >
+            ♯
+          </span>
+        </div>
 
         {/* Central Note Readout */}
         <div className="text-center">
@@ -229,6 +300,16 @@ export function Tuner() {
             {inTune && (
               <span className="mt-2 inline-flex items-center gap-1.5 rounded-full border border-[var(--color-ns-mint)]/40 bg-[var(--color-ns-mint)]/15 px-3 py-0.5 text-xs font-bold text-[var(--color-ns-mint)] animate-pulse">
                 ✓ IN TUNE
+              </span>
+            )}
+            {(isFlat || isSharp) && target && (
+              <span className="mt-2 inline-flex items-center rounded-full border border-[var(--color-ns-coral)]/40 bg-[var(--color-ns-coral)]/10 px-3 py-0.5 text-xs font-bold text-[var(--color-ns-coral)]">
+                {isFlat ? "Tune up" : "Tune down"} to {target.note}
+              </span>
+            )}
+            {!pitch && (
+              <span className="mt-2 inline-flex items-center rounded-full bg-[var(--color-ns-raised)] px-3 py-0.5 text-xs text-[var(--color-ns-muted)]">
+                {isAuto ? "Start tuning by playing any string" : `Play the ${strings[selectedString].note} string`}
               </span>
             )}
           </div>
@@ -261,28 +342,37 @@ export function Tuner() {
           {isListening ? "Stop Microphone" : "Start Microphone Tuner"}
         </button>
 
-        {/* Reference Pitch String Buttons */}
-        {(instrumentId === "guitar" || instrumentId === "electric-guitar") && (
-          <div className="mt-6 border-t border-[var(--color-ns-border)] pt-5">
-            <p className="mb-2.5 text-center text-xs font-semibold uppercase tracking-wider text-[var(--color-ns-muted)]">
-              Reference String Tones (Tune by Ear)
-            </p>
-            <div className="grid grid-cols-6 gap-1.5 sm:gap-2">
-              {STANDARD_GUITAR_STRINGS.map((str) => (
+        {/* String buttons — tap to tune a specific string (turns AUTO off) and hear its reference tone */}
+        <div className="mt-6 border-t border-[var(--color-ns-border)] pt-5">
+          <p className="mb-2.5 text-center text-xs font-semibold uppercase tracking-wider text-[var(--color-ns-muted)]">
+            {isAuto ? "Auto-detecting string · tap one to tune manually" : "Manual · tap a string to hear it"}
+          </p>
+          <div className="grid gap-1.5 sm:gap-2" style={{ gridTemplateColumns: `repeat(${strings.length}, minmax(0, 1fr))` }}>
+            {strings.map((str, i) => {
+              const active = targetIndex === i && (!isAuto || pitch !== null);
+              return (
                 <button
                   key={str.note}
                   type="button"
-                  onClick={() => playReferenceTone(str.freq)}
-                  title={`Play ${str.note} (${str.freq} Hz)`}
-                  className="flex flex-col items-center justify-center rounded-xl border border-[var(--color-ns-border)] bg-[var(--color-ns-raised)] py-2 transition-all hover:border-[var(--color-ns-coral)]/50 hover:bg-[var(--color-ns-card)] active:scale-95"
+                  onClick={() => selectString(i)}
+                  title={`Tune to ${str.note} (${str.freq} Hz)`}
+                  className={`flex flex-col items-center justify-center rounded-full py-2.5 transition-all active:scale-95 ${
+                    active
+                      ? inTune
+                        ? "bg-[var(--color-ns-mint)] text-[var(--color-ns-ink)]"
+                        : "bg-[var(--color-ns-blue)] text-[var(--color-ns-ink)]"
+                      : "border border-[var(--color-ns-border)] bg-[var(--color-ns-raised)] text-[var(--color-ns-text)] hover:border-[var(--color-ns-border-strong)]"
+                  }`}
                 >
-                  <span className="font-heading text-xs font-bold text-[var(--color-ns-text)]">{str.note}</span>
-                  <span className="text-[10px] text-[var(--color-ns-muted)] font-mono">{Math.round(str.freq)}</span>
+                  <span className="font-heading text-base font-bold">{str.note.replace(/\d/, "")}</span>
+                  <span className={`font-mono text-[10px] ${active ? "opacity-80" : "text-[var(--color-ns-muted)]"}`}>
+                    {Math.round(str.freq)}
+                  </span>
                 </button>
-              ))}
-            </div>
+              );
+            })}
           </div>
-        )}
+        </div>
 
         <p className="mt-5 text-center text-[11px] text-[var(--color-ns-muted)]">
           Frequency window: {instrument.fmin}–{instrument.fmax} Hz · Standard pitch reference A4 = 440 Hz
