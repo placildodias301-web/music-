@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import type { ReactNode } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { askAssistant, type SongContext } from "../lib/api";
@@ -293,6 +294,9 @@ export function Assistant() {
   const [railQuery, setRailQuery] = useState("");
   const [topicKey, setTopicKey] = useState<string | null>(null);
   const [attachOpen, setAttachOpen] = useState(false);
+  const [menuPos, setMenuPos] = useState<{ left: number; top: number; width: number } | null>(null);
+  const attachBtnRef = useRef<HTMLButtonElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
   const [listening, setListening] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
@@ -333,6 +337,33 @@ export function Assistant() {
   }, [input, isEmpty]);
 
   useEffect(() => () => recognitionRef.current?.stop(), []);
+
+  // The + menu lives in a portal so it never makes the page scroll: open it below the
+  // button when it fits, otherwise above, and keep it inside the viewport.
+  useLayoutEffect(() => {
+    if (!attachOpen) return;
+    function place() {
+      const btn = attachBtnRef.current;
+      const menu = menuRef.current;
+      if (!btn || !menu) return;
+      const r = btn.getBoundingClientRect();
+      const gap = 8;
+      const margin = 12;
+      const width = Math.min(460, window.innerWidth - margin * 2);
+      const h = menu.offsetHeight;
+      const below = r.bottom + gap;
+      const above = r.top - gap - h;
+      let top: number;
+      if (below + h <= window.innerHeight - margin) top = below;
+      else if (above >= margin) top = above;
+      else top = Math.max(margin, window.innerHeight - margin - h);
+      const left = Math.min(Math.max(margin, r.left - 12), window.innerWidth - margin - width);
+      setMenuPos({ left, top, width });
+    }
+    place();
+    window.addEventListener("resize", place);
+    return () => window.removeEventListener("resize", place);
+  }, [attachOpen]);
 
   // Ctrl/Cmd+U jumps to song upload (shown as a hint in the + menu); Escape closes the menu.
   useEffect(() => {
@@ -522,6 +553,7 @@ export function Assistant() {
         {/* Attach menu */}
         <div className="relative">
           <button
+            ref={attachBtnRef}
             type="button"
             aria-label="Add a song"
             aria-expanded={attachOpen}
@@ -530,19 +562,23 @@ export function Assistant() {
           >
             {ICONS.plus}
           </button>
-          {attachOpen && (
+          {attachOpen &&
+            createPortal(
             <>
-              <div className="fixed inset-0 z-10" onClick={() => setAttachOpen(false)} />
-              {/* Spans the composer's full width, like the + menus in other AI chats. */}
+              <div className="fixed inset-0 z-[60]" onClick={() => setAttachOpen(false)} />
               <div
+                ref={menuRef}
                 role="menu"
                 aria-label="Add to chat"
-                className={`animate-fadeIn absolute -left-3 z-20 w-[calc(100vw-2rem)] max-w-[min(760px,calc(100vw-2rem))] rounded-2xl border border-[var(--color-ns-border)] bg-[var(--color-ns-card)] p-1.5 shadow-2xl sm:w-[460px] ${
-                  isEmpty ? "top-12" : "bottom-12"
-                }`}
+                className="animate-fadeIn fixed z-[61] rounded-2xl border border-[var(--color-ns-border)] bg-[var(--color-ns-card)] p-1 shadow-2xl"
+                style={
+                  menuPos
+                    ? { left: menuPos.left, top: menuPos.top, width: menuPos.width }
+                    : { left: 0, top: 0, width: 460, visibility: "hidden" }
+                }
               >
-                <MenuLink to="/upload" icon={ICONS.upload} tint="text-[var(--color-ns-coral)]" title="Analyze a new song" hint="Upload audio for chords, key & tempo" shortcut="Ctrl+U" />
-                <MenuLink to="/library" icon={ICONS.library} tint="text-[var(--color-ns-blue)]" title="Add from library" hint="Pick a song you've already analyzed" />
+                <MenuLink to="/upload" icon={ICONS.upload} tint="text-[var(--color-ns-coral)]" title="Analyze a new song" hint="Get chords, key & tempo" shortcut="Ctrl+U" />
+                <MenuLink to="/library" icon={ICONS.library} tint="text-[var(--color-ns-blue)]" title="Add from library" hint="Songs you've analyzed" />
                 {songContext && (
                   <MenuButton
                     icon={ICONS.disc}
@@ -557,13 +593,13 @@ export function Assistant() {
                   />
                 )}
 
-                <div className="my-1.5 h-px bg-[var(--color-ns-border)]" />
+                <div className="mx-2 my-1 h-px bg-[var(--color-ns-border)]" />
 
                 <MenuLink to="/chords" icon={ICONS.chordGrid} tint="text-[var(--color-ns-amber)]" title="Chord lookup" hint="Diagrams for guitar, ukulele & piano" />
                 <MenuLink to="/tuner" icon={ICONS.tuner} tint="text-[var(--color-ns-mint)]" title="Tuner" hint="Tune up before you play" />
                 <MenuLink to="/practice" icon={ICONS.target} tint="text-[var(--color-ns-blue)]" title="Practice mode" hint="Drill chords with live feedback" />
 
-                <div className="my-1.5 h-px bg-[var(--color-ns-border)]" />
+                <div className="mx-2 my-1 h-px bg-[var(--color-ns-border)]" />
 
                 <MenuButton
                   icon={ICONS.target}
@@ -589,7 +625,8 @@ export function Assistant() {
                   />
                 )}
               </div>
-            </>
+            </>,
+            document.body
           )}
         </div>
 
@@ -920,7 +957,7 @@ export function Assistant() {
 }
 
 const MENU_ROW =
-  "flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition-colors hover:bg-[var(--color-ns-raised)] focus-visible:bg-[var(--color-ns-raised)]";
+  "flex w-full items-center gap-3 rounded-xl px-3 py-[7px] text-left transition-colors hover:bg-[var(--color-ns-raised)] focus-visible:bg-[var(--color-ns-raised)]";
 
 interface MenuRowProps {
   icon: ReactNode;
@@ -934,7 +971,7 @@ function MenuRowBody({ icon, tint, title, hint, trailing }: MenuRowProps & { tra
     <>
       <span className={tint}>{icon}</span>
       <span className="min-w-0 flex-1 truncate">
-        <span className="text-sm font-medium text-[var(--color-ns-text)]">{title}</span>
+        <span className="text-[13px] font-medium text-[var(--color-ns-text)]">{title}</span>
         <span className="ml-2 hidden text-xs text-[var(--color-ns-muted)] sm:inline">{hint}</span>
       </span>
       {trailing}
