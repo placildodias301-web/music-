@@ -202,27 +202,6 @@ export function AnalyzeHero({
             </svg>
           </div>
 
-<<<<<<< HEAD
-  {/* Central Animated Audio Waveform */ }
-  <div className="relative z-10 flex h-28 items-center justify-center gap-1.5 px-4" aria-hidden="true">
-    {bars.map((h, i) => {
-      const isCenter = Math.abs(i - WAVE_BARS / 2) < 8;
-      return (
-        <div
-          key={i}
-          className="w-1.5 rounded-full transition-[height] duration-300"
-          style={{
-            height: `${Math.max(16, h)}%`,
-            animation: `heroWave ${1.1 + (i % 5) * 0.18}s ease-in-out ${-((i * 0.137) % 1.2).toFixed(2)}s infinite`,
-            background: isCenter
-              ? "linear-gradient(to top, #6C4DFF, #22C7D9)"
-              : "linear-gradient(to top, rgba(108,77,255,0.4), rgba(77,163,255,0.7))",
-            boxShadow: isCenter ? "0 0 12px rgba(34,199,217,0.4)" : "none",
-          }}
-        />
-      );
-    })}
-=======
           {/* Central Real Audio-Reactive Waveform */}
     <div className="relative z-10 w-full max-w-[360px] px-2 sm:px-4 flex items-center justify-center">
       <AudioReactiveWaveform
@@ -236,7 +215,6 @@ export function AnalyzeHero({
         seed={title ?? (fileName ? stripExtension(fileName) : "wilsify-hero")}
         height={116}
       />
->>>>>>> 3b853f7 (feat(ui): add audio reactive hero waveform)
     </div>
 
     {/* Floating Badges: Key, BPM, Chords, Scale */}
