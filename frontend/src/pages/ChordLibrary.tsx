@@ -9,18 +9,20 @@ import {
   chordFullName,
   chordMidiNotes,
   enharmonicRoot,
+  GUITAR_TUNING,
   getGuitarVoicings,
   getUkuleleShape,
   parseChordSymbol,
   qualityForSuffix,
   spellChord,
+  UKULELE_TUNING,
   type ChordCategory,
   type ParsedChord,
 } from "../lib/chordTheory";
 import { GuitarChordDiagram } from "../components/GuitarChordDiagram";
 import { UkuleleChordDiagram } from "../components/UkuleleChordDiagram";
 import { PianoRoll } from "../components/PianoRoll";
-import { playChordLive } from "../lib/playChord";
+import { playChordLive, playStrummedShape } from "../lib/playChord";
 
 type View = "guitar" | "ukulele" | "piano";
 
@@ -302,7 +304,11 @@ function ChordCard({ chord, view }: { chord: ParsedChord; view: View }) {
 
       <button
         type="button"
-        onClick={() => playChordLive(chord)}
+        onClick={() => {
+          if (view === "guitar" && voicing) playStrummedShape(voicing.frets, "guitar", GUITAR_TUNING);
+          else if (view === "ukulele") playStrummedShape(getUkuleleShape(chord), "ukulele", UKULELE_TUNING);
+          else playChordLive(chord);
+        }}
         className="flex items-center gap-1.5 rounded-xl border border-[var(--color-ns-border)] bg-[var(--color-ns-bg)] px-3 py-1.5 text-[11px] font-medium text-[var(--color-ns-muted)] transition-all hover:border-[var(--color-ns-amber)]/60 hover:text-[var(--color-ns-text)] hover:bg-[var(--color-ns-card)] active:scale-95"
       >
         <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor" className="text-[var(--color-ns-amber)]">

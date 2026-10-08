@@ -225,8 +225,8 @@ function aShapeBarre(chord: ParsedChord): GuitarVoicing {
   return { name: b === 0 ? "Open (A-shape)" : `Barre – A-shape (fret ${b})`, frets };
 }
 
-const GUITAR_TUNING = [40, 45, 50, 55, 59, 64]; // E2 A2 D3 G3 B3 E4
-const UKULELE_TUNING = [67, 60, 64, 69]; // G4 C4 E4 A4 (re-entrant)
+export const GUITAR_TUNING = [40, 45, 50, 55, 59, 64]; // E2 A2 D3 G3 B3 E4
+export const UKULELE_TUNING = [67, 60, 64, 69]; // G4 C4 E4 A4 (re-entrant)
 const WINDOW = 4; // diagrams show four frets
 
 interface Candidate {
