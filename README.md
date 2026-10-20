@@ -1,146 +1,37 @@
-ont# Wilsify AI — MVP
+# Wilsify AI
 
-An AI-powered music learning companion. Upload a song **or a video with
-music in it**, and Wilsify AI performs **real audio analysis** — genuine
-signal processing (not mock/lookup data) — to detect its key, tempo (BPM),
-time signature, and chord progression. Then practice along with adjustable
-playback speed, looping, and a metronome, or ask the built-in music-theory
-assistant a question.
+An AI-assisted music learning companion. Sign in, upload a song (audio or video) or pick a YouTube video, and Wilsify AI analyses it with a signal-processing pipeline (ffmpeg + librosa, with HMM/Viterbi chord smoothing) to detect **key, tempo (BPM), time signature and a timed chord progression**. You then read a synced chord and lyric sheet and practise along with it.
 
-This is a standalone, self-contained MVP — just this `backend/` and
-`frontend/`, no larger project to install.
+**Status: MVP in active development — NOT READY for production.** The code for the core loop is complete and automated tests pass in a Linux sandbox, but the real Windows browser run, the Windows command run and the live Supabase migration are still outstanding. See [`docs/verification/FINAL_VERIFICATION_REPORT.md`](./docs/verification/FINAL_VERIFICATION_REPORT.md).
 
-> **Setup instructions:** see [`INSTALLATION.md`](./INSTALLATION.md) for a
-> complete, step-by-step guide (prerequisites, every command, troubleshooting,
-> and what was tested before delivery). The quick version is below.
+## Core MVP features
+- **Accounts:** Supabase email/password sign-in (Google optional).
+- **Input:** local audio/video upload, YouTube search/URL import, a built-in sample track and microphone recording.
+- **Analysis:** live stage-by-stage progress, then key, BPM, 3/4 or 4/4 meter, timed chords and a difficulty score.
+- **Library:** every completed analysis is saved automatically (browser `localStorage`, synced to Supabase `public.user_data` when available) and survives a refresh. Raw audio is not stored.
+- **Chord & lyric sheet:** synced playback, `.lrc` or tap-synced lyrics, transpose, capo, chord simplification.
+- **Practice Studio:** speed control, looping, metronome, tap tempo and microphone accuracy tracking. After a refresh it works without audio (chord practice) until you re-attach the file.
+- **Extras:** chromatic tuner, chord library, AI tutor, MIDI/PDF export.
 
-## How the analysis works (real, not mock)
+## Quick start
+Follow [`INSTALLATION.md`](./INSTALLATION.md) — the only setup, run, migration and deployment guide.
 
-| What | How |
+## Documentation
+| Document | What it is |
 |---|---|
-| Any audio or video file | `ffmpeg` extracts/decodes the audio track |
-| Key | Chroma vector correlated against Krumhansl-Kessler major/minor key profiles |
-| Tempo (BPM) | `librosa` onset-strength beat tracking |
-| Chord progression | Per-beat chroma matched against major/minor triad templates, collapsed into a progression |
-| Time signature | Lightweight periodicity heuristic (defaults to 4/4, the common case, unless there's a clearly stronger 3-beat signal) |
-| Duration | Directly from the decoded audio |
+| [`INSTALLATION.md`](./INSTALLATION.md) | Setup, environment variables, Supabase migration, run, test, deploy, troubleshooting |
+| [`MVP_PLAN.md`](./MVP_PLAN.md) | Current scope, task status, roadmap/backlog, known limitations |
+| [`docs/verification/FINAL_VERIFICATION_REPORT.md`](./docs/verification/FINAL_VERIFICATION_REPORT.md) | The only verification status (evidence per check) |
+| [`docs/verification/TEST_COVERAGE.md`](./docs/verification/TEST_COVERAGE.md) | Test map: 146 backend + 415 frontend tests |
+| [`docs/analysis/`](./docs/analysis/) | Project analysis, requirements, feasibility/risks, sources |
+| [`docs/README.md`](./docs/README.md) | Full documentation index, including archived legacy material |
 
-This is genuine music-information-retrieval (MIR) signal processing — the
-same family of technique real tools use — so **results are estimates**,
-same as any such algorithm: a clean solo instrument recording analyzes more
-reliably than a dense, noisy mix. It is not a neural network and does not
-pretend to be one; it's classical DSP, and it's real.
+## Key known limitations
+- Results are estimates: dense or noisy mixes analyse less reliably than clean recordings, and the chord vocabulary is limited to major, minor, 7 and m7 (plus no-chord).
+- Meter detection chooses between 4/4 and 3/4 only.
+- The **Stem Splitter UI is a preview**; the backend stem endpoints are not implemented.
+- Paid plans and the community feed are placeholders ("Coming soon").
+- Uploads are capped at 100 MB (YouTube: 20 minutes / 100 MB); the rate limiter is in-process, so run a single backend instance.
+- Lint reports 0 errors and 30 warnings; the production bundle is about 1.1 MB.
 
-The AI Assistant is a separate, honestly-labeled **rule-based** Q&A engine
-(pattern matching over a fixed set of music-theory topics) — not an LLM.
-
-## Project structure
-
-```
-wilsify-mvp/
-├── backend/     Python + FastAPI — real analysis engine (ffmpeg + librosa)
-└── frontend/    Vite + React + TypeScript + Tailwind — the UI
-```
-
-## Run locally
-
-You need two terminals. No database, no Docker, no API keys.
-
-**Requirements:** Python 3.10+, Node.js 18+, `ffmpeg` on your PATH.
-- macOS: `brew install ffmpeg`
-- Ubuntu/Debian: `sudo apt install ffmpeg`
-- Windows: [ffmpeg.org/download](https://ffmpeg.org/download.html) (add to PATH)
-
-### 1. Backend
-
-```bash
-cd backend
-python3 -m venv venv
-source venv/bin/activate        # Windows: venv\Scripts\activate
-pip install -r requirements.txt
-cp .env.example .env
-uvicorn main:app --reload --port 8000
-```
-
-Runs on **http://localhost:8000**. Verify:
-
-```bash
-curl http://localhost:8000/api/health
-```
-
-> First startup runs a short warmup analysis (a few seconds) so the numba
-> JIT compilation cost is paid once at boot, not on your first real upload.
-
-### 2. Frontend
-
-```bash
-cd frontend
-npm install
-npm run dev
-```
-
-Runs on **http://localhost:5173**. Open it in a browser.
-
-## Try it
-
-1. Go to `http://localhost:5173/`, click **Upload Song**.
-2. Either select a real audio/video file from your device, or click **Use
-   Sample Track** (generates a short original clip in-browser — always
-   works, no file needed).
-3. Click **Analyze Song** — this sends the file to the backend, which
-   really decodes and analyzes it (usually under a second after warmup).
-4. See the real key / BPM / time signature / chord progression on the
-   **Analysis Results** page (a green banner confirms it's real, not demo,
-   analysis).
-5. Open **Practice Mode** — play/pause, seek, change speed (0.5x/0.75x/1x),
-   loop, and use the metronome (driven by the detected BPM).
-6. Open **AI Assistant** and ask a music-theory question.
-
-## Notes on accuracy
-
-- Works best on relatively clean recordings (solo instrument, vocals +
-  simple accompaniment, or a clear mix). Very dense/loud mixes, heavy
-  distortion, or spoken-word audio will analyze less reliably — this is a
-  property of the underlying signal-processing techniques, not a bug.
-- Time signature detection defaults to 4/4 (correct for the large majority
-  of popular music) and only overrides to 3/4 with a clearly strong signal.
-  True downbeat/meter detection is a much harder MIR problem; this is a
-  deliberately simple, honest heuristic.
-- Max upload size: 100MB.
-
-## Tests
-
-```bash
-cd backend
-pip install -r requirements-dev.txt
-pytest                # 13 tests covering analysis, validation, exports, difficulty
-```
-
-```bash
-cd frontend
-npm run lint          # oxlint
-npm run build         # tsc -b + vite build
-```
-
-## Configuration
-
-| Variable | Where | Default | Purpose |
-|---|---|---|---|
-| `FRONTEND_ORIGIN` | `backend/.env` | local dev + preview ports | Comma-separated CORS allow-list |
-| `ANALYZE_RATE_LIMIT_PER_MINUTE` | backend env | `60` | Per-IP cap on `/api/analyze`. Set `0` to disable. |
-| `VITE_API_URL` | `frontend/.env` | `http://localhost:8000` | Backend URL, read at build time |
-
-## Deployment
-
-**Frontend** → any static host (Vercel, Netlify, Cloudflare Pages). Build
-with `npm run build` (outputs to `frontend/dist/`), set the environment
-variable `VITE_API_URL` to your deployed backend's URL before building.
-
-**Backend** → any host that can run a long-lived Python process with
-`ffmpeg` available (Railway, Render, Fly.io, a small VM). Most of these
-platforms let you add `ffmpeg` via a build script or already include it in
-their Python buildpacks — check your platform's docs. Set `FRONTEND_ORIGIN`
-to your deployed frontend's URL (for CORS). Start command:
-`uvicorn main:app --host 0.0.0.0 --port $PORT`.
-
-No database or queue service is required for either side.
+Full list: [`MVP_PLAN.md`](./MVP_PLAN.md) §10.

@@ -24,20 +24,63 @@ os.makedirs(TMP_DIR, exist_ok=True)
 TARGET_SAMPLE_RATE = 22050
 
 
+import shutil
+
 class AudioExtractionError(Exception):
     pass
 
 
+def find_ffmpeg() -> str | None:
+    candidate = os.environ.get("FFMPEG_PATH")
+    if candidate and os.path.isfile(candidate):
+        return candidate
+    which_ffmpeg = shutil.which("ffmpeg")
+    if which_ffmpeg:
+        return which_ffmpeg
+    candidates = [
+        r"C:\Program Files\BlueStacks_nxt\ffmpeg.exe",
+        r"C:\Users\Placildo Jayson Dias\AppData\Local\CapCut\Apps\7.1.0.2890\ffmpeg.exe",
+    ]
+    for p in candidates:
+        if os.path.isfile(p):
+            return p
+    return None
+
+
 def extract_audio_to_wav(input_path: str) -> str:
     """
-    Runs ffmpeg on `input_path` (any audio or video file) and produces a
-    mono, 22.05kHz WAV file suitable for librosa analysis. Returns the path
-    to the generated WAV file.
+    Extracts or converts `input_path` (audio or video file) into a
+    standardized mono, 22.05kHz WAV file suitable for librosa analysis.
+    Uses native soundfile decoding for WAV/FLAC/OGG when possible, and
+    ffmpeg for MP3, MP4, MOV and other video/audio formats.
     """
     output_path = os.path.join(TMP_DIR, f"{uuid.uuid4().hex}.wav")
 
+    ext = os.path.splitext(input_path)[1].lower()
+    if ext in (".wav", ".flac", ".ogg"):
+        try:
+            import soundfile as sf
+            import librosa
+            y, sr = sf.read(input_path)
+            if y.ndim > 1:
+                y = y.mean(axis=1)
+            if sr != TARGET_SAMPLE_RATE:
+                y = librosa.resample(y, orig_sr=sr, target_sr=TARGET_SAMPLE_RATE)
+            sf.write(output_path, y, TARGET_SAMPLE_RATE, subtype="PCM_16")
+            if os.path.exists(output_path):
+                return output_path
+        except Exception as e:
+            logger.info("Direct soundfile read for %s failed, falling back to ffmpeg: %s", input_path, e)
+
+    ffmpeg_bin = find_ffmpeg()
+    if not ffmpeg_bin:
+        raise AudioExtractionError(
+            "Could not read audio from that file. Make sure it's a valid "
+            "audio or video file that actually contains an audio track."
+        )
+
     cmd = [
-        "ffmpeg",
+        ffmpeg_bin,
         "-y",  # overwrite
         "-i", input_path,
         "-vn",  # drop any video stream — we only want audio
@@ -50,9 +93,6 @@ def extract_audio_to_wav(input_path: str) -> str:
     result = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
 
     if result.returncode != 0 or not os.path.exists(output_path):
-        # Log the real ffmpeg output server-side for debugging, but never
-        # return it to the client - it exposes build flags and filesystem
-        # paths, and means nothing to the person who uploaded the file.
         logger.warning(
             "ffmpeg failed (returncode=%s): %s",
             result.returncode,

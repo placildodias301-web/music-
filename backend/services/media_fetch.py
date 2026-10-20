@@ -1,0 +1,483 @@
+"""
+Media fetching and YouTube search/input flow for Wilsify AI MVP.
+
+Security & MVP rules enforced:
+- Only allowlisted YouTube domains (youtube.com, www.youtube.com, m.youtube.com,
+  music.youtube.com, youtu.be) or valid 11-character YouTube video IDs are accepted.
+- Playlists, channels, live streams, upcoming streams, and videos over 20 minutes
+  are rejected with clear user-facing messages.
+- Raw user URLs are never passed to shell commands or yt-dlp; we extract the
+  11-character video ID and construct a canonical watch URL passed to the
+  yt-dlp Python API.
+- Socket timeout is 15s with hard overall timeouts for search and download.
+- Downloads are written to random UUID filenames inside TMP_DIR (never using the
+  video title in a filesystem path) and cleaned up on failure, timeout, or completion.
+"""
+
+from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
+import ipaddress
+import logging
+import os
+import re
+import socket
+import threading
+import uuid
+from urllib.parse import parse_qs, urlparse
+
+from services.audio_extract import TMP_DIR
+
+logger = logging.getLogger(__name__)
+
+MAX_MEDIA_BYTES = 100 * 1024 * 1024  # 100 MB (matches upload cap)
+MAX_DURATION_SECONDS = 20 * 60       # 20 minutes
+SOCKET_TIMEOUT_SECONDS = 15
+SEARCH_TIMEOUT_SECONDS = 20.0
+DOWNLOAD_TIMEOUT_SECONDS = 60.0
+MAX_SEARCH_RESULTS = 24
+
+YOUTUBE_FALLBACK_MESSAGE = (
+    "YouTube could not provide this video right now. "
+    "Please try again later or upload the audio file directly."
+)
+
+ALLOWED_YOUTUBE_HOSTS = {
+    "youtube.com",
+    "www.youtube.com",
+    "m.youtube.com",
+    "music.youtube.com",
+    "youtu.be",
+}
+
+# Kept for backward compatibility with existing unit test `test_social_hosts_are_routed_to_ytdlp`
+SOCIAL_HOSTS = (
+    "youtube.com", "youtu.be", "youtube-nocookie.com",
+    "instagram.com",
+    "tiktok.com",
+    "facebook.com", "fb.watch",
+    "x.com", "twitter.com",
+    "soundcloud.com",
+    "vimeo.com",
+    "dailymotion.com", "dai.ly",
+    "reddit.com", "redd.it",
+    "twitch.tv",
+    "bandcamp.com",
+    "mixcloud.com",
+    "snapchat.com",
+    "threads.net",
+)
+
+USER_AGENT = (
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+    "(KHTML, like Gecko) Chrome/126.0 Safari/537.36"
+)
+
+_YT_ID_RE = re.compile(r"^[A-Za-z0-9_-]{11}$")
+
+# Per-user / per-client concurrency guard (max 1 active YouTube job per client key)
+_active_jobs_lock = threading.Lock()
+_active_youtube_jobs: set[str] = set()
+
+
+class MediaFetchError(Exception):
+    """User-safe error — the message is shown in the UI as-is."""
+
+    def __init__(self, message: str, status_code: int = 400):
+        super().__init__(message)
+        self.status_code = status_code
+
+
+def acquire_youtube_slot(client_key: str) -> bool:
+    with _active_jobs_lock:
+        if client_key in _active_youtube_jobs:
+            return False
+        _active_youtube_jobs.add(client_key)
+        return True
+
+
+def release_youtube_slot(client_key: str) -> None:
+    with _active_jobs_lock:
+        _active_youtube_jobs.discard(client_key)
+
+
+def _host_matches(host: str, domains: tuple[str, ...]) -> bool:
+    host = host.lower().rstrip(".")
+    return any(host == d or host.endswith("." + d) for d in domains)
+
+
+def _validate_url(url: str) -> str:
+    url = (url or "").strip()
+    if not url or len(url) > 2048:
+        raise MediaFetchError("Please paste a valid YouTube video link.")
+    if _YT_ID_RE.match(url):
+        return f"https://www.youtube.com/watch?v={url}"
+    if "://" not in url:
+        url = "https://" + url
+    parsed = urlparse(url)
+    if parsed.scheme not in ("http", "https") or not parsed.hostname:
+        raise MediaFetchError("Please paste a valid http(s) YouTube link.")
+    return url
+
+
+def _assert_public_host(url: str) -> None:
+    host = urlparse(url).hostname
+    if not host:
+        raise MediaFetchError("Please paste a valid http(s) link.")
+    # Fast-path check when host is literally an IP literal (e.g. 127.0.0.1, 10.0.0.5)
+    try:
+        literal_ip = ipaddress.ip_address(host)
+        if not literal_ip.is_global:
+            raise MediaFetchError("That link points to a private or local address, which isn't allowed.")
+    except ValueError:
+        pass
+
+    if host.lower().rstrip(".") in ("localhost", "localhost.localdomain"):
+        raise MediaFetchError("That link points to a private or local address, which isn't allowed.")
+
+    try:
+        infos = socket.getaddrinfo(host, None)
+    except socket.gaierror:
+        raise MediaFetchError("Couldn't reach that website - check the link and try again.")
+    for info in infos:
+        ip = ipaddress.ip_address(info[4][0])
+        if not ip.is_global:
+            raise MediaFetchError("That link points to a private or local address, which isn't allowed.")
+
+
+def _safe_name(name: str, fallback: str = "Linked track") -> str:
+    name = re.sub(r'[\\/:*?"<>|\x00-\x1f\x7f]+', " ", name or "").strip()
+    return (name or fallback)[:120]
+
+
+def is_social_url(url: str) -> bool:
+    host = urlparse(_validate_url(url)).hostname or ""
+    return _host_matches(host, SOCIAL_HOSTS)
+
+
+def extract_youtube_video_id(url_or_id: str) -> str:
+    """
+    Validates that `url_or_id` is either an 11-character YouTube video ID or a
+    single-video URL on an allowlisted YouTube domain:
+      youtube.com, www.youtube.com, m.youtube.com, music.youtube.com, youtu.be
+    Rejects playlists, channels, live stream URLs, and non-YouTube domains.
+    Returns the validated 11-character video ID.
+    """
+    raw = (url_or_id or "").strip()
+    if not raw or len(raw) > 2048:
+        raise MediaFetchError("Please enter a valid YouTube video link.")
+
+    if _YT_ID_RE.match(raw):
+        return raw
+
+    normalized = _validate_url(raw)
+    parsed = urlparse(normalized)
+    host = (parsed.hostname or "").lower().rstrip(".")
+
+    if host not in ALLOWED_YOUTUBE_HOSTS:
+        raise MediaFetchError(
+            "Unsupported domain. Only YouTube links (youtube.com, www.youtube.com, m.youtube.com, music.youtube.com, youtu.be) are supported."
+        )
+
+    query = parse_qs(parsed.query)
+    path = parsed.path or "/"
+    path_lower = path.lower()
+    segments = [seg for seg in path.split("/") if seg]
+
+    # Reject playlists
+    if path_lower.startswith("/playlist") or "list" in query:
+        raise MediaFetchError("YouTube playlists are not supported. Please paste a link to a single video.")
+
+    # Reject channels, user profiles, feeds, and search pages
+    if (
+        path_lower.startswith(("/@", "/channel", "/c/", "/user", "/feed", "/results"))
+        or (segments and segments[0].startswith("@"))
+    ):
+        raise MediaFetchError("YouTube channels and feeds are not supported. Please paste a link to a single video.")
+
+    # Reject explicit live stream URLs
+    if path_lower.startswith("/live") or query.get("live") == ["1"]:
+        raise MediaFetchError("Live streams cannot be analyzed. Please choose a recorded video under 20 minutes.")
+
+    video_id = ""
+    if host == "youtu.be":
+        if len(segments) == 1:
+            video_id = segments[0]
+        else:
+            raise MediaFetchError("Invalid youtu.be link. Please paste a direct link to a single YouTube video.")
+    else:
+        if path == "/watch":
+            v_list = query.get("v") or []
+            video_id = v_list[0] if len(v_list) == 1 else ""
+        elif len(segments) == 2 and segments[0].lower() in ("shorts", "embed", "v"):
+            video_id = segments[1]
+        else:
+            raise MediaFetchError("Unsupported YouTube URL. Please paste a direct YouTube video link.")
+
+    if not _YT_ID_RE.match(video_id):
+        raise MediaFetchError("Invalid YouTube video ID. Please check the link and try again.")
+
+    return video_id
+
+
+def fetch_media(url: str, client_key: str = "global", request_id: str | None = None) -> tuple[str, str]:
+    """
+    Validates `url`, extracts the 11-character YouTube video ID, and downloads
+    its audio into `TMP_DIR` under a random UUID filename.
+    Returns `(local_path, display_file_name)`. Caller must clean up `local_path`.
+    """
+    req_id = request_id or uuid.uuid4().hex[:12]
+    raw = (url or "").strip()
+    if not raw:
+        raise MediaFetchError("Please paste a valid YouTube video link.")
+
+    # Preserve SSRF / scheme checks first when a full URL is provided.
+    normalized = _validate_url(raw)
+    parsed = urlparse(normalized)
+    host = (parsed.hostname or "").lower().rstrip(".")
+    if host not in ALLOWED_YOUTUBE_HOSTS:
+        _assert_public_host(normalized)
+
+    video_id = extract_youtube_video_id(raw)
+    canonical_url = f"https://www.youtube.com/watch?v={video_id}"
+    _assert_public_host(canonical_url)
+
+    if not acquire_youtube_slot(client_key):
+        raise MediaFetchError(
+            "Another YouTube video is already being fetched. Please wait for it to finish.",
+            status_code=429,
+        )
+
+    try:
+        return _download_youtube_video(canonical_url, video_id, req_id)
+    finally:
+        release_youtube_slot(client_key)
+
+
+def _run_with_timeout(fn, timeout_s: float):
+    executor = ThreadPoolExecutor(max_workers=1)
+    future = executor.submit(fn)
+    try:
+        return future.result(timeout=timeout_s)
+    except FuturesTimeoutError:
+        future.cancel()
+        raise
+    finally:
+        executor.shutdown(wait=False, cancel_futures=True)
+
+
+def _download_youtube_video(canonical_url: str, video_id: str, request_id: str) -> tuple[str, str]:
+    try:
+        import yt_dlp
+        from yt_dlp.utils import DownloadError
+    except ImportError:  # pragma: no cover - dependency missing
+        raise MediaFetchError(YOUTUBE_FALLBACK_MESSAGE)
+
+    os.makedirs(TMP_DIR, exist_ok=True)
+    stem = uuid.uuid4().hex
+    opts = {
+        "format": "bestaudio[filesize<100M]/bestaudio/best[filesize<100M]/best",
+        "outtmpl": os.path.join(TMP_DIR, f"{stem}.%(ext)s"),
+        "noplaylist": True,
+        "playlist_items": "1",
+        "max_filesize": MAX_MEDIA_BYTES,
+        "allowed_extractors": ["youtube", "default", "-generic"],
+        "socket_timeout": SOCKET_TIMEOUT_SECONDS,
+        "retries": 1,
+        "quiet": True,
+        "no_warnings": True,
+        "noprogress": True,
+        "cachedir": False,
+        "http_headers": {"User-Agent": USER_AGENT},
+    }
+
+    def _run_extract_and_download():
+        with yt_dlp.YoutubeDL(opts) as ydl:
+            meta = ydl.extract_info(canonical_url, download=False)
+            if meta and meta.get("entries"):
+                meta = next((e for e in meta["entries"] if e), None)
+            if not meta:
+                raise MediaFetchError(YOUTUBE_FALLBACK_MESSAGE)
+
+            live_status = meta.get("live_status") or ""
+            if meta.get("is_live") or live_status in ("is_live", "is_upcoming", "post_live"):
+                raise MediaFetchError(
+                    "Live streams and upcoming premieres cannot be analyzed. Please choose a recorded video under 20 minutes."
+                )
+
+            duration = meta.get("duration")
+            if duration and float(duration) > MAX_DURATION_SECONDS:
+                raise MediaFetchError(
+                    "That video is longer than 20 minutes. Please select a video under 20 minutes or upload an audio file."
+                )
+
+            return ydl.extract_info(canonical_url, download=True)
+
+    try:
+        info = _run_with_timeout(_run_extract_and_download, DOWNLOAD_TIMEOUT_SECONDS)
+    except FuturesTimeoutError:
+        _remove_stem(stem)
+        logger.warning("[request_id=%s] YouTube download timed out for video_id=%s", request_id, video_id)
+        raise MediaFetchError(
+            YOUTUBE_FALLBACK_MESSAGE,
+            status_code=504,
+        )
+    except MediaFetchError:
+        _remove_stem(stem)
+        raise
+    except DownloadError as e:
+        _remove_stem(stem)
+        logger.warning("[request_id=%s] yt-dlp DownloadError for video_id=%s: %s", request_id, video_id, str(e)[-300:])
+        raise MediaFetchError(_explain_ytdlp_error(str(e)))
+    except Exception as e:
+        _remove_stem(stem)
+        logger.warning("[request_id=%s] yt-dlp unexpected error for video_id=%s: %s", request_id, video_id, type(e).__name__)
+        raise MediaFetchError(YOUTUBE_FALLBACK_MESSAGE)
+
+    if info and info.get("entries"):
+        info = next((e for e in info["entries"] if e), None)
+
+    downloads = (info or {}).get("requested_downloads") or []
+    path = downloads[0].get("filepath") if downloads else None
+    if not path or not os.path.exists(path):
+        # Also check TMP_DIR for any file written with this UUID stem
+        for name in os.listdir(TMP_DIR):
+            if name.startswith(stem):
+                candidate = os.path.join(TMP_DIR, name)
+                if os.path.isfile(candidate):
+                    path = candidate
+                    break
+
+    if not path or not os.path.exists(path):
+        _remove_stem(stem)
+        if info and (info.get("is_live") or info.get("live_status") in ("is_live", "is_upcoming")):
+            raise MediaFetchError(
+                "Live streams and upcoming premieres cannot be analyzed. Please choose a recorded video under 20 minutes."
+            )
+        if info and (info.get("duration") or 0) > MAX_DURATION_SECONDS:
+            raise MediaFetchError(
+                "That video is longer than 20 minutes. Please select a video under 20 minutes or upload an audio file."
+            )
+        logger.warning("[request_id=%s] yt-dlp produced no file for video_id=%s", request_id, video_id)
+        raise MediaFetchError(YOUTUBE_FALLBACK_MESSAGE)
+
+    try:
+        file_size = os.path.getsize(path)
+    except OSError:
+        file_size = 0
+
+    if file_size <= 0:
+        _remove_stem(stem)
+        raise MediaFetchError(YOUTUBE_FALLBACK_MESSAGE)
+
+    if file_size > MAX_MEDIA_BYTES:
+        _remove_stem(stem)
+        raise MediaFetchError("That video's audio exceeds the 100 MB limit. Please upload a smaller audio file.")
+
+    ext = os.path.splitext(path)[1].lower()
+    display_title = _safe_name((info or {}).get("title") or video_id, fallback=video_id)
+    return path, display_title + ext
+
+
+def search_youtube(
+    query: str,
+    limit: int = 12,
+    client_key: str = "global",
+    request_id: str | None = None,
+) -> list[dict]:
+    """
+    Searches YouTube via yt-dlp Python API (metadata only, no shell execution)
+    with a 15s socket timeout and a 20s hard timeout.
+    """
+    req_id = request_id or uuid.uuid4().hex[:12]
+    query = re.sub(r"\s+", " ", query or "").strip()[:200]
+    if not query:
+        raise MediaFetchError("Type a song title or artist to search for.")
+    limit = max(1, min(limit, MAX_SEARCH_RESULTS))
+
+    try:
+        import yt_dlp
+    except ImportError:  # pragma: no cover - dependency missing
+        raise MediaFetchError(YOUTUBE_FALLBACK_MESSAGE)
+
+    opts = {
+        "extract_flat": "in_playlist",
+        "skip_download": True,
+        "noplaylist": True,
+        "socket_timeout": SOCKET_TIMEOUT_SECONDS,
+        "retries": 1,
+        "quiet": True,
+        "no_warnings": True,
+        "cachedir": False,
+        "http_headers": {"User-Agent": USER_AGENT},
+    }
+
+    def _run_search():
+        with yt_dlp.YoutubeDL(opts) as ydl:
+            return ydl.extract_info(f"ytsearch{limit}:{query}", download=False)
+
+    try:
+        info = _run_with_timeout(_run_search, SEARCH_TIMEOUT_SECONDS)
+    except FuturesTimeoutError:
+        logger.warning("[request_id=%s] YouTube search timed out for query=%r", req_id, query)
+        raise MediaFetchError(
+            YOUTUBE_FALLBACK_MESSAGE,
+            status_code=504,
+        )
+    except Exception as e:
+        logger.warning("[request_id=%s] YouTube search failed for query=%r: %s", req_id, query, type(e).__name__)
+        raise MediaFetchError(YOUTUBE_FALLBACK_MESSAGE, status_code=502)
+
+    results = []
+    for entry in (info or {}).get("entries") or []:
+        if not entry or not isinstance(entry, dict):
+            continue
+        vid = entry.get("id") or ""
+        if not _YT_ID_RE.match(vid):
+            continue  # Ignore channels and playlists in search results
+        duration = entry.get("duration")
+        live_status = entry.get("live_status") or ""
+        is_live = bool(entry.get("is_live") or live_status in ("is_live", "is_upcoming"))
+        results.append({
+            "id": vid,
+            "title": entry.get("title") or "Untitled",
+            "channel": entry.get("channel") or entry.get("uploader") or "",
+            "durationSeconds": int(duration) if duration else None,
+            "views": entry.get("view_count"),
+            "thumbnail": f"https://i.ytimg.com/vi/{vid}/mqdefault.jpg",
+            "url": f"https://www.youtube.com/watch?v={vid}",
+            "isLive": is_live,
+            "tooLong": bool(duration and duration > MAX_DURATION_SECONDS),
+        })
+    return results
+
+
+def _explain_ytdlp_error(message: str) -> str:
+    m = message.lower()
+    if "live" in m and ("stream" in m or "event" in m or "premiere" in m):
+        return "Live streams and upcoming premieres cannot be analyzed. Please choose a recorded video under 20 minutes."
+    if "private" in m or "members-only" in m:
+        return "That YouTube video is private or members-only and cannot be analyzed."
+    if "age" in m and "restrict" in m:
+        return "That YouTube video is age-restricted and cannot be analyzed."
+    if "not available" in m or "unavailable" in m or "removed" in m or "404" in m:
+        return "That YouTube video is unavailable — it may have been removed or region-locked."
+    if "larger than max-filesize" in m or "file is larger" in m:
+        return "That video's audio exceeds the 100 MB limit. Please upload a smaller audio file."
+    if "timed out" in m or "timeout" in m:
+        return "YouTube took too long to respond (timed out). Please try again later or upload the audio file directly."
+    return YOUTUBE_FALLBACK_MESSAGE
+
+
+def _remove(path: str | None) -> None:
+    if path and os.path.exists(path):
+        try:
+            os.remove(path)
+        except OSError:
+            pass
+
+
+def _remove_stem(stem: str) -> None:
+    if not os.path.exists(TMP_DIR):
+        return
+    for name in os.listdir(TMP_DIR):
+        if name.startswith(stem):
+            _remove(os.path.join(TMP_DIR, name))

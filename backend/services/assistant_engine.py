@@ -1,9 +1,11 @@
 """
-Wilsify AI Assistant — rule-based demo implementation.
+Wilsify AI Assistant — Gemini when GEMINI_API_KEY is set, rule-based otherwise.
 
-No external AI API is configured. This is a genuine, working rule-based
-Q&A engine over a fixed set of music-theory topics — it is NOT a large
-language model, and callers must not present it as one.
+With a key, questions go to the Gemini API (song context in the system
+prompt) and come back with isDemo False. Without a key, or when the call
+fails (rate limit, network, bad key), the rule-based engine below answers
+instead, so the tutor never goes dead in a demo. The rule-based engine is
+NOT a large language model, and callers must not present it as one.
 
 Section 4.4 of the spec calls for a "Contextual AI tutor" that answers
 using the real detected song data (chords, key, tempo, weak chords) rather
@@ -14,15 +16,85 @@ chords) and checks song-grounded questions FIRST, before falling back to
 the generic music-theory rules below. This keeps the "no LLM API key
 needed" zero-budget property while still being genuinely grounded, not a
 disconnected chatbot.
-
-To connect a real AI API later: keep `answer_question(question, context)`'s
-signature the same, call the real API inside it (passing `context` as part
-of the system prompt) instead of matching rules, and set `is_demo` to
-False. Keep any API key server-side (environment variable), never in the
-frontend.
 """
 
+import json
+import logging
+import os
 import re
+
+import httpx
+
+logger = logging.getLogger("wilsify")
+
+GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "").strip()
+# "-latest" alias tracks Google's current Flash model, so this doesn't rot
+# when a dated model is retired. Override to pin a specific model.
+GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-flash-latest")
+# Tried when the main model is overloaded (503) or rate-limited (429) -
+# free-tier Flash returns 503 "high demand" fairly often.
+GEMINI_BACKUP_MODEL = os.environ.get("GEMINI_BACKUP_MODEL", "gemini-flash-lite-latest")
+RETRYABLE_STATUS = {429, 500, 503}
+GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
+
+SYSTEM_PROMPT = (
+    "You are Wilsify Tutor, a friendly music teacher inside a music-learning app. "
+    "Answer questions about music theory, chords, scales, rhythm, ear training and "
+    "practicing an instrument. Keep answers short and practical (under about 150 "
+    "words), in the same language the user writes in. Reply in plain text only, "
+    "no Markdown (no **, #, or backticks); the app shows text as-is, so use "
+    "simple line breaks and '-' for lists. If the question is not about "
+    "music, politely steer back to music. If song data is given below, it was "
+    "detected automatically from the user's upload and may be slightly off; use it "
+    "when the question is about their song."
+)
+
+
+def _gemini_answer(question: str, context: dict | None, history: list[dict] | None = None) -> dict | None:
+    """Returns a Gemini answer, or None so the caller falls back to rules.
+
+    `history` is the chat so far ([{"role": "user"|"assistant", "text": ...}],
+    oldest first). Gemini is stateless, so earlier turns must be resent for
+    follow-up questions to make sense.
+    """
+    if not GEMINI_API_KEY:
+        return None
+
+    system = SYSTEM_PROMPT
+    if context:
+        system += "\n\nSong data (JSON): " + json.dumps(context, ensure_ascii=False)[:4000]
+
+    contents = [
+        {"role": "model" if turn["role"] == "assistant" else "user", "parts": [{"text": turn["text"]}]}
+        for turn in (history or [])
+        if turn.get("text")
+    ]
+    contents.append({"role": "user", "parts": [{"text": question}]})
+
+    for model in dict.fromkeys([GEMINI_MODEL, GEMINI_BACKUP_MODEL]):  # dedupe, keep order
+        try:
+            res = httpx.post(
+                GEMINI_URL.format(model=model),
+                headers={"x-goog-api-key": GEMINI_API_KEY},
+                json={
+                    "systemInstruction": {"parts": [{"text": system}]},
+                    "contents": contents,
+                },
+                timeout=30,
+            )
+            res.raise_for_status()
+            parts = res.json()["candidates"][0]["content"]["parts"]
+            text = "".join(p.get("text", "") for p in parts).strip()
+        except Exception as e:  # any failure -> backup model, then rule-based fallback
+            retryable = not isinstance(e, httpx.HTTPStatusError) or e.response.status_code in RETRYABLE_STATUS
+            detail = e.response.text[:300] if isinstance(e, httpx.HTTPStatusError) else repr(e)
+            logger.warning("Gemini call failed (%s): %s", model, detail)
+            if retryable:
+                continue
+            return None
+        if text:
+            return {"answer": text, "isDemo": False, "matchedTopic": None}
+    return None
 
 
 def _grounded_answer(question: str, context: dict | None) -> dict | None:
@@ -130,8 +202,15 @@ FALLBACK_ANSWER = (
     "C-G-Am-F progression. Try asking one of those!"
 )
 
+# Shown instead of FALLBACK_ANSWER when a key IS set but Gemini failed, so the
+# user isn't told the app is "rule-based" when it's really just busy.
+BUSY_ANSWER = (
+    "The AI tutor is busy right now, so I couldn't answer that one. "
+    "Please try again in a few seconds."
+)
 
-def answer_question(question: str, context: dict | None = None) -> dict:
+
+def answer_question(question: str, context: dict | None = None, history: list[dict] | None = None) -> dict:
     q = (question or "").strip()
 
     if not q:
@@ -141,6 +220,10 @@ def answer_question(question: str, context: dict | None = None) -> dict:
             "matchedTopic": None,
         }
 
+    llm = _gemini_answer(q, context, history)
+    if llm is not None:
+        return llm
+
     grounded = _grounded_answer(q, context)
     if grounded is not None:
         return grounded
@@ -149,4 +232,4 @@ def answer_question(question: str, context: dict | None = None) -> dict:
         if pattern.search(q):
             return {"answer": answer, "isDemo": True, "matchedTopic": topic_id}
 
-    return {"answer": FALLBACK_ANSWER, "isDemo": True, "matchedTopic": None}
+    return {"answer": BUSY_ANSWER if GEMINI_API_KEY else FALLBACK_ANSWER, "isDemo": True, "matchedTopic": None}
