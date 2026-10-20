@@ -107,6 +107,21 @@ export function playPluckedNotes(midis: number[], instrument: PluckKind, gapSeco
   window.setTimeout(() => ctx.close().catch(() => {}), (tone.seconds + midis.length * gap + 0.5) * 1000);
 }
 
+/** Plays a single note with plucked or synthesized tone */
+export function playSingleNote(midi: number, instrument: PluckKind = "guitar") {
+  playPluckedNotes([midi], instrument, 0);
+}
+
+/** Plays notes in sequence as an arpeggio at slow (0.35s), normal (0.18s), or fast (0.09s) speed */
+export function playArpeggioNotes(
+  midis: number[],
+  instrument: PluckKind = "guitar",
+  speed: "slow" | "normal" | "fast" = "normal"
+) {
+  const gap = speed === "slow" ? 0.35 : speed === "fast" ? 0.09 : 0.18;
+  playPluckedNotes(midis, instrument, gap);
+}
+
 /**
  * A neutral reference tone for instruments Wilsify cannot synthesise convincingly (keys, accordion, mallets):
  * plain oscillators, so you hear WHICH notes the chord has — not what the real instrument sounds like.

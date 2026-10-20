@@ -45,6 +45,8 @@ export const CHORD_QUALITIES: QualityDef[] = [
   { suffix: "6/9", name: "six-nine", category: "Sixths & adds", tones: [[0, 1], [4, 3], [7, 5], [9, 6], [14, 9]], optional: [7], aliases: ["69"] },
   { suffix: "add9", name: "added ninth", category: "Sixths & adds", tones: [[0, 1], [4, 3], [7, 5], [14, 9]], optional: [7] },
   { suffix: "madd9", name: "minor added ninth", category: "Sixths & adds", tones: [[0, 1], [3, 3], [7, 5], [14, 9]], optional: [7] },
+  { suffix: "add11", name: "added eleventh", category: "Sixths & adds", tones: [[0, 1], [4, 3], [7, 5], [17, 11]], optional: [7] },
+  { suffix: "add13", name: "added thirteenth", category: "Sixths & adds", tones: [[0, 1], [4, 3], [7, 5], [21, 13]], optional: [7] },
   // Sevenths
   { suffix: "7", name: "dominant seventh", category: "Sevenths", tones: [[0, 1], [4, 3], [7, 5], [10, 7]], optional: [7] },
   { suffix: "maj7", name: "major seventh", category: "Sevenths", tones: [[0, 1], [4, 3], [7, 5], [11, 7]], optional: [7], aliases: ["M7", "Δ7", "Δ"] },
@@ -59,6 +61,7 @@ export const CHORD_QUALITIES: QualityDef[] = [
   { suffix: "m9", name: "minor ninth", category: "Extended", tones: [[0, 1], [3, 3], [7, 5], [10, 7], [14, 9]], optional: [7], aliases: ["min9", "-9"] },
   { suffix: "9sus4", name: "ninth sus4", category: "Extended", tones: [[0, 1], [5, 4], [7, 5], [10, 7], [14, 9]], optional: [7] },
   { suffix: "11", name: "dominant eleventh", category: "Extended", tones: [[0, 1], [4, 3], [7, 5], [10, 7], [14, 9], [17, 11]], optional: [4, 7, 14] },
+  { suffix: "maj11", name: "major eleventh", category: "Extended", tones: [[0, 1], [4, 3], [7, 5], [11, 7], [14, 9], [17, 11]], optional: [7, 14], aliases: ["M11"] },
   { suffix: "m11", name: "minor eleventh", category: "Extended", tones: [[0, 1], [3, 3], [7, 5], [10, 7], [14, 9], [17, 11]], optional: [7, 14], aliases: ["min11", "-11"] },
   { suffix: "13", name: "dominant thirteenth", category: "Extended", tones: [[0, 1], [4, 3], [7, 5], [10, 7], [14, 9], [21, 13]], optional: [7, 14] },
   { suffix: "maj13", name: "major thirteenth", category: "Extended", tones: [[0, 1], [4, 3], [7, 5], [11, 7], [14, 9], [21, 13]], optional: [7, 14], aliases: ["M13"] },
@@ -68,6 +71,8 @@ export const CHORD_QUALITIES: QualityDef[] = [
   { suffix: "7b5", name: "seventh flat five", category: "Altered", tones: [[0, 1], [4, 3], [6, 5], [10, 7]], optional: [] },
   { suffix: "7b9", name: "seventh flat nine", category: "Altered", tones: [[0, 1], [4, 3], [7, 5], [10, 7], [13, 9]], optional: [7] },
   { suffix: "7#9", name: "seventh sharp nine", category: "Altered", tones: [[0, 1], [4, 3], [7, 5], [10, 7], [15, 9]], optional: [7] },
+  { suffix: "7#11", name: "seventh sharp eleven", category: "Altered", tones: [[0, 1], [4, 3], [7, 5], [10, 7], [18, 11]], optional: [7] },
+  { suffix: "7b13", name: "seventh flat thirteen", category: "Altered", tones: [[0, 1], [4, 3], [7, 5], [10, 7], [20, 13]], optional: [7] },
   { suffix: "maj7#11", name: "major seventh sharp eleven", category: "Altered", tones: [[0, 1], [4, 3], [7, 5], [11, 7], [18, 11]], optional: [7] },
   { suffix: "maj7#5", name: "augmented major seventh", category: "Altered", tones: [[0, 1], [4, 3], [8, 5], [11, 7]], optional: [], aliases: ["+maj7", "maj7+5"] },
 ];
@@ -94,6 +99,8 @@ export interface ParsedChord {
   root: number; // 0-11 pitch class
   quality: QualityDef;
   label: string;
+  slashBass?: number; // 0-11 pitch class for slash chord bass note (e.g. C/E -> 4)
+  slashBassNote?: string; // string representation e.g. "E"
 }
 
 const LETTER_PC: Record<string, number> = { C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11 };
@@ -106,11 +113,24 @@ export function parseChordSymbol(symbol: string): ParsedChord {
 
   const letter = match[1].toUpperCase();
   const accidental = match[2] === "#" || match[2] === "♯" ? 1 : match[2] ? -1 : 0;
-  // Drop any slash bass ("C/E") — voicings are built on the chord root.
-  const suffix = QUALITY_BY_SUFFIX.has(match[3]) ? match[3] : match[3].replace(/\/[A-G][#b♯♭]?$/, "");
-  const quality = QUALITY_BY_SUFFIX.get(suffix) ?? CHORD_QUALITIES[0];
+  
+  let rest = match[3];
+  let slashBass: number | undefined;
+  let slashBassNote: string | undefined;
 
-  return { root: (LETTER_PC[letter] + accidental + 12) % 12, quality, label: trimmed };
+  const slashMatch = /\/([A-Ga-g])([#b♯♭]?)$/.exec(rest);
+  if (slashMatch) {
+    const sLetter = slashMatch[1].toUpperCase();
+    const sAcc = slashMatch[2] === "#" || slashMatch[2] === "♯" ? 1 : slashMatch[2] ? -1 : 0;
+    slashBass = (LETTER_PC[sLetter] + sAcc + 12) % 12;
+    slashBassNote = `${sLetter}${slashMatch[2] || ""}`;
+    rest = rest.slice(0, slashMatch.index);
+  }
+
+  const quality = QUALITY_BY_SUFFIX.get(rest) ?? CHORD_QUALITIES[0];
+  const root = (LETTER_PC[letter] + accidental + 12) % 12;
+
+  return { root, quality, label: trimmed, slashBass, slashBassNote };
 }
 
 /** Semitone offsets of the chord's tones above its root. */

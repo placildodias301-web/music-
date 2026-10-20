@@ -19,8 +19,9 @@ import { chordTunings, HARMONICA_KEYS, HARP_CHORD_TYPES, loadChordSettings, save
 import { inversionName } from "../lib/chords/theory";
 import { chordInstruments, findDefinition } from "../lib/instruments/definitions";
 import { ChordFamilyPanel } from "../components/chords/ChordFamilyPanel";
+import { ChordExplorerView } from "../components/chords/ChordExplorerView";
 
-type Tab = "library" | "family";
+type Tab = "explorer" | "library" | "family";
 
 const ALL_CHORDS: ParsedChord[] = ALL_CHORD_SYMBOLS.map(parseChordSymbol);
 
@@ -68,12 +69,17 @@ export function ChordLibrary() {
   const cardSettings = useMemo<ChordSettings>(() => ({ ...chordSettings, definitionId: definition.id, tuningId: tuningValue || undefined }), [chordSettings, definition.id, tuningValue]);
   const [searchParams, setSearchParams] = useSearchParams();
   const tabParam = searchParams.get("tab");
-  const tab: Tab = tabParam === "family" ? tabParam : "library";
+  const tab: Tab = tabParam === "library" ? "library" : tabParam === "family" ? "family" : "explorer";
+  const [selectedChordSymbol, setSelectedChordSymbol] = useState<string>(searchParams.get("chord") ?? "C");
+
   const setTab = (next: Tab) =>
     setSearchParams(
       (params) => {
-        if (next === "library") params.delete("tab");
-        else params.set("tab", next);
+        if (next === "explorer") {
+          params.delete("tab");
+        } else {
+          params.set("tab", next);
+        }
         return params;
       },
       { replace: true }
@@ -127,19 +133,20 @@ export function ChordLibrary() {
       {/* Header */}
       <div className="mb-8">
         <span className="inline-flex items-center gap-1.5 rounded-full border border-[var(--color-ns-amber)]/30 bg-[var(--color-ns-amber)]/10 px-3 py-0.5 text-[0.6875rem] font-semibold uppercase tracking-wider text-[var(--color-ns-amber)]">
-          Interactive Reference & Diagrams
+          Interactive Chord Explorer & Music Theory
         </span>
         <h1 className="mt-3 font-heading text-3xl font-bold tracking-tight text-[var(--color-ns-text)] sm:text-4xl">
-          Chord Reference Library
+          Chord Explorer
         </h1>
         <p className="mt-1.5 max-w-2xl text-xs sm:text-sm text-[var(--color-ns-muted)]">
-          {ALL_CHORD_SYMBOLS.length} chords — {CHORD_QUALITIES.length} chord types across all 12 root keys, with diagrams for guitars, bass, ukulele and other fretted instruments, keyboards, harp, accordion, mallets and wind instruments (flute, clarinet, saxophones, trumpet, harmonica and more), plus reference playback.
+          Explore chords, understand their notes, and learn exactly how to play them across guitars, bass, ukulele, keyboards and more.
         </p>
       </div>
 
-      {/* Tabs: whole library, or the chord family of one key */}
+      {/* Tabs */}
       <div className="mb-6 flex w-fit gap-1.5 rounded-xl border border-[var(--color-ns-border)] bg-[var(--color-ns-bg)] p-1" role="tablist" aria-label="Chord views">
         {([
+          ["explorer", "Chord Explorer"],
           ["library", "All chords"],
           ["family", "Chord family"],
         ] as [Tab, string][]).map(([t, label]) => (
@@ -160,92 +167,92 @@ export function ChordLibrary() {
         ))}
       </div>
 
-      {/* Toolbar: View Switcher + Search */}
-      <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
-        <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
-          <div className="w-full min-w-[11rem] sm:w-56">
-            <InstrumentPicker
-              label="Instrument"
-              variant="field"
-              value={definition.id}
-              definitions={chordInstruments()}
-              onChange={(id) => update({ definitionId: id, tuningId: undefined, inversion: 0 })}
-            />
-          </div>
-          {tuningOptions.length > 1 && (
-            <div className="w-full sm:w-56">
-              <SettingsSelect
-                variant="field"
-                label={definition.id === "harp" ? "Harp type" : definition.id === "harmonica" ? "Harmonica key" : "Tuning"}
-                value={tuningValue}
-                options={tuningOptions.map((t) => ({ value: t.id, label: t.name }))}
-                onChange={(v) => update({ ...chordSettings, tuningId: v })}
-              />
-            </div>
-          )}
-          {hasInversions && (
-            <div role="group" aria-label="Inversion" className="flex gap-1 rounded-xl border border-[var(--color-ns-border)] bg-[var(--color-ns-bg)] p-1">
-              {Array.from({ length: 4 }, (_, i) => (
-                <button
-                  key={i}
-                  type="button"
-                  title={inversionName(i)}
-                  aria-pressed={chordSettings.inversion === i}
-                  onClick={() => update({ ...chordSettings, inversion: i })}
-                  className={`rounded-lg px-2.5 py-1 text-xs font-semibold ${chordSettings.inversion === i ? "bg-[var(--color-ns-amber)] font-bold text-[var(--color-ns-ink)]" : "text-[var(--color-ns-muted)] hover:text-[var(--color-ns-text)]"}`}
-                >
-                  {i === 0 ? "Root" : `${i}${i === 1 ? "st" : i === 2 ? "nd" : "rd"}`}
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
-
-        {tab === "library" && (
-          <div className="relative w-full sm:w-72">
-            <svg
-              width="14"
-              height="14"
-              viewBox="0 0 24 24"
-              fill="none"
-              aria-hidden="true"
-              className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[var(--color-ns-muted)]"
-            >
-              <circle cx="11" cy="11" r="7" stroke="currentColor" strokeWidth="2" />
-              <path d="m20 20-3-3" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-            </svg>
-            <input
-              type="text"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              aria-label="Search all chords"
-              placeholder="Search chord (e.g. Bbm7, F#9, sus4)…"
-              className="input-base py-2 pl-9 pr-8 text-xs rounded-xl"
-            />
-            {query && (
-              <button
-                type="button"
-                aria-label="Clear search"
-                onClick={() => setQuery("")}
-                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-xs text-[var(--color-ns-muted)] hover:text-[var(--color-ns-text)]"
-              >
-                ✕
-              </button>
-            )}
-          </div>
-        )}
-      </div>
-
-        <p className="mb-4 text-[0.6875rem] leading-relaxed text-[var(--color-ns-muted)]">
-          {tuningNote && <>{tuningNote} </>}
-          {definition.caveat && <>{definition.caveat} </>}
-          Playback is a plain reference tone, a simple string simulation or a synthetic wind voice for the chord’s notes — not a recording of a real {definition.name.toLowerCase()}.
-        </p>
-
-      {tab === "family" ? (
+      {tab === "explorer" ? (
+        <ChordExplorerView initialChordSymbol={selectedChordSymbol} />
+      ) : tab === "family" ? (
         <ChordFamilyPanel settings={cardSettings} />
       ) : (
         <>
+          {/* Toolbar: View Switcher + Search */}
+          <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
+            <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
+              <div className="w-full min-w-[11rem] sm:w-56">
+                <InstrumentPicker
+                  label="Instrument"
+                  variant="field"
+                  value={definition.id}
+                  definitions={chordInstruments()}
+                  onChange={(id) => update({ definitionId: id, tuningId: undefined, inversion: 0 })}
+                />
+              </div>
+              {tuningOptions.length > 1 && (
+                <div className="w-full sm:w-56">
+                  <SettingsSelect
+                    variant="field"
+                    label={definition.id === "harp" ? "Harp type" : definition.id === "harmonica" ? "Harmonica key" : "Tuning"}
+                    value={tuningValue}
+                    options={tuningOptions.map((t) => ({ value: t.id, label: t.name }))}
+                    onChange={(v) => update({ ...chordSettings, tuningId: v })}
+                  />
+                </div>
+              )}
+              {hasInversions && (
+                <div role="group" aria-label="Inversion" className="flex gap-1 rounded-xl border border-[var(--color-ns-border)] bg-[var(--color-ns-bg)] p-1">
+                  {Array.from({ length: 4 }, (_, i) => (
+                    <button
+                      key={i}
+                      type="button"
+                      title={inversionName(i)}
+                      aria-pressed={chordSettings.inversion === i}
+                      onClick={() => update({ ...chordSettings, inversion: i })}
+                      className={`rounded-lg px-2.5 py-1 text-xs font-semibold ${chordSettings.inversion === i ? "bg-[var(--color-ns-amber)] font-bold text-[var(--color-ns-ink)]" : "text-[var(--color-ns-muted)] hover:text-[var(--color-ns-text)]"}`}
+                    >
+                      {i === 0 ? "Root" : `${i}${i === 1 ? "st" : i === 2 ? "nd" : "rd"}`}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className="relative w-full sm:w-72">
+              <svg
+                width="14"
+                height="14"
+                viewBox="0 0 24 24"
+                fill="none"
+                aria-hidden="true"
+                className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[var(--color-ns-muted)]"
+              >
+                <circle cx="11" cy="11" r="7" stroke="currentColor" strokeWidth="2" />
+                <path d="m20 20-3-3" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+              </svg>
+              <input
+                type="text"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                aria-label="Search all chords"
+                placeholder="Search chord (e.g. Bbm7, F#9, sus4)…"
+                className="input-base py-2 pl-9 pr-8 text-xs rounded-xl"
+              />
+              {query && (
+                <button
+                  type="button"
+                  aria-label="Clear search"
+                  onClick={() => setQuery("")}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-xs text-[var(--color-ns-muted)] hover:text-[var(--color-ns-text)]"
+                >
+                  ✕
+                </button>
+              )}
+            </div>
+          </div>
+
+          <p className="mb-4 text-[0.6875rem] leading-relaxed text-[var(--color-ns-muted)]">
+            {tuningNote && <>{tuningNote} </>}
+            {definition.caveat && <>{definition.caveat} </>}
+            Playback is a plain reference tone, a simple string simulation or a synthetic wind voice for the chord’s notes — not a recording of a real {definition.name.toLowerCase()}.
+          </p>
+
           {/* Filters — Root Note & Chord Type */}
           <div className={`mb-6 space-y-3 transition-opacity ${searching ? "pointer-events-none opacity-40" : ""}`} aria-disabled={searching}>
             <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label="Root note">
@@ -307,7 +314,15 @@ export function ChordLibrary() {
           ) : (
             <div className="grid grid-cols-2 gap-3.5 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
               {filtered.map((chord) => (
-                <ChordCard key={chord.label} chord={chord} settings={cardSettings} />
+                <ChordCard
+                  key={chord.label}
+                  chord={chord}
+                  settings={cardSettings}
+                  onExplore={(c) => {
+                    setSelectedChordSymbol(c.label);
+                    setTab("explorer");
+                  }}
+                />
               ))}
             </div>
           )}

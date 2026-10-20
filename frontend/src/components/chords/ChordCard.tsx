@@ -40,7 +40,15 @@ export function FilterPill({
   );
 }
 
-export function ChordCard({ chord, settings }: { chord: ParsedChord; settings: ChordSettings }) {
+export function ChordCard({
+  chord,
+  settings,
+  onExplore,
+}: {
+  chord: ParsedChord;
+  settings: ChordSettings;
+  onExplore?: (chord: ParsedChord) => void;
+}) {
   const [shapeIndex, setShapeIndex] = useState(0);
   const definition = findDefinition(settings.definitionId);
   const model = useMemo(() => (definition ? buildChordModel(chord, definition, settings) : null), [chord, definition, settings]);
@@ -50,10 +58,26 @@ export function ChordCard({ chord, settings }: { chord: ParsedChord; settings: C
 
   return (
     <div className="group flex flex-col items-center justify-between rounded-2xl border border-[var(--color-ns-border)] bg-[var(--color-ns-card)] p-4 sm:p-5 shadow-sm transition-all hover:border-[var(--color-ns-border-strong)] hover:bg-[var(--color-ns-raised)]">
-      <h3 className="font-heading text-lg font-bold text-[var(--color-ns-text)] sm:text-xl">
-        {chord.label.replace(/^([A-G])#/, "$1♯").replace(/^([A-G])b/, "$1♭")}
-      </h3>
-      <p className="text-center text-[0.6875rem] capitalize text-[var(--color-ns-muted)]">{chordDisplayName(chord)}</p>
+      {onExplore ? (
+        <button
+          type="button"
+          onClick={() => onExplore(chord)}
+          className="group/title flex flex-col items-center"
+          title={`Explore ${chord.label} in depth`}
+        >
+          <h3 className="font-heading text-lg font-bold text-[var(--color-ns-text)] sm:text-xl group-hover/title:text-[var(--color-ns-amber)] transition-colors">
+            {chord.label.replace(/^([A-G])#/, "$1♯").replace(/^([A-G])b/, "$1♭")}
+          </h3>
+          <p className="text-center text-[0.6875rem] capitalize text-[var(--color-ns-muted)]">{chordDisplayName(chord)}</p>
+        </button>
+      ) : (
+        <>
+          <h3 className="font-heading text-lg font-bold text-[var(--color-ns-text)] sm:text-xl">
+            {chord.label.replace(/^([A-G])#/, "$1♯").replace(/^([A-G])b/, "$1♭")}
+          </h3>
+          <p className="text-center text-[0.6875rem] capitalize text-[var(--color-ns-muted)]">{chordDisplayName(chord)}</p>
+        </>
+      )}
 
       <div className="my-3 flex w-full flex-1 items-center justify-center">
         <ChordDiagram model={model} shapeIndex={shapeIndex} onShape={setShapeIndex} />
@@ -92,6 +116,15 @@ export function ChordCard({ chord, settings }: { chord: ParsedChord; settings: C
           </svg>
           Play Audio
         </button>
+        {onExplore && (
+          <button
+            type="button"
+            onClick={() => onExplore(chord)}
+            className="flex items-center gap-1 rounded-xl border border-[var(--color-ns-amber)]/40 bg-[var(--color-ns-amber)]/10 px-2.5 py-1.5 text-[0.6875rem] font-bold text-[var(--color-ns-amber)] transition-all hover:bg-[var(--color-ns-amber)] hover:text-[var(--color-ns-ink)] active:scale-95"
+          >
+            Explore
+          </button>
+        )}
         {model.kind === "bass" && (
           <button
             type="button"
