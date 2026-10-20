@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import { type FingeringResult } from "../../lib/chords/fingering";
 import { type PracticeGuidance } from "../../lib/chords/instructions";
-import { playPluckedNotes, playArpeggioNotes, playChordLive } from "../../lib/playChord";
+import { audioEngine } from "../../lib/audio";
 import { type ParsedChord } from "../../lib/chordTheory";
 
 export interface ChordPracticePanelProps {
@@ -11,6 +11,7 @@ export interface ChordPracticePanelProps {
   tuningMidi: number[];
   fingering: FingeringResult;
   guidance: PracticeGuidance;
+  instrument?: string;
 }
 
 export function ChordPracticePanel({
@@ -19,24 +20,36 @@ export function ChordPracticePanel({
   tuningMidi,
   fingering,
   guidance,
+  instrument = "guitar",
 }: ChordPracticePanelProps) {
   const [arpeggioSpeed, setArpeggioSpeed] = useState<"slow" | "normal" | "fast">("normal");
+  const [isPlayingStrum, setIsPlayingStrum] = useState(false);
+  const [isPlayingArpeggio, setIsPlayingArpeggio] = useState(false);
 
-  // Filter played MIDI notes
-  const playedMidis = frets.flatMap((f, i) => (f !== null && f >= 0 ? [tuningMidi[i] + f] : []));
+  const instType = instrument === "bass" ? "bass" : instrument === "ukulele" ? "ukulele" : "guitar";
 
   const handlePlayChord = () => {
-    if (playedMidis.length > 0) {
-      playPluckedNotes(playedMidis, "guitar", 0.035);
-    } else {
-      playChordLive(chord);
-    }
+    setIsPlayingStrum(true);
+    audioEngine.playChord({
+      frets,
+      tuningMidi,
+      instrument: instType,
+      direction: "down",
+      onEnded: () => setIsPlayingStrum(false),
+    });
+    setTimeout(() => setIsPlayingStrum(false), 2200);
   };
 
   const handlePlayArpeggio = () => {
-    if (playedMidis.length > 0) {
-      playArpeggioNotes(playedMidis, "guitar", arpeggioSpeed);
-    }
+    setIsPlayingArpeggio(true);
+    audioEngine.playArpeggio({
+      frets,
+      tuningMidi,
+      instrument: instType,
+      speed: arpeggioSpeed,
+      onEnded: () => setIsPlayingArpeggio(false),
+    });
+    setTimeout(() => setIsPlayingArpeggio(false), 2800);
   };
 
   const difficultyColor =
@@ -75,24 +88,48 @@ export function ChordPracticePanel({
           <button
             type="button"
             onClick={handlePlayChord}
-            className="flex items-center gap-2 rounded-xl border border-[var(--color-ns-amber)] bg-[var(--color-ns-amber)] px-4 py-2.5 text-xs font-bold text-[var(--color-ns-ink)] shadow-md transition-all hover:brightness-110 active:scale-95"
+            aria-label={`Play strummed ${chord.label} chord`}
+            className={`flex items-center gap-2 rounded-xl border px-4 py-2.5 text-xs font-bold transition-all active:scale-95 ${
+              isPlayingStrum
+                ? "border-[var(--color-ns-amber)] bg-[var(--color-ns-amber)] text-[var(--color-ns-ink)] shadow-md brightness-110"
+                : "border-[var(--color-ns-amber)] bg-[var(--color-ns-amber)] text-[var(--color-ns-ink)] shadow-md hover:brightness-110"
+            }`}
           >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
-              <polygon points="5 3 19 12 5 21 5 3" />
-            </svg>
-            Play Strummed Chord
+            {isPlayingStrum ? (
+              <span className="flex h-2.5 w-2.5 relative">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[var(--color-ns-ink)] opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-[var(--color-ns-ink)]"></span>
+              </span>
+            ) : (
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+                <polygon points="5 3 19 12 5 21 5 3" />
+              </svg>
+            )}
+            {isPlayingStrum ? "Strumming Chord..." : "Play Strummed Chord"}
           </button>
 
           <button
             type="button"
             onClick={handlePlayArpeggio}
-            className="flex items-center gap-2 rounded-xl border border-[var(--color-ns-border)] bg-[var(--color-ns-bg)] px-4 py-2.5 text-xs font-bold text-[var(--color-ns-text)] transition-all hover:border-[var(--color-ns-amber)] hover:bg-[var(--color-ns-card)] active:scale-95"
+            aria-label={`Play ${chord.label} arpeggio`}
+            className={`flex items-center gap-2 rounded-xl border px-4 py-2.5 text-xs font-bold transition-all active:scale-95 ${
+              isPlayingArpeggio
+                ? "border-[var(--color-ns-amber)] bg-[var(--color-ns-amber)]/20 text-[var(--color-ns-amber)] shadow-sm"
+                : "border-[var(--color-ns-border)] bg-[var(--color-ns-bg)] text-[var(--color-ns-text)] hover:border-[var(--color-ns-amber)] hover:bg-[var(--color-ns-card)]"
+            }`}
           >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <circle cx="12" cy="12" r="10" />
-              <polyline points="12 6 12 12 16 14" />
-            </svg>
-            Play Arpeggio
+            {isPlayingArpeggio ? (
+              <span className="flex h-2.5 w-2.5 relative">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[var(--color-ns-amber)] opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-[var(--color-ns-amber)]"></span>
+              </span>
+            ) : (
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <circle cx="12" cy="12" r="10" />
+                <polyline points="12 6 12 12 16 14" />
+              </svg>
+            )}
+            {isPlayingArpeggio ? "Playing Arpeggio..." : "Play Arpeggio"}
           </button>
 
           {/* Arpeggio Speed Selector */}

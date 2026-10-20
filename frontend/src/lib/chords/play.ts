@@ -6,6 +6,7 @@
 
 import { playPluckedNotes, playToneNotes, playWindNotes, type PluckKind, type WindVoiceName } from "../playChord";
 import { arpeggioMidi, modelMidi, type ChordModel } from "./model";
+import { audioEngine } from "../audio";
 
 const VOICE: Record<string, PluckKind> = {
   guitar: "guitar",
@@ -49,6 +50,34 @@ export function playbackKind(model: ChordModel): "string-simulation" | "neutral-
 }
 
 export function playModel(model: ChordModel, shapeIndex = 0) {
+  // If fretted instrument (guitar, ukulele, etc.), use the physical string strum engine
+  if (model.kind === "fretted" && model.shapes && model.shapes.length > 0) {
+    const shape = model.shapes[shapeIndex % model.shapes.length];
+    if (shape) {
+      const voice = VOICE[model.definition.id];
+      const inst = voice === "bass" ? "bass" : voice === "ukulele" ? "ukulele" : "guitar";
+      return audioEngine.playChord({
+        frets: shape.frets,
+        tuningMidi: model.tuning.midi,
+        instrument: inst,
+        direction: "down",
+      });
+    }
+  }
+
+  // If bass instrument with chord shapes
+  if (model.kind === "bass" && model.shapes && model.shapes.length > 0) {
+    const shape = model.shapes[shapeIndex % model.shapes.length];
+    if (shape) {
+      return audioEngine.playChord({
+        frets: shape.frets,
+        tuningMidi: model.tuning.midi,
+        instrument: "bass",
+        direction: "down",
+      });
+    }
+  }
+
   const midis = modelMidi(model, shapeIndex);
   if (!midis.length) return;
   const voice = VOICE[model.definition.id];
@@ -62,5 +91,12 @@ export function playModel(model: ChordModel, shapeIndex = 0) {
 
 export function playArpeggio(model: ChordModel) {
   if (model.kind !== "bass") return;
-  playPluckedNotes(arpeggioMidi(model), "bass", 0.32);
+  const midis = arpeggioMidi(model);
+  if (!midis.length) return;
+  return audioEngine.playArpeggio({
+    frets: midis.map(() => 0),
+    tuningMidi: midis,
+    instrument: "bass",
+    speed: "normal",
+  });
 }

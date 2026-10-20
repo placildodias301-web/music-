@@ -1,12 +1,13 @@
 import { type PlayedStringAnalysis } from "../../lib/chords/analysis";
-import { playSingleNote } from "../../lib/playChord";
+import { audioEngine } from "../../lib/audio";
 
 export interface NoteInspectorCardProps {
   selectedNote: PlayedStringAnalysis | null;
   onClearSelection?: () => void;
+  instrument?: string;
 }
 
-export function NoteInspectorCard({ selectedNote, onClearSelection }: NoteInspectorCardProps) {
+export function NoteInspectorCard({ selectedNote, onClearSelection, instrument = "guitar" }: NoteInspectorCardProps) {
   if (!selectedNote) {
     return (
       <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-[var(--color-ns-border)] bg-[var(--color-ns-card)]/40 p-6 text-center">
@@ -26,7 +27,15 @@ export function NoteInspectorCard({ selectedNote, onClearSelection }: NoteInspec
 
   const handlePlay = () => {
     if (selectedNote.midi !== null) {
-      playSingleNote(selectedNote.midi, "guitar");
+      const inst = instrument === "bass" ? "bass" : instrument === "ukulele" ? "ukulele" : "guitar";
+      audioEngine.playNote({
+        midi: selectedNote.midi,
+        stringIndex: selectedNote.stringIndex,
+        fret: selectedNote.fret,
+        isOpen,
+        isMuted,
+        instrument: inst,
+      });
     }
   };
 

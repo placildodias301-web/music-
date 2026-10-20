@@ -1,7 +1,7 @@
 import React from "react";
 import { type PlayedStringAnalysis } from "../../lib/chords/analysis";
 import { type FingeringResult } from "../../lib/chords/fingering";
-import { playSingleNote } from "../../lib/playChord";
+import { audioEngine } from "../../lib/audio";
 
 export interface StringInfoTableProps {
   playedStrings: PlayedStringAnalysis[];
@@ -16,13 +16,21 @@ export function StringInfoTable({
   selectedStringIndex,
   onSelectString,
   fingering,
+  instrumentName = "guitar",
 }: StringInfoTableProps) {
   const handlePlayString = (e: React.MouseEvent, stringInfo: PlayedStringAnalysis) => {
     e.stopPropagation();
     onSelectString(stringInfo.stringIndex);
-    if (stringInfo.midi !== null) {
-      playSingleNote(stringInfo.midi, "guitar");
-    }
+    const inst = instrumentName === "bass" ? "bass" : instrumentName === "ukulele" ? "ukulele" : "guitar";
+    audioEngine.playNote({
+      midi: stringInfo.midi ?? 40,
+      stringIndex: stringInfo.stringIndex,
+      totalStrings: playedStrings.length,
+      fret: stringInfo.fret,
+      isOpen: stringInfo.action === "open",
+      isMuted: stringInfo.action === "muted",
+      instrument: inst,
+    });
   };
 
   return (

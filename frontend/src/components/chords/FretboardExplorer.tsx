@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { NOTE_NAMES, type ParsedChord } from "../../lib/chordTheory";
 import { midiToFrequency } from "../../lib/theory/notes";
-import { playSingleNote } from "../../lib/playChord";
+import { audioEngine } from "../../lib/audio";
 import { useSettings } from "../../lib/settings/settingsContext";
 
 export interface FretboardExplorerProps {
@@ -9,6 +9,7 @@ export interface FretboardExplorerProps {
   tuningMidi: number[];
   stringNames?: string[];
   activeShapeFrets?: (number | null)[];
+  instrument?: string;
   onNoteClick?: (info: {
     stringIndex: number;
     fret: number;
@@ -30,6 +31,7 @@ export function FretboardExplorer({
   tuningMidi,
   stringNames: _stringNames,
   activeShapeFrets,
+  instrument = "guitar",
   onNoteClick,
 }: FretboardExplorerProps) {
   const { settings } = useSettings();
@@ -61,7 +63,15 @@ export function FretboardExplorer({
     const freq = midiToFrequency(midi);
     const isRoot = pc === chord.root;
 
-    playSingleNote(midi, "guitar");
+    const inst = instrument === "bass" ? "bass" : instrument === "ukulele" ? "ukulele" : "guitar";
+    audioEngine.playNote({
+      midi,
+      stringIndex: sIdx,
+      totalStrings: numStrings,
+      fret,
+      isOpen: fret === 0,
+      instrument: inst,
+    });
 
     if (onNoteClick) {
       onNoteClick({

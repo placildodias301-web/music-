@@ -22,7 +22,7 @@ import { NoteInspectorCard } from "./NoteInspectorCard";
 import { ChordTheoryCard } from "./ChordTheoryCard";
 import { FretboardExplorer } from "./FretboardExplorer";
 import { ChordPracticePanel } from "./ChordPracticePanel";
-import { playSingleNote } from "../../lib/playChord";
+import { audioEngine } from "../../lib/audio";
 
 export interface ChordExplorerViewProps {
   initialChordSymbol?: string;
@@ -181,8 +181,16 @@ export function ChordExplorerView({ initialChordSymbol = "C" }: ChordExplorerVie
   const handleSelectString = (index: number) => {
     setSelectedStringIndex(index);
     const str = playedStrings[index];
-    if (str && str.midi !== null) {
-      playSingleNote(str.midi, "guitar");
+    if (str) {
+      audioEngine.playNote({
+        midi: str.midi ?? 40,
+        stringIndex: str.stringIndex,
+        totalStrings: playedStrings.length,
+        fret: str.fret,
+        isOpen: str.action === "open",
+        isMuted: str.action === "muted",
+        instrument: instrumentId as any,
+      });
     }
   };
 
@@ -479,6 +487,7 @@ export function ChordExplorerView({ initialChordSymbol = "C" }: ChordExplorerVie
           <NoteInspectorCard
             selectedNote={selectedNoteInfo}
             onClearSelection={() => setSelectedStringIndex(null)}
+            instrument={instrumentId}
           />
         </div>
 
@@ -490,6 +499,7 @@ export function ChordExplorerView({ initialChordSymbol = "C" }: ChordExplorerVie
             selectedStringIndex={selectedStringIndex}
             onSelectString={handleSelectString}
             fingering={fingeringResult}
+            instrumentName={instrumentId}
           />
 
           {/* Music Theory & Construction */}
@@ -504,6 +514,7 @@ export function ChordExplorerView({ initialChordSymbol = "C" }: ChordExplorerVie
         stringNames={currentTuning.stringNames}
         activeShapeFrets={activeVoicing.frets}
         onNoteClick={handleFretboardNoteClick}
+        instrument={instrumentId}
       />
 
       {/* ─── PRACTICE & AUDIO PLAYBACK PANEL ─── */}
@@ -513,6 +524,7 @@ export function ChordExplorerView({ initialChordSymbol = "C" }: ChordExplorerVie
         tuningMidi={currentTuning.midi}
         fingering={fingeringResult}
         guidance={practiceGuidance}
+        instrument={instrumentId}
       />
     </div>
   );

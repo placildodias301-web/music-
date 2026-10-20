@@ -50,11 +50,18 @@ export function ChordCard({
   onExplore?: (chord: ParsedChord) => void;
 }) {
   const [shapeIndex, setShapeIndex] = useState(0);
+  const [isPlaying, setIsPlaying] = useState(false);
   const definition = findDefinition(settings.definitionId);
   const model = useMemo(() => (definition ? buildChordModel(chord, definition, settings) : null), [chord, definition, settings]);
   if (!model || !definition) return null;
   const shapeCount = model.kind === "fretted" ? model.shapes.length : 0;
   const showInversion = model.kind === "keyboard" || model.kind === "mallet" || model.kind === "accordion";
+
+  const handlePlayAudio = () => {
+    setIsPlaying(true);
+    playModel(model, shapeIndex);
+    setTimeout(() => setIsPlaying(false), 2000);
+  };
 
   return (
     <div className="group flex flex-col items-center justify-between rounded-2xl border border-[var(--color-ns-border)] bg-[var(--color-ns-card)] p-4 sm:p-5 shadow-sm transition-all hover:border-[var(--color-ns-border-strong)] hover:bg-[var(--color-ns-raised)]">
@@ -108,13 +115,30 @@ export function ChordCard({
       <div className="flex flex-wrap items-center justify-center gap-2">
         <button
           type="button"
-          onClick={() => playModel(model, shapeIndex)}
-          className="flex items-center gap-1.5 rounded-xl border border-[var(--color-ns-border)] bg-[var(--color-ns-bg)] px-3 py-1.5 text-[0.6875rem] font-medium text-[var(--color-ns-muted)] transition-all hover:border-[var(--color-ns-amber)]/60 hover:text-[var(--color-ns-text)] hover:bg-[var(--color-ns-card)] active:scale-95"
+          onClick={handlePlayAudio}
+          aria-label={`Play ${chord.label} chord audio`}
+          className={`flex items-center gap-1.5 rounded-xl border px-3 py-1.5 text-[0.6875rem] font-medium transition-all active:scale-95 ${
+            isPlaying
+              ? "border-[var(--color-ns-amber)] bg-[var(--color-ns-amber)]/20 text-[var(--color-ns-amber)] font-bold shadow-sm"
+              : "border border-[var(--color-ns-border)] bg-[var(--color-ns-bg)] text-[var(--color-ns-muted)] hover:border-[var(--color-ns-amber)]/60 hover:text-[var(--color-ns-text)] hover:bg-[var(--color-ns-card)]"
+          }`}
         >
-          <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor" className="text-[var(--color-ns-amber)]">
-            <polygon points="5 3 19 12 5 21 5 3" />
-          </svg>
-          Play Audio
+          {isPlaying ? (
+            <>
+              <span className="flex h-2 w-2 relative">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[var(--color-ns-amber)] opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-[var(--color-ns-amber)]"></span>
+              </span>
+              <span>Playing</span>
+            </>
+          ) : (
+            <>
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor" className="text-[var(--color-ns-amber)]">
+                <polygon points="5 3 19 12 5 21 5 3" />
+              </svg>
+              <span>Play Audio</span>
+            </>
+          )}
         </button>
         {onExplore && (
           <button

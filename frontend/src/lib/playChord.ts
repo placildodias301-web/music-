@@ -1,4 +1,5 @@
 import { chordMidiNotes, getGuitarVoicings, getUkuleleShape, GUITAR_TUNING, UKULELE_TUNING, type ParsedChord } from "./chordTheory";
+import { audioEngine } from "./audio";
 
 function midiToFrequency(midi: number): number {
   return 440 * Math.pow(2, (midi - 69) / 12);
@@ -57,8 +58,8 @@ const PLUCK_TONE = {
 /** Which plucked-string voice to use. These are simple string simulations, not recordings of the real instruments. */
 export type PluckKind = keyof typeof PLUCK_TONE;
 
-/** Renders one plucked string with Karplus–Strong synthesis. */
-function renderPluck(ctx: AudioContext, midi: number, tone: (typeof PLUCK_TONE)["guitar"]): AudioBuffer {
+/** Renders one plucked string with Karplus–Strong synthesis (legacy helper). */
+export function renderPluck(ctx: AudioContext, midi: number, tone: (typeof PLUCK_TONE)["guitar"]): AudioBuffer {
   const sr = ctx.sampleRate;
   const length = Math.floor(sr * tone.seconds);
   const buffer = ctx.createBuffer(1, length, sr);
@@ -80,7 +81,13 @@ function renderPluck(ctx: AudioContext, midi: number, tone: (typeof PLUCK_TONE)[
 
 /** Strums a guitar or ukulele shape exactly as drawn in its chord diagram, first string to last. */
 export function playStrummedShape(frets: (number | null)[], instrument: PluckKind, tuning: number[]) {
-  playPluckedNotes(fretsToMidi(frets, tuning), instrument);
+  const instType = instrument === "bass" ? "bass" : instrument === "ukulele" ? "ukulele" : "guitar";
+  audioEngine.playChord({
+    frets,
+    tuningMidi: tuning,
+    instrument: instType,
+    direction: "down",
+  });
 }
 
 /**
@@ -88,28 +95,33 @@ export function playStrummedShape(frets: (number | null)[], instrument: PluckKin
  * a longer one is an arpeggio (a run of single notes).
  */
 export function playPluckedNotes(midis: number[], instrument: PluckKind, gapSeconds?: number) {
-  const AudioCtx =
-    window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
-  const ctx = new AudioCtx();
-  const tone = PLUCK_TONE[instrument];
-  const gap = gapSeconds ?? tone.strumGap;
-  const master = ctx.createGain();
-  master.gain.value = 0.45;
-  master.connect(ctx.destination);
-
-  midis.forEach((midi, i) => {
-    const src = ctx.createBufferSource();
-    src.buffer = renderPluck(ctx, midi, tone);
-    src.connect(master);
-    src.start(ctx.currentTime + 0.02 + i * gap);
-  });
-
-  window.setTimeout(() => ctx.close().catch(() => {}), (tone.seconds + midis.length * gap + 0.5) * 1000);
+  const instType = instrument === "bass" ? "bass" : instrument === "ukulele" ? "ukulele" : "guitar";
+  if (!midis.length) return;
+  if (gapSeconds !== undefined && gapSeconds > 0.08) {
+    audioEngine.playArpeggio({
+      frets: midis.map(() => 0),
+      tuningMidi: midis,
+      instrument: instType,
+      speed: gapSeconds >= 0.25 ? "slow" : gapSeconds <= 0.12 ? "fast" : "normal",
+    });
+  } else {
+    audioEngine.playChord({
+      frets: midis.map(() => 0),
+      tuningMidi: midis,
+      instrument: instType,
+      speed: gapSeconds ?? 0.034,
+      direction: "down",
+    });
+  }
 }
 
 /** Plays a single note with plucked or synthesized tone */
 export function playSingleNote(midi: number, instrument: PluckKind = "guitar") {
-  playPluckedNotes([midi], instrument, 0);
+  const instType = instrument === "bass" ? "bass" : instrument === "ukulele" ? "ukulele" : "guitar";
+  audioEngine.playNote({
+    midi,
+    instrument: instType,
+  });
 }
 
 /** Plays notes in sequence as an arpeggio at slow (0.35s), normal (0.18s), or fast (0.09s) speed */
@@ -118,8 +130,13 @@ export function playArpeggioNotes(
   instrument: PluckKind = "guitar",
   speed: "slow" | "normal" | "fast" = "normal"
 ) {
-  const gap = speed === "slow" ? 0.35 : speed === "fast" ? 0.09 : 0.18;
-  playPluckedNotes(midis, instrument, gap);
+  const instType = instrument === "bass" ? "bass" : instrument === "ukulele" ? "ukulele" : "guitar";
+  audioEngine.playArpeggio({
+    frets: midis.map(() => 0),
+    tuningMidi: midis,
+    instrument: instType,
+    speed,
+  });
 }
 
 /**
