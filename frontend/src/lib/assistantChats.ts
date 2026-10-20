@@ -1,4 +1,5 @@
-/** Assistant conversations, persisted per-device in localStorage. */
+/** Assistant conversations: kept in localStorage, synced to the account (cloudSync). */
+import { SYNCED_KEYS, syncList } from "./cloudSync";
 
 export interface ChatMessage {
   id: string;
@@ -16,7 +17,7 @@ export interface Conversation {
   messages: ChatMessage[];
 }
 
-const STORAGE_KEY = "wilsify:assistant-chats";
+const STORAGE_KEY = SYNCED_KEYS.chat;
 const MAX_CONVERSATIONS = 50;
 
 export function loadConversations(): Conversation[] {
@@ -32,8 +33,9 @@ export function loadConversations(): Conversation[] {
 
 export function saveConversations(conversations: Conversation[]) {
   try {
-    const sorted = [...conversations].sort((a, b) => b.updatedAt - a.updatedAt);
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(sorted.slice(0, MAX_CONVERSATIONS)));
+    const kept = [...conversations].sort((a, b) => b.updatedAt - a.updatedAt).slice(0, MAX_CONVERSATIONS);
+    syncList("chat", loadConversations(), kept);
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(kept));
   } catch {
     // non-fatal for the demo
   }

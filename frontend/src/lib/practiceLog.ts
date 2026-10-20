@@ -10,7 +10,9 @@
  * functions below.
  */
 
-const STORAGE_KEY = "wilsify_practice_sessions_v1";
+import { SYNCED_KEYS, syncList } from "./cloudSync";
+
+const STORAGE_KEY = SYNCED_KEYS.practice;
 
 export interface PracticeSession {
   id: string;
@@ -34,6 +36,7 @@ function readAll(): PracticeSession[] {
 }
 
 function writeAll(sessions: PracticeSession[]) {
+  syncList("practice", readAll(), sessions);
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(sessions));
   } catch {
@@ -51,13 +54,9 @@ export function logPracticeSession(session: Omit<PracticeSession, "id" | "starte
   writeAll(sessions);
 }
 
-/** Deletes every logged practice session on this device. */
+/** Deletes every logged practice session. */
 export function clearPracticeSessions() {
-  try {
-    localStorage.removeItem(STORAGE_KEY);
-  } catch {
-    // localStorage unavailable — nothing to clear
-  }
+  writeAll([]);
 }
 
 export function getAllSessions(): PracticeSession[] {

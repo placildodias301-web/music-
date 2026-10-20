@@ -69,6 +69,7 @@ export const CHORD_QUALITIES: QualityDef[] = [
   { suffix: "7b9", name: "seventh flat nine", category: "Altered", tones: [[0, 1], [4, 3], [7, 5], [10, 7], [13, 9]], optional: [7] },
   { suffix: "7#9", name: "seventh sharp nine", category: "Altered", tones: [[0, 1], [4, 3], [7, 5], [10, 7], [15, 9]], optional: [7] },
   { suffix: "maj7#11", name: "major seventh sharp eleven", category: "Altered", tones: [[0, 1], [4, 3], [7, 5], [11, 7], [18, 11]], optional: [7] },
+  { suffix: "maj7#5", name: "augmented major seventh", category: "Altered", tones: [[0, 1], [4, 3], [8, 5], [11, 7]], optional: [], aliases: ["+maj7", "maj7+5"] },
 ];
 
 export const CHORD_CATEGORIES: ChordCategory[] = ["Triads", "Sixths & adds", "Sevenths", "Extended", "Altered"];
@@ -225,11 +226,11 @@ function aShapeBarre(chord: ParsedChord): GuitarVoicing {
   return { name: b === 0 ? "Open (A-shape)" : `Barre – A-shape (fret ${b})`, frets };
 }
 
-const GUITAR_TUNING = [40, 45, 50, 55, 59, 64]; // E2 A2 D3 G3 B3 E4
-const UKULELE_TUNING = [67, 60, 64, 69]; // G4 C4 E4 A4 (re-entrant)
+export const GUITAR_TUNING = [40, 45, 50, 55, 59, 64]; // E2 A2 D3 G3 B3 E4
+export const UKULELE_TUNING = [67, 60, 64, 69]; // G4 C4 E4 A4 (re-entrant)
 const WINDOW = 4; // diagrams show four frets
 
-interface Candidate {
+export interface Candidate {
   frets: (number | null)[];
   score: number;
   minFret: number;
@@ -240,7 +241,7 @@ interface Candidate {
  * `bassIsRoot` forces the lowest sounding string to be the root (guitar);
  * `allStrings` requires every string to ring (ukulele).
  */
-function searchShapes(
+export function searchShapes(
   chord: ParsedChord,
   tuning: number[],
   opts: { bassIsRoot: boolean; allStrings: boolean; maxPosition: number; rootOptional?: boolean }
@@ -249,7 +250,8 @@ function searchShapes(
   const optionalPcs = new Set(chord.quality.optional.map((o) => (chord.root + o) % 12));
   if (opts.rootOptional) optionalPcs.add(chord.root);
   const requiredPcs = [...chordPcs].filter((pc) => !optionalPcs.has(pc));
-  const minPlayed = opts.allStrings ? tuning.length : chordPcs.size <= 2 ? 2 : chordPcs.size === 3 ? 3 : 4;
+  // Instruments with fewer strings than chord tones (3-string balalaika) can only ever sound as many as they have.
+  const minPlayed = Math.min(tuning.length, opts.allStrings ? tuning.length : chordPcs.size <= 2 ? 2 : chordPcs.size === 3 ? 3 : 4);
 
   const results = new Map<string, Candidate>();
 
@@ -363,7 +365,7 @@ function evaluate(
 }
 
 /** Picks up to `count` good shapes spread across the neck. */
-function pickSpread(cands: Candidate[], count: number): Candidate[] {
+export function pickSpread(cands: Candidate[], count: number): Candidate[] {
   const picked: Candidate[] = [];
   for (const c of cands) {
     if (picked.every((p) => Math.abs(p.minFret - c.minFret) >= 3)) picked.push(c);
@@ -372,7 +374,7 @@ function pickSpread(cands: Candidate[], count: number): Candidate[] {
   return picked;
 }
 
-function voicingName(frets: (number | null)[]): string {
+export function voicingName(frets: (number | null)[]): string {
   const fretted = frets.filter((f): f is number => f !== null && f > 0);
   const max = fretted.length ? Math.max(...fretted) : 0;
   if (max <= WINDOW) return frets.includes(0) ? "Open position" : "Position 1";
@@ -392,7 +394,9 @@ export function getGuitarVoicings(chord: ParsedChord): GuitarVoicing[] {
 
   if (isTriad) {
     const openKey = `${NOTE_NAMES[chord.root]}${chord.quality.suffix}`;
-    if (OPEN_GUITAR_CHORDS[openKey]) voicings.push({ name: "Open position", frets: OPEN_GUITAR_CHORDS[openKey] });
+    // Several "first" shapes (F, C#, G#m…) are barres with no open strings —
+    // name them by position rather than calling them open chords.
+    if (OPEN_GUITAR_CHORDS[openKey]) voicings.push({ name: voicingName(OPEN_GUITAR_CHORDS[openKey]), frets: OPEN_GUITAR_CHORDS[openKey] });
     voicings.push(eShapeBarre(chord));
     voicings.push(aShapeBarre(chord));
   } else if (chord.quality.suffix === "5") {

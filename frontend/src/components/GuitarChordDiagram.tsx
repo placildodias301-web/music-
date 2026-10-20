@@ -1,4 +1,5 @@
 import type { GuitarVoicing } from "../lib/chordTheory";
+import { useSettings } from "../lib/settings/settingsContext";
 
 const STRING_COUNT = 6;
 const FRET_COUNT = 4;
@@ -9,7 +10,10 @@ const LEFT_MARGIN = 14;
 
 /** Renders one guitar chord fingering as a real fretboard diagram (SVG). */
 export function GuitarChordDiagram({ voicing, size = 1 }: { voicing: GuitarVoicing; size?: number }) {
-  const frettedFrets = voicing.frets.filter((f): f is number => f !== null && f > 0);
+  // Left-handed setting: mirror the diagram (high E string on the left).
+  const { settings } = useSettings();
+  const frets = settings.display.leftHanded ? [...voicing.frets].reverse() : voicing.frets;
+  const frettedFrets = frets.filter((f): f is number => f !== null && f > 0);
   const minFret = frettedFrets.length ? Math.min(...frettedFrets) : 0;
   const maxFret = frettedFrets.length ? Math.max(...frettedFrets) : 0;
   // If the shape reaches past the first four frets, shift the diagram up
@@ -64,7 +68,7 @@ export function GuitarChordDiagram({ voicing, size = 1 }: { voicing: GuitarVoici
         ))}
 
         {/* Finger dots + open/mute markers */}
-        {voicing.frets.map((fret, stringIndex) => {
+        {frets.map((fret, stringIndex) => {
           const x = LEFT_MARGIN + stringIndex * STRING_SPACING;
 
           if (fret === null) {

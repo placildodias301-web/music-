@@ -1,3 +1,4 @@
+import { useSettings } from "../lib/settings/settingsContext";
 const STRING_COUNT = 4;
 const FRET_COUNT = 4;
 const STRING_SPACING = 22;
@@ -6,7 +7,10 @@ const TOP_MARGIN = 26;
 const LEFT_MARGIN = 14;
 
 /** Renders one ukulele chord fingering (4-string, GCEA tuning) as an SVG diagram. */
-export function UkuleleChordDiagram({ frets }: { frets: (number | null)[] }) {
+export function UkuleleChordDiagram({ frets: shape }: { frets: (number | null)[] }) {
+  // Left-handed setting: mirror the diagram (A string on the left).
+  const { settings } = useSettings();
+  const frets = settings.display.leftHanded ? [...shape].reverse() : shape;
   const frettedFrets = frets.filter((f): f is number => f !== null && f > 0);
   const minFret = frettedFrets.length ? Math.min(...frettedFrets) : 0;
   const maxFret = frettedFrets.length ? Math.max(...frettedFrets) : 0;

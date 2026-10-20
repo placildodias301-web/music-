@@ -1,84 +1,192 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { useMvp } from "../lib/MvpContext";
-import { exportMidi, exportPdf } from "../lib/api";
-import { parseChordSymbol, getGuitarVoicings, getUkuleleShape, chordMidiNotes } from "../lib/chordTheory";
-import { GuitarChordDiagram } from "../components/GuitarChordDiagram";
-import { UkuleleChordDiagram } from "../components/UkuleleChordDiagram";
-import { PianoRoll } from "../components/PianoRoll";
-import { separateStems, type StemResult } from "../lib/stemSeparation";
-import { saveToLibrary, isSaved } from "../lib/library";
+import { exportMidi, exportPdf, pitchShiftAudio } from "../lib/api";
+import type { AnalysisResult } from "../lib/api";
+import { scaleName } from "../lib/chordSync";
+import { useNotation } from "../lib/useNotation";
+import { useSettings } from "../lib/settings/settingsContext";
+import { LiveChordSync } from "../components/analysis/LiveChordSync";
+import { InstrumentVoicings } from "../components/analysis/InstrumentVoicings";
+import { TransposePanel } from "../components/analysis/TransposePanel";
+import {
+  capoSuggestions,
+  shapeShift,
+  soundingShift,
+  transposeAnalysis,
+  NO_TRANSPOSE,
+  type TransposeSettings,
+} from "../lib/transpose";
+import { StemMixer } from "../components/analysis/StemMixer";
+import { saveToLibrary, isSaved, resolveLibrarySong, updateLibrarySongState } from "../lib/library";
+import {
+  DEFAULT_DIFFICULTY_BADGE,
+  DIFFICULTY_BADGES,
+  describeKeyConfidence,
+} from "../lib/analysisDisplay";
+import { buildLeadSheet } from "../lib/leadSheet";
+import { MeterCard, TempoCard } from "../components/analysis/RhythmCards";
 
-type View = "guitar" | "ukulele" | "piano";
-
-function StatCard({ label, value, accent }: { label: string; value: string; accent: string }) {
-  return (
-    <div className="glass-card p-5">
-      <p className="text-xs font-medium uppercase tracking-wide text-content-dim">{label}</p>
-      <p className="mt-2 font-heading text-2xl font-bold" style={{ color: accent }}>
-        {value}
-      </p>
-    </div>
-  );
-}
-
-const DIFFICULTY_COLORS: Record<string, string> = {
-  Beginner: "var(--color-green)",
-  Intermediate: "var(--color-orange)",
-  Advanced: "var(--color-pink)",
-};
+/** A detected capo is applied by default only when the analysis is at least this sure. */
+const CAPO_AUTO_MIN_CONFIDENCE = 0.4;
 
 export function Analysis() {
-  const { analysis, fileName, audioUrl } = useMvp();
-  const [view, setView] = useState<View>("guitar");
-  const [voicingIndex, setVoicingIndex] = useState(0);
+  const { analysis, libraryId, fileName, audioUrl, isSampleAudio, setAnalysis, attachAudioFile } = useMvp();
+  const reattachInputRef = useRef<HTMLInputElement>(null);
   const [exporting, setExporting] = useState<"midi" | "pdf" | null>(null);
   const [exportError, setExportError] = useState<string | null>(null);
-  const [stems, setStems] = useState<StemResult | null>(null);
-  const [separatingStems, setSeparatingStems] = useState(false);
-  const [stemsError, setStemsError] = useState<string | null>(null);
+  const [pdfLight, setPdfLight] = useState(false);
   const [savedToLibrary, setSavedToLibrary] = useState(false);
+  // The chord sounding now (from the playback clock) and the one the user picked.
+  const [playingChord, setPlayingChord] = useState<string | null>(null);
+  const [selectedChord, setSelectedChord] = useState<string | null>(null);
 
-  const displayName = fileName ?? analysis?.fileName ?? "";
+  // Transpose / capo. `transpose.audio` is the shift of the audio actually
+  // playing; a requested change waits in `audioPending` until the server
+  // returns the re-pitched file, so chords and sound never disagree.
+  const { settings } = useSettings();
+  const displayName = fileName ?? analysis?.fileName ?? "Analyzed Track";
+  const [transpose, setTranspose] = useState<TransposeSettings>(() => {
+    const saved = resolveLibrarySong(libraryId || displayName);
+    if (saved && (saved.transpose !== undefined || saved.capo !== undefined)) {
+      return {
+        ...NO_TRANSPOSE,
+        chordsOnly: saved.transpose ?? 0,
+        capo: saved.capo ?? 0,
+      };
+    }
+    if (analysis?.capo?.detected && analysis.capo.fret > 0 && analysis.capo.confidence >= CAPO_AUTO_MIN_CONFIDENCE) {
+      return { ...NO_TRANSPOSE, capo: analysis.capo.fret };
+    }
+    if (!analysis || settings.display.capo !== "easiest") return NO_TRANSPOSE;
+    const [best] = capoSuggestions(analysis, 0);
+    const none = capoSuggestions(analysis, 0, 8).find((s) => s.capo === 0);
+    return best && best.capo > 0 && best.openShare > (none?.openShare ?? 0) ? { ...NO_TRANSPOSE, capo: best.capo } : NO_TRANSPOSE;
+  });
+  const notation = useNotation(analysis?.key ?? "");
+  const displayKey = notation.key;
+  const [shiftedUrls, setShiftedUrls] = useState<Record<number, string>>({});
+  const [audioPending, setAudioPending] = useState<number | null>(null);
+  const [audioError, setAudioError] = useState<string | null>(null);
+  const shiftRequest = useRef<{ id: number; abort: AbortController | null }>({ id: 0, abort: null });
+  const createdUrls = useRef<string[]>([]);
 
   useEffect(() => {
     if (displayName) setSavedToLibrary(isSaved(displayName));
   }, [displayName]);
 
-  if (!analysis) {
+  useEffect(() => {
+    const urls = createdUrls.current;
+    const request = shiftRequest.current;
+    return () => {
+      request.abort?.abort();
+      urls.forEach((u) => URL.revokeObjectURL(u));
+    };
+  }, []);
+
+  const shown = useMemo(() => (analysis ? transposeAnalysis(analysis, shapeShift(transpose)) : null), [analysis, transpose]);
+  const suggestions = useMemo(() => (analysis ? capoSuggestions(analysis, soundingShift(transpose)) : []), [analysis, transpose]);
+  const playbackUrl = transpose.audio && shiftedUrls[transpose.audio] ? shiftedUrls[transpose.audio] : audioUrl;
+
+  function handleTransposeChange(next: TransposeSettings) {
+    setSelectedChord(null);
+    setAudioError(null);
+    const target = next.audio;
+    // Capo / chords-only apply at once; the audio shift only once its audio is ready.
+    setTranspose((t) => ({ ...next, audio: t.audio }));
+    try {
+      updateLibrarySongState(libraryId || displayName, {
+        transpose: Math.max(-12, Math.min(12, Math.round(next.chordsOnly))),
+        capo: Math.max(0, Math.min(7, Math.round(next.capo))),
+      });
+    } catch {
+      // ignore out-of-range
+    }
+    if (target === (audioPending ?? transpose.audio)) return;
+
+    const request = shiftRequest.current;
+    request.abort?.abort();
+    request.abort = null;
+    const id = ++request.id;
+
+    if (target === 0 || shiftedUrls[target] || !audioUrl) {
+      setAudioPending(null);
+      if (target === 0 || shiftedUrls[target]) setTranspose((t) => ({ ...t, audio: target }));
+      return;
+    }
+
+    const controller = new AbortController();
+    request.abort = controller;
+    setAudioPending(target);
+    pitchShiftAudio(audioUrl, target, controller.signal)
+      .then((blob) => {
+        if (shiftRequest.current.id !== id) return;
+        const url = URL.createObjectURL(blob);
+        createdUrls.current.push(url);
+        setShiftedUrls((m) => ({ ...m, [target]: url }));
+        setTranspose((t) => ({ ...t, audio: target }));
+        setAudioPending(null);
+      })
+      .catch((err) => {
+        if (shiftRequest.current.id !== id || controller.signal.aborted) return;
+        setAudioError(err instanceof Error ? err.message : "Couldn't re-pitch the audio.");
+        setAudioPending(null);
+      });
+  }
+
+  if (!analysis || !shown) {
     return (
-      <div className="mx-auto flex min-h-[calc(100vh-73px)] max-w-lg flex-col justify-center px-5 py-24 text-center">
-        <h1 className="font-heading text-2xl font-bold text-content">No analysis yet</h1>
-        <p className="mt-3 text-content-muted">
-          Upload a song or video first — or try the built-in sample track —
-          to see a real music analysis here.
+      <div className="mx-auto flex min-h-[calc(100vh-140px)] max-w-xl flex-col items-center justify-center px-4 py-16 text-center">
+        <div className="flex h-16 w-16 items-center justify-center rounded-2xl border border-[var(--color-ns-border)] bg-[var(--color-ns-card)] text-[var(--color-ns-blue)] shadow-xl">
+          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M9 18V5l12-2v13" />
+            <circle cx="6" cy="18" r="3" />
+            <circle cx="18" cy="16" r="3" />
+          </svg>
+        </div>
+        <h1 className="mt-6 font-heading text-2xl font-bold tracking-tight text-[var(--color-ns-text)] sm:text-3xl">
+          No Song Analyzed Yet
+        </h1>
+        <p className="mt-3 text-sm leading-relaxed text-[var(--color-ns-muted)]">
+          Upload an audio or video file, or try our built-in sample track in Studio to see key, BPM, harmonic progression, and instrument chord charts.
         </p>
-        <Link to="/upload" className="btn-primary mt-6 inline-flex">
-          Go to Upload
-        </Link>
+        <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
+          <Link to="/upload" className="btn-primary">
+            Upload Audio File
+          </Link>
+          <Link to="/studio" className="btn-secondary">
+            Return to Studio
+          </Link>
+          <button
+            type="button"
+            disabled
+            title="Analyze or select a song first to open the Chord & Lyric Sheet"
+            className="btn-secondary"
+          >
+            Open Chord & Lyric Sheet
+          </button>
+        </div>
       </div>
     );
   }
 
-  const uniqueChords = Array.from(new Set(analysis.chordProgression));
+  const uniqueChords = Array.from(new Set(shown.chordProgression));
+  const isV2 = (analysis.analysisVersion ?? 1) >= 2;
+  const keyConfidence = describeKeyConfidence(analysis);
+  const diffInfo = analysis.difficulty
+    ? DIFFICULTY_BADGES[analysis.difficulty.difficultyLabel] ?? DEFAULT_DIFFICULTY_BADGE
+    : null;
 
-  function handleSaveToLibrary() {
-    saveToLibrary(displayName, analysis!);
-    setSavedToLibrary(true);
+  /** Tempo/meter picked by the user: update this song, and its Library copy if saved. */
+  function applyRhythm(next: AnalysisResult) {
+    setAnalysis(next);
+    const targetRef = libraryId || displayName;
+    if (isSaved(targetRef)) saveToLibrary(targetRef, next);
   }
 
-  async function handleSeparateStems() {
-    if (!audioUrl) return;
-    setStemsError(null);
-    setSeparatingStems(true);
-    try {
-      const result = await separateStems(audioUrl);
-      setStems(result);
-    } catch {
-      setStemsError("Couldn't separate stems from this audio (it may not be a stereo file).");
-    } finally {
-      setSeparatingStems(false);
-    }
+  function handleSaveToLibrary() {
+    saveToLibrary(libraryId || displayName, analysis!);
+    setSavedToLibrary(true);
   }
 
   async function handleExport(kind: "midi" | "pdf") {
@@ -86,9 +194,23 @@ export function Analysis() {
     setExporting(kind);
     try {
       if (kind === "midi") {
-        await exportMidi(analysis!.chordProgression, analysis!.bpm, displayName);
+        const sounding = transposeAnalysis(analysis!, soundingShift(transpose));
+        await exportMidi(sounding.chordProgression, analysis!.bpm, displayName, sounding.chordTimeline);
       } else {
-        await exportPdf(analysis!, displayName);
+        await exportPdf(
+          buildLeadSheet({
+            analysis: analysis!,
+            shown: shown!,
+            transpose,
+            title: displayName,
+            theme: pdfLight ? "light" : "dark",
+            display: {
+              notation: { accidentals: settings.display.accidentals, notation: settings.display.notation },
+              leftHanded: settings.display.leftHanded,
+              showUncertain: settings.practice.showUncertain,
+            },
+          })
+        );
       }
     } catch (err) {
       setExportError(err instanceof Error ? err.message : "Export failed.");
@@ -99,34 +221,55 @@ export function Analysis() {
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6 sm:py-10 md:px-8">
-      {/* Top Header & Quick Actions */}
-      <div className="mb-6 flex flex-col justify-between gap-4 border-b border-glass/80 pb-6 sm:flex-row sm:items-center">
-        <div>
-          <div className="flex items-center gap-2">
-            <span className="rounded-full bg-primary/10 px-2.5 py-0.5 text-[11px] font-semibold text-primary-light">
-              Analysis Results
-            </span>
-            {analysis.difficulty && (
-              <span
-                className="rounded-full border px-2.5 py-0.5 text-[11px] font-semibold"
-                style={{
-                  color: DIFFICULTY_COLORS[analysis.difficulty.difficultyLabel] ?? "var(--color-content)",
-                  borderColor: `${DIFFICULTY_COLORS[analysis.difficulty.difficultyLabel]}55`,
-                  background: `${DIFFICULTY_COLORS[analysis.difficulty.difficultyLabel]}15`,
-                }}
-              >
-                {analysis.difficulty.difficultyLabel} · {analysis.difficulty.difficultyScore}/100
-              </span>
-            )}
+      {/* 1. TRACK HEADER */}
+      <div className="mb-6 flex flex-col justify-between gap-5 rounded-2xl border border-[var(--color-ns-border)] bg-[var(--color-ns-card)] p-5 sm:flex-row sm:items-center sm:p-7">
+        <div className="flex min-w-0 flex-1 items-start gap-4">
+          <div className="flex h-14 w-14 flex-shrink-0 items-center justify-center rounded-2xl border border-[var(--color-ns-border)] bg-[var(--color-ns-raised)] text-[var(--color-ns-coral)] shadow-md">
+            <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M9 18V5l12-2v13" />
+              <circle cx="6" cy="18" r="3" />
+              <circle cx="18" cy="16" r="3" />
+            </svg>
           </div>
-          <h1 className="mt-2 font-heading text-2xl font-bold tracking-tight text-content sm:text-3xl">
-            {displayName}
-          </h1>
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="inline-flex items-center rounded-md border border-[var(--color-ns-blue)]/30 bg-[var(--color-ns-blue)]/10 px-2.5 py-0.5 text-[0.6875rem] font-semibold text-[var(--color-ns-blue)]">
+                Audio Analysis
+              </span>
+              {diffInfo && analysis.difficulty && (
+                <span
+                  className="inline-flex items-center rounded-md border px-2.5 py-0.5 text-[0.6875rem] font-semibold"
+                  style={{
+                    backgroundColor: diffInfo.bg,
+                    color: diffInfo.text,
+                    borderColor: diffInfo.border,
+                  }}
+                >
+                  {analysis.difficulty.difficultyLabel} · {analysis.difficulty.difficultyScore}/100
+                </span>
+              )}
+              {isSampleAudio && (
+                <span className="inline-flex items-center rounded-md border border-[var(--color-ns-border)] bg-white/[0.04] px-2 py-0.5 text-[0.625rem] font-medium text-[var(--color-ns-muted)]">
+                  Sample Clip
+                </span>
+              )}
+            </div>
+            <h1 className="mt-2 break-words font-heading text-xl font-bold tracking-tight text-[var(--color-ns-text)] sm:text-2xl md:text-3xl">
+              {displayName}
+            </h1>
+            <p className="mt-1 text-xs text-[var(--color-ns-muted)]">
+              Processed in {analysis.processingSeconds}s · Key of {displayKey(analysis.key)} · {scaleName(analysis)}
+            </p>
+          </div>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2.5">
-          <Link to="/practice" className="btn-primary py-2 text-xs sm:text-sm">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+        {/* Action buttons: the main action on top, two quick actions side by side */}
+        <div className="grid w-full grid-cols-2 gap-2.5 sm:w-72 sm:flex-shrink-0">
+          <Link to="/song/current" className="btn-primary col-span-2">
+            Open Chord & Lyric Sheet
+          </Link>
+          <Link to="/practice" className="btn-secondary col-span-2">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor">
               <polygon points="6 4 19 12 6 20 6 4" />
             </svg>
             Practice Track
@@ -135,252 +278,185 @@ export function Analysis() {
             type="button"
             onClick={handleSaveToLibrary}
             disabled={savedToLibrary}
-            className={`btn-secondary py-2 text-xs sm:text-sm ${
-              savedToLibrary ? "border-green/40 bg-green/10 text-green" : ""
+            aria-label={savedToLibrary ? "Saved in Library" : "Save to Library"}
+            className={`btn-secondary px-3 text-[0.8125rem] ${
+              savedToLibrary ? "!border-[var(--color-ns-mint)]/40 !bg-[var(--color-ns-mint)]/10 !text-[var(--color-ns-mint)] !opacity-100" : ""
             }`}
           >
             {savedToLibrary ? (
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none">
+                <path d="M20 6L9 17l-5-5" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            ) : (
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none">
+                <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            )}
+            {savedToLibrary ? "Saved" : "Save"}
+          </button>
+          <Link to="/upload" className="btn-secondary px-3 text-[0.8125rem]" aria-label="Analyze another song">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+              <line x1="12" y1="5" x2="12" y2="19" />
+              <line x1="5" y1="12" x2="19" y2="12" />
+            </svg>
+            New Song
+          </Link>
+        </div>
+      </div>
+
+      {/* Real vs Demo Banner */}
+      {analysis.isDemo ? (
+        <div className="mb-6 flex items-start gap-3 rounded-xl border border-[var(--color-ns-amber)]/30 bg-[var(--color-ns-amber)]/10 px-4 py-3">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" className="mt-0.5 flex-shrink-0 text-[var(--color-ns-amber)]">
+            <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="2" />
+            <path d="M12 8v5M12 16h.01" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+          </svg>
+          <p className="text-xs sm:text-sm text-[var(--color-ns-amber)]">{analysis.demoNotice}</p>
+        </div>
+      ) : (
+        <div className="mb-6 flex items-start gap-3 rounded-xl border border-[var(--color-ns-mint)]/30 bg-[var(--color-ns-mint)]/10 px-4 py-3">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" className="mt-0.5 flex-shrink-0 text-[var(--color-ns-mint)]">
+            <path d="M20 6L9 17l-5-5" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+          <p className="text-xs sm:text-sm text-[var(--color-ns-mint)]">
+            {isV2 ? (
               <>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
-                  <path d="M20 6L9 17l-5-5" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-                Saved in Library
+                Real audio analysis complete — key, tempo, beats and {analysis.chordTimeline.length} chord changes detected from this
+                recording. Chords are read as major, minor and 7th chords; ones the analysis wasn't sure about are marked{" "}
+                <span className="font-bold">?</span>.
               </>
             ) : (
               <>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
-                  <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-                Save to Library
+                Real MIR analysis — key, tempo, and chord transitions detected from actual audio. Saved with an earlier analysis
+                version, so confidence and beat data aren't available for this track.
               </>
             )}
-          </button>
-        </div>
-      </div>
-
-      {analysis.isDemo ? (
-        <div className="mb-6 flex items-start gap-3 rounded-[var(--radius-card-sm)] border border-orange/30 bg-orange/10 px-4 py-3">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" className="mt-0.5 flex-shrink-0">
-            <circle cx="12" cy="12" r="9" stroke="var(--color-orange)" strokeWidth="2" />
-            <path d="M12 8v5M12 16h.01" stroke="var(--color-orange)" strokeWidth="2" strokeLinecap="round" />
-          </svg>
-          <p className="text-sm text-orange">{analysis.demoNotice}</p>
-        </div>
-      ) : (
-        <div className="mb-6 flex items-start gap-3 rounded-[var(--radius-card-sm)] border border-green/30 bg-green/10 px-4 py-3">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" className="mt-0.5 flex-shrink-0">
-            <path d="M20 6L9 17l-5-5" stroke="var(--color-green)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-          </svg>
-          <p className="text-sm text-green">
-            Real analysis — key, tempo, and chords were detected from the actual audio you uploaded
-            (processed in {analysis.processingSeconds}s).
           </p>
         </div>
       )}
 
-      {!audioUrl && (
-        <div className="mb-6 flex items-start gap-3 rounded-[var(--radius-card-sm)] border border-glass bg-white/[0.03] px-4 py-3">
-          <p className="text-sm text-content-muted">
-            Reopened from your Library — the saved chords, key, tempo and difficulty are all real,
-            but the original audio isn't kept in this browser-only demo, so playback, stems and the
-            tuner aren't available for this session.
+      {/* 2. KEY / BPM / TIME / DURATION STATS */}
+      <div className="grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-4">
+        <div className="rounded-xl border border-[var(--color-ns-border)] bg-[var(--color-ns-card)] p-4 sm:p-5">
+          <p className="text-[0.6875rem] font-semibold uppercase tracking-wider text-[var(--color-ns-muted)]">Detected Key</p>
+          <p className="mt-2 font-heading text-2xl font-extrabold text-[var(--color-ns-coral)] sm:text-3xl">
+            {displayKey(analysis.key)}
           </p>
-        </div>
-      )}
-
-      <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
-        <StatCard label="Key" value={analysis.key} accent="var(--color-primary-light)" />
-        <StatCard label="Tempo" value={`${analysis.bpm} BPM`} accent="var(--color-cyan)" />
-        <StatCard label="Time Signature" value={analysis.timeSignature} accent="var(--color-pink)" />
-        <StatCard label="Duration" value={analysis.duration} accent="var(--color-green)" />
-      </div>
-
-      <div className="glass-card mt-6 p-6">
-        <h2 className="font-heading text-lg font-semibold text-content">Scale</h2>
-        <p className="mt-1 text-content-muted">{analysis.scale}</p>
-      </div>
-
-      {/* Chord Progression Timeline */}
-      <div className="glass-card mt-6 p-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <h2 className="font-heading text-lg font-semibold text-content">Detected Chord Progression</h2>
-            <p className="mt-0.5 text-xs text-content-dim">
-              Sequential harmonic progression detected by the MIR analysis pipeline
-            </p>
-          </div>
-          <span className="rounded-full border border-glass bg-white/[0.04] px-2.5 py-0.5 text-[11px] font-semibold text-content-dim">
-            {analysis.chordProgression.length} chords
-          </span>
-        </div>
-
-        <div className="mt-5 flex overflow-x-auto pb-3 pt-1 scrollbar-thin">
-          <div className="flex items-center gap-3">
-            {analysis.chordProgression.map((chord, i) => (
-              <div key={`${chord}-${i}`} className="flex items-center gap-3">
-                <div className="flex flex-col items-center gap-1.5 rounded-xl border border-primary/30 bg-primary/10 px-4 py-3 transition-transform hover:scale-105">
-                  <span className="text-[10px] font-bold text-content-dim">#{i + 1}</span>
-                  <span className="font-heading text-xl font-extrabold text-primary-light">{chord}</span>
-                </div>
-                {i < analysis.chordProgression.length - 1 && (
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" className="text-content-dim flex-shrink-0">
-                    <path d="M5 12h14m0 0l-5-5m5 5l-5 5" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
-                  </svg>
-                )}
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-
-      {/* Instrument-specific views + alternate voicings */}
-      <div className="glass-card mt-6 p-6">
-        <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <h2 className="font-heading text-lg font-semibold text-content">Interactive Instrument Voicings</h2>
-            <p className="mt-0.5 text-xs text-content-dim">
-              Visual chord diagrams and piano keys for all unique chords in this piece
-            </p>
-          </div>
-          <div className="flex gap-1.5 rounded-xl border border-glass bg-white/[0.02] p-1">
-            {(["guitar", "ukulele", "piano"] as View[]).map((v) => (
-              <button
-                key={v}
-                type="button"
-                onClick={() => {
-                  setView(v);
-                  setVoicingIndex(0);
-                }}
-                className={`rounded-lg px-3.5 py-1.5 text-xs font-semibold capitalize transition-all ${
-                  view === v
-                    ? "bg-primary text-white shadow-md shadow-primary/20"
-                    : "text-content-muted hover:text-content"
-                }`}
-              >
-                {v}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
-          {uniqueChords.map((symbol) => {
-            const chord = parseChordSymbol(symbol);
-            const voicings = getGuitarVoicings(chord);
-            const activeVoicing = voicings[Math.min(voicingIndex, voicings.length - 1)];
-
-            return (
-              <div
-                key={symbol}
-                className="flex flex-col items-center gap-2 rounded-xl border border-glass bg-white/[0.02] p-4 transition-all hover:border-glass-strong"
-              >
-                <span className="font-heading text-base font-bold text-content">{symbol}</span>
-                {view === "guitar" && <GuitarChordDiagram voicing={activeVoicing} />}
-                {view === "ukulele" && <UkuleleChordDiagram frets={getUkuleleShape(chord)} />}
-                {view === "piano" && <PianoRoll activePitchClasses={chordMidiNotes(chord).map((m) => m % 12)} />}
-              </div>
-            );
-          })}
-        </div>
-
-        {view === "guitar" && (
-          <div className="mt-6 border-t border-glass pt-5">
-            <p className="mb-2.5 text-xs font-bold uppercase tracking-wider text-content-dim">
-              Alternate Voicings Position
-            </p>
-            <div className="flex flex-wrap gap-2">
-              {getGuitarVoicings(parseChordSymbol(uniqueChords[0] ?? "C")).map((v, i) => (
-                <button
-                  key={v.name}
-                  type="button"
-                  onClick={() => setVoicingIndex(i)}
-                  className={`rounded-lg px-3.5 py-1.5 text-xs font-semibold transition-all ${
-                    voicingIndex === i
-                      ? "bg-primary text-white shadow-sm"
-                      : "border border-glass bg-white/[0.03] text-content-muted hover:border-glass-strong hover:text-content"
-                  }`}
-                >
-                  {v.name}
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
-      </div>
-
-      {/* Stem separation */}
-      <div className="glass-card mt-6 p-6">
-        <div className="flex flex-col justify-between gap-2 sm:flex-row sm:items-center">
-          <div>
-            <h2 className="font-heading text-lg font-semibold text-content">Audio Stems Separation</h2>
-            <p className="mt-0.5 text-xs text-content-dim">
-              Phase-cancellation DSP extracts instrumental backing and center vocals directly in your browser.
-            </p>
-          </div>
-          {audioUrl && !stems && (
-            <button
-              type="button"
-              onClick={handleSeparateStems}
-              disabled={separatingStems}
-              className="btn-primary self-start sm:self-center py-2 text-xs"
-            >
-              {separatingStems ? (
-                <>
-                  <span className="spinner" />
-                  <span>Processing Stems…</span>
-                </>
-              ) : (
-                <>
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                    <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
-                    <path d="M19.07 4.93a10 10 0 0 1 0 14.14" />
-                  </svg>
-                  <span>Extract Backing Stems</span>
-                </>
-              )}
-            </button>
+          <p className="mt-1 text-xs text-[var(--color-ns-muted)]">
+            {scaleName(analysis)}
+            {keyConfidence && <span className={keyConfidence.className}> · {keyConfidence.label}</span>}
+          </p>
+          {keyConfidence?.alternative && (
+            <p className="mt-0.5 text-[0.6875rem] text-[var(--color-ns-dim)]">Could also be {displayKey(keyConfidence.alternative)}</p>
           )}
         </div>
 
+        <TempoCard analysis={analysis} onChange={applyRhythm} />
+
+        <MeterCard analysis={analysis} onChange={applyRhythm} />
+
+        <div className="rounded-xl border border-[var(--color-ns-border)] bg-[var(--color-ns-card)] p-4 sm:p-5">
+          <p className="text-[0.6875rem] font-semibold uppercase tracking-wider text-[var(--color-ns-muted)]">Duration</p>
+          <p className="mt-2 font-heading text-2xl font-extrabold text-[var(--color-ns-mint)] sm:text-3xl">
+            {analysis.duration}
+          </p>
+          <p className="mt-1 text-xs text-[var(--color-ns-muted)]">
+            {analysis.chordTimeline.length} chord changes · {uniqueChords.length} unique
+          </p>
+        </div>
+      </div>
+
+      {/* TRANSPOSE & CAPO */}
+      <TransposePanel
+        settings={transpose}
+        onChange={handleTransposeChange}
+        originalKey={analysis.key}
+        audioAvailable={Boolean(audioUrl)}
+        audioPending={audioPending}
+        audioError={audioError}
+        suggestions={suggestions}
+        detectedCapo={analysis.capo}
+      />
+
+      {/* 3–4. PLAYER, NOW-PLAYING CHORD & CHORD TIMELINE (one shared playback clock) */}
+      {!audioUrl && (
+        <div className="mt-6 flex flex-col justify-between gap-3 rounded-xl border border-[var(--color-ns-amber)]/35 bg-[var(--color-ns-amber)]/10 px-4 py-3 sm:flex-row sm:items-center">
+          <p className="text-xs text-[var(--color-ns-text)] sm:text-sm">
+            Your saved chord analysis is ready. Re-attach your local audio file (`{displayName}`) to play along with live chord sync.
+          </p>
+          <input
+            ref={reattachInputRef}
+            type="file"
+            accept="audio/*,video/*"
+            className="hidden"
+            onChange={(e) => {
+              const f = e.target.files?.[0];
+              if (f) attachAudioFile(f);
+              e.target.value = "";
+            }}
+          />
+          <button
+            type="button"
+            onClick={() => reattachInputRef.current?.click()}
+            className="btn-secondary shrink-0 px-3 py-1.5 text-xs font-semibold"
+          >
+            Re-attach audio file
+          </button>
+        </div>
+      )}
+      <LiveChordSync
+        analysis={shown}
+        audioUrl={playbackUrl}
+        selectedChord={selectedChord}
+        onActiveChordChange={setPlayingChord}
+        onSelectChord={setSelectedChord}
+      />
+
+      {/* 5. INTERACTIVE INSTRUMENT VOICINGS */}
+      <InstrumentVoicings
+        chords={uniqueChords}
+        songKey={shown.key}
+        playingChord={playingChord}
+        selectedChord={selectedChord}
+        onSelectChord={setSelectedChord}
+      />
+
+      {/* 6. STEM SEPARATION */}
+      <div className="mt-6 rounded-2xl border border-[var(--color-ns-border)] bg-[var(--color-ns-card)] p-5 sm:p-6">
+        <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="rounded-md border border-[var(--color-ns-blue)]/30 bg-[var(--color-ns-blue)]/10 px-2 py-0.5 text-[0.625rem] font-semibold text-[var(--color-ns-blue)]">
+                AI
+              </span>
+              <h2 className="font-heading text-lg font-bold text-[var(--color-ns-text)]">Audio Stems Separation</h2>
+            </div>
+            <p className="mt-1 text-xs text-[var(--color-ns-muted)]">
+              Splits this song into vocals and music, or vocals, drums, bass and other. Same engine as the Stem Splitter, no need to upload again.
+            </p>
+          </div>
+        </div>
+
         {!audioUrl && (
-          <p className="mt-3 text-xs text-content-dim">
-            Stems require live audio from this session.
+          <p className="mt-3 text-xs text-[var(--color-ns-muted)]">
+            Stems separation requires live audio from the current session.
           </p>
         )}
 
-        {stemsError && <p className="mt-3 text-xs text-pink">{stemsError}</p>}
-
-        {stems && (
-          <div className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <div className="rounded-xl border border-glass bg-white/[0.02] p-4">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-xs font-bold text-content">Instrumental Backing</span>
-                <span className="rounded-md bg-cyan/15 px-2 py-0.5 text-[10px] font-semibold text-cyan">Vocals Diminished</span>
-              </div>
-              <audio controls src={stems.instrumentalUrl} className="w-full mt-2" />
-            </div>
-
-            <div className="rounded-xl border border-glass bg-white/[0.02] p-4">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-xs font-bold text-content">Vocal-Emphasized Stem</span>
-                <span className="rounded-md bg-pink/15 px-2 py-0.5 text-[10px] font-semibold text-pink">Center Channel</span>
-              </div>
-              <audio controls src={stems.vocalEmphasizedUrl} className="w-full mt-2" />
-            </div>
-          </div>
-        )}
+        {/* key: a new song starts a fresh separator instead of showing the old stems */}
+        {audioUrl && <StemMixer key={audioUrl} audioUrl={audioUrl} fileName={fileName ?? undefined} />}
       </div>
 
-      {/* Export Section */}
-      <div className="glass-card mt-6 p-6">
+      {/* 7. EXPORT SECTION */}
+      <div className="mt-6 rounded-2xl border border-[var(--color-ns-border)] bg-[var(--color-ns-card)] p-5 sm:p-6">
         <div>
-          <h2 className="font-heading text-lg font-semibold text-content">Export Song Charts & MIDI</h2>
-          <p className="mt-0.5 text-xs text-content-dim">
-            Export standard MIDI files and lead sheets generated from detected chords.
+          <h2 className="font-heading text-lg font-bold text-[var(--color-ns-text)]">Export Song Charts & MIDI</h2>
+          <p className="mt-0.5 text-xs text-[var(--color-ns-muted)]">
+            Download standard MIDI files and printable lead sheets generated from detected chords.
           </p>
         </div>
 
-        {exportError && <p className="mt-3 text-xs text-pink">{exportError}</p>}
+        {exportError && <p className="mt-3 text-xs text-[var(--color-ns-coral)]">{exportError}</p>}
 
         <div className="mt-4 flex flex-wrap gap-3">
           <button
@@ -389,7 +465,9 @@ export function Analysis() {
             disabled={exporting !== null}
             className="btn-secondary py-2 text-xs"
           >
-            <span className="rounded bg-primary/20 px-1.5 py-0.5 font-mono text-[10px] font-bold text-primary-light">.MID</span>
+            <span className="rounded bg-[var(--color-ns-coral)]/20 px-1.5 py-0.5 font-mono text-[0.625rem] font-bold text-[var(--color-ns-coral)]">
+              .MID
+            </span>
             <span>{exporting === "midi" ? "Generating MIDI…" : "Download Standard MIDI"}</span>
           </button>
           <button
@@ -398,14 +476,25 @@ export function Analysis() {
             disabled={exporting !== null}
             className="btn-secondary py-2 text-xs"
           >
-            <span className="rounded bg-cyan/20 px-1.5 py-0.5 font-mono text-[10px] font-bold text-cyan">.PDF</span>
+            <span className="rounded bg-[var(--color-ns-blue)]/20 px-1.5 py-0.5 font-mono text-[0.625rem] font-bold text-[var(--color-ns-blue)]">
+              .PDF
+            </span>
             <span>{exporting === "pdf" ? "Generating Lead Sheet…" : "Download Chord Chart PDF"}</span>
           </button>
+          <label className="inline-flex cursor-pointer select-none items-center gap-2 self-center text-xs text-[var(--color-ns-muted)]">
+            <input
+              type="checkbox"
+              checked={pdfLight}
+              onChange={(e) => setPdfLight(e.target.checked)}
+              className="ns-check"
+            />
+            Print-friendly (light)
+          </label>
         </div>
       </div>
 
-      {/* Bottom Navigation CTAs */}
-      <div className="mt-8 flex flex-wrap items-center gap-3 border-t border-glass pt-6">
+      {/* 8. BOTTOM NAVIGATION CTAS */}
+      <div className="mt-8 flex flex-wrap items-center gap-3 border-t border-[var(--color-ns-border)] pt-6">
         <Link to="/practice" className="btn-primary">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor">
             <polygon points="6 4 19 12 6 20 6 4" />
@@ -416,7 +505,14 @@ export function Analysis() {
           <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor">
             <path d="M12 2L14.4 9.6L22 12L14.4 14.4L12 22L9.6 14.4L2 12L9.6 9.6L12 2Z" />
           </svg>
-          Ask AI Assistant
+          Ask AI Tutor
+        </Link>
+        <Link to="/upload" className="btn-secondary">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+            <line x1="12" y1="5" x2="12" y2="19" />
+            <line x1="5" y1="12" x2="19" y2="12" />
+          </svg>
+          Analyze Another Song
         </Link>
         <Link to="/library" className="btn-ghost">
           View in Library
@@ -425,3 +521,4 @@ export function Analysis() {
     </div>
   );
 }
+

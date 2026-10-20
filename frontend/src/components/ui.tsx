@@ -16,10 +16,10 @@ export function SectionHeader({
   action?: ReactNode;
 }) {
   return (
-    <div className="mb-3 flex items-end justify-between gap-3">
+    <div className="mb-4 flex items-end justify-between gap-3">
       <div className="min-w-0">
-        <h2 className="font-heading text-base font-bold text-content">{title}</h2>
-        {subtitle && <p className="mt-0.5 text-xs text-content-dim">{subtitle}</p>}
+        <h2 className="font-heading text-lg font-bold text-content">{title}</h2>
+        {subtitle && <p className="mt-0.5 text-xs text-content-muted">{subtitle}</p>}
       </div>
       {action && <div className="flex-shrink-0">{action}</div>}
     </div>
@@ -39,11 +39,11 @@ export function EmptyState({
   children?: ReactNode;
 }) {
   return (
-    <div className="flex flex-col items-center rounded-xl border border-dashed border-glass-strong bg-white/[0.015] px-6 py-8 text-center">
-      {icon && <span className="icon-tile tint-violet mb-3 h-11 w-11">{icon}</span>}
-      <p className="font-heading text-sm font-bold text-content">{title}</p>
+    <div className="flex flex-col items-center rounded-2xl border border-dashed border-glass-strong bg-bg-card/40 px-6 py-10 text-center">
+      {icon && <span className="icon-tile tint-cyan mb-3.5 h-12 w-12 rounded-2xl">{icon}</span>}
+      <p className="font-heading text-base font-bold text-content">{title}</p>
       {body && <p className="mt-1.5 max-w-sm text-xs leading-relaxed text-content-muted">{body}</p>}
-      {children && <div className="mt-4 flex flex-wrap justify-center gap-2">{children}</div>}
+      {children && <div className="mt-5 flex flex-wrap justify-center gap-2.5">{children}</div>}
     </div>
   );
 }
