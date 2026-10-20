@@ -1,3 +1,9 @@
+> [!IMPORTANT]
+> **Standalone MVP Notice & Documentation Guide**
+> This document describes a planned or legacy multi-service architecture (including references to PostgreSQL, Prisma, Fastify, Next.js, React Native, etc.). 
+> The *current* active codebase in this repository is the **standalone Wilsify AI MVP** (a Python/FastAPI backend and Vite/React frontend). 
+> Please see the root `README.md` and `INSTALLATION.md` for accurate setup and usage instructions for the current product.
+
 # Wilsify AI — Documentation Style Guide
 
 Purpose: one writing standard so every document in this repository reads like it belongs to the same system. Apply this to new documents and when editing existing ones — it is not required to rewrite an untouched document purely to comply.

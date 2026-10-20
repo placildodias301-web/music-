@@ -1,0 +1,2562 @@
+{
+ "TEST_001": {
+  "other_repo": [
+   {
+    "start": 3.13,
+    "end": 3.54,
+    "note": "C#4",
+    "conf": "Low"
+   },
+   {
+    "start": 5.6,
+    "end": 5.83,
+    "note": "C4",
+    "conf": "Low"
+   },
+   {
+    "start": 5.84,
+    "end": 6.17,
+    "note": "C#4",
+    "conf": "Low"
+   },
+   {
+    "start": 6.18,
+    "end": 6.35,
+    "note": "C#4",
+    "conf": "Low"
+   },
+   {
+    "start": 6.81,
+    "end": 7.22,
+    "note": "A#3",
+    "conf": "Low"
+   },
+   {
+    "start": 7.88,
+    "end": 8.13,
+    "note": "A#3",
+    "conf": "Low"
+   },
+   {
+    "start": 9.38,
+    "end": 9.83,
+    "note": "B3",
+    "conf": "Low"
+   },
+   {
+    "start": 10.79,
+    "end": 11.3,
+    "note": "C#4",
+    "conf": "Low"
+   },
+   {
+    "start": 11.75,
+    "end": 11.95,
+    "note": "C#4",
+    "conf": "Low"
+   },
+   {
+    "start": 11.95,
+    "end": 12.25,
+    "note": "C#4",
+    "conf": "Low"
+   }
+  ],
+  "claude": [
+   {
+    "start": 3.09,
+    "end": 3.32,
+    "note": "F#2",
+    "conf": "Low"
+   },
+   {
+    "start": 5.32,
+    "end": 5.5,
+    "note": "A#3",
+    "conf": "Low"
+   },
+   {
+    "start": 7.34,
+    "end": 7.58,
+    "note": "F#3",
+    "conf": "Low"
+   },
+   {
+    "start": 9.09,
+    "end": 9.25,
+    "note": "G#3",
+    "conf": "Low"
+   },
+   {
+    "start": 9.33,
+    "end": 9.56,
+    "note": "B3",
+    "conf": "Low"
+   },
+   {
+    "start": 9.65,
+    "end": 9.83,
+    "note": "E2",
+    "conf": "Low"
+   },
+   {
+    "start": 10.03,
+    "end": 10.31,
+    "note": "G#3",
+    "conf": "Low"
+   },
+   {
+    "start": 10.47,
+    "end": 10.84,
+    "note": "B3",
+    "conf": "Low"
+   },
+   {
+    "start": 10.96,
+    "end": 11.28,
+    "note": "F#2",
+    "conf": "Low"
+   },
+   {
+    "start": 12.71,
+    "end": 12.93,
+    "note": "F#2",
+    "conf": "Low"
+   }
+  ],
+  "n_ess": 111,
+  "n_py": 129
+ },
+ "TEST_002": {
+  "other_repo": [
+   {
+    "start": 1.24,
+    "end": 1.46,
+    "note": "D3",
+    "conf": "Low"
+   },
+   {
+    "start": 2.25,
+    "end": 2.89,
+    "note": "D3",
+    "conf": "Low"
+   },
+   {
+    "start": 2.9,
+    "end": 3.15,
+    "note": "G#4",
+    "conf": "Low"
+   },
+   {
+    "start": 3.18,
+    "end": 3.37,
+    "note": "F#4",
+    "conf": "Low"
+   },
+   {
+    "start": 3.52,
+    "end": 3.95,
+    "note": "F#4",
+    "conf": "Low"
+   },
+   {
+    "start": 4.53,
+    "end": 4.75,
+    "note": "G3",
+    "conf": "Low"
+   },
+   {
+    "start": 8.15,
+    "end": 8.48,
+    "note": "D3",
+    "conf": "Low"
+   },
+   {
+    "start": 8.73,
+    "end": 8.97,
+    "note": "D3",
+    "conf": "Low"
+   },
+   {
+    "start": 8.97,
+    "end": 9.15,
+    "note": "B2",
+    "conf": "Low"
+   },
+   {
+    "start": 9.58,
+    "end": 9.72,
+    "note": "A2",
+    "conf": "Low"
+   }
+  ],
+  "claude": [
+   {
+    "start": 1.88,
+    "end": 2.88,
+    "note": "D#2",
+    "conf": "Low"
+   },
+   {
+    "start": 2.88,
+    "end": 3.1,
+    "note": "E2",
+    "conf": "Low"
+   },
+   {
+    "start": 3.47,
+    "end": 3.83,
+    "note": "B2",
+    "conf": "Low"
+   },
+   {
+    "start": 5.18,
+    "end": 6.4,
+    "note": "D#2",
+    "conf": "Low"
+   },
+   {
+    "start": 6.55,
+    "end": 7.13,
+    "note": "A2",
+    "conf": "Low"
+   },
+   {
+    "start": 7.95,
+    "end": 8.13,
+    "note": "F#2",
+    "conf": "Low"
+   },
+   {
+    "start": 8.16,
+    "end": 9.01,
+    "note": "D#2",
+    "conf": "Low"
+   },
+   {
+    "start": 10.74,
+    "end": 10.95,
+    "note": "D#2",
+    "conf": "Low"
+   },
+   {
+    "start": 11.51,
+    "end": 11.8,
+    "note": "E3",
+    "conf": "Low"
+   },
+   {
+    "start": 12.47,
+    "end": 12.79,
+    "note": "G4",
+    "conf": "Low"
+   }
+  ],
+  "n_ess": 432,
+  "n_py": 986
+ },
+ "TEST_003": {
+  "other_repo": [
+   {
+    "start": 1.02,
+    "end": 1.15,
+    "note": "F3",
+    "conf": "Low"
+   },
+   {
+    "start": 2.31,
+    "end": 2.49,
+    "note": "F3",
+    "conf": "Low"
+   },
+   {
+    "start": 2.71,
+    "end": 2.85,
+    "note": "B3",
+    "conf": "Low"
+   },
+   {
+    "start": 2.96,
+    "end": 3.17,
+    "note": "A3",
+    "conf": "Low"
+   },
+   {
+    "start": 3.39,
+    "end": 4.12,
+    "note": "G3",
+    "conf": "Low"
+   },
+   {
+    "start": 4.12,
+    "end": 4.46,
+    "note": "G3",
+    "conf": "Low"
+   },
+   {
+    "start": 4.53,
+    "end": 4.7,
+    "note": "F3",
+    "conf": "Low"
+   },
+   {
+    "start": 6.22,
+    "end": 7.05,
+    "note": "F3",
+    "conf": "Low"
+   },
+   {
+    "start": 8.23,
+    "end": 8.42,
+    "note": "A3",
+    "conf": "Low"
+   },
+   {
+    "start": 8.52,
+    "end": 8.67,
+    "note": "F3",
+    "conf": "Low"
+   }
+  ],
+  "claude": [
+   {
+    "start": 0.86,
+    "end": 1.27,
+    "note": "F2",
+    "conf": "Low"
+   },
+   {
+    "start": 3.2,
+    "end": 4.1,
+    "note": "G3",
+    "conf": "Low"
+   },
+   {
+    "start": 4.13,
+    "end": 4.5,
+    "note": "G3",
+    "conf": "Low"
+   },
+   {
+    "start": 4.68,
+    "end": 5.33,
+    "note": "G3",
+    "conf": "Low"
+   },
+   {
+    "start": 5.38,
+    "end": 5.67,
+    "note": "F3",
+    "conf": "Low"
+   },
+   {
+    "start": 5.68,
+    "end": 6.05,
+    "note": "F3",
+    "conf": "Low"
+   },
+   {
+    "start": 6.16,
+    "end": 6.75,
+    "note": "F3",
+    "conf": "Low"
+   },
+   {
+    "start": 7.0,
+    "end": 7.44,
+    "note": "F3",
+    "conf": "Low"
+   },
+   {
+    "start": 8.96,
+    "end": 9.28,
+    "note": "A#3",
+    "conf": "Low"
+   },
+   {
+    "start": 9.94,
+    "end": 10.74,
+    "note": "G3",
+    "conf": "Low"
+   }
+  ],
+  "n_ess": 91,
+  "n_py": 160
+ },
+ "TEST_004": {
+  "other_repo": [
+   {
+    "start": 0.03,
+    "end": 0.51,
+    "note": "G#3",
+    "conf": "Low"
+   },
+   {
+    "start": 0.51,
+    "end": 0.71,
+    "note": "A#4",
+    "conf": "Low"
+   },
+   {
+    "start": 8.79,
+    "end": 8.91,
+    "note": "G#3",
+    "conf": "Low"
+   },
+   {
+    "start": 8.91,
+    "end": 9.04,
+    "note": "F#3",
+    "conf": "Low"
+   },
+   {
+    "start": 9.04,
+    "end": 9.2,
+    "note": "G#3",
+    "conf": "Low"
+   },
+   {
+    "start": 9.67,
+    "end": 10.01,
+    "note": "A3",
+    "conf": "Low"
+   },
+   {
+    "start": 10.12,
+    "end": 10.44,
+    "note": "G#3",
+    "conf": "Low"
+   },
+   {
+    "start": 13.6,
+    "end": 13.79,
+    "note": "G#3",
+    "conf": "Low"
+   },
+   {
+    "start": 13.8,
+    "end": 13.96,
+    "note": "F#3",
+    "conf": "Low"
+   },
+   {
+    "start": 14.22,
+    "end": 14.38,
+    "note": "A3",
+    "conf": "Low"
+   }
+  ],
+  "claude": [
+   {
+    "start": 1.95,
+    "end": 2.14,
+    "note": "F#3",
+    "conf": "Low"
+   },
+   {
+    "start": 2.15,
+    "end": 2.82,
+    "note": "G#3",
+    "conf": "High"
+   },
+   {
+    "start": 3.08,
+    "end": 3.48,
+    "note": "B3",
+    "conf": "Low"
+   },
+   {
+    "start": 4.92,
+    "end": 6.22,
+    "note": "A2",
+    "conf": "Low"
+   },
+   {
+    "start": 6.37,
+    "end": 6.94,
+    "note": "E2",
+    "conf": "Low"
+   },
+   {
+    "start": 6.98,
+    "end": 7.52,
+    "note": "B2",
+    "conf": "Medium"
+   },
+   {
+    "start": 9.71,
+    "end": 10.04,
+    "note": "A2",
+    "conf": "Low"
+   },
+   {
+    "start": 10.15,
+    "end": 10.53,
+    "note": "G#2",
+    "conf": "Low"
+   },
+   {
+    "start": 10.63,
+    "end": 10.91,
+    "note": "E3",
+    "conf": "Medium"
+   },
+   {
+    "start": 12.24,
+    "end": 12.71,
+    "note": "E2",
+    "conf": "Low"
+   }
+  ],
+  "n_ess": 272,
+  "n_py": 600
+ },
+ "TEST_005": {
+  "other_repo": [
+   {
+    "start": 0.45,
+    "end": 0.59,
+    "note": "F#4",
+    "conf": "Low"
+   },
+   {
+    "start": 0.6,
+    "end": 0.83,
+    "note": "F#4",
+    "conf": "Low"
+   },
+   {
+    "start": 2.28,
+    "end": 2.79,
+    "note": "A#3",
+    "conf": "Low"
+   },
+   {
+    "start": 2.79,
+    "end": 3.67,
+    "note": "C4",
+    "conf": "Low"
+   },
+   {
+    "start": 3.78,
+    "end": 3.93,
+    "note": "B3",
+    "conf": "Low"
+   },
+   {
+    "start": 3.94,
+    "end": 4.35,
+    "note": "A#3",
+    "conf": "Low"
+   },
+   {
+    "start": 4.36,
+    "end": 4.56,
+    "note": "C4",
+    "conf": "Low"
+   },
+   {
+    "start": 6.7,
+    "end": 6.97,
+    "note": "F3",
+    "conf": "Low"
+   },
+   {
+    "start": 7.07,
+    "end": 7.43,
+    "note": "A#3",
+    "conf": "Low"
+   },
+   {
+    "start": 7.44,
+    "end": 7.57,
+    "note": "F#3",
+    "conf": "Low"
+   }
+  ],
+  "claude": [
+   {
+    "start": 0.5,
+    "end": 0.82,
+    "note": "F#3",
+    "conf": "Low"
+   },
+   {
+    "start": 1.25,
+    "end": 1.54,
+    "note": "D#2",
+    "conf": "Low"
+   },
+   {
+    "start": 1.94,
+    "end": 2.12,
+    "note": "G3",
+    "conf": "Low"
+   },
+   {
+    "start": 2.26,
+    "end": 2.81,
+    "note": "A#3",
+    "conf": "Medium"
+   },
+   {
+    "start": 3.96,
+    "end": 4.38,
+    "note": "A#3",
+    "conf": "Medium"
+   },
+   {
+    "start": 4.4,
+    "end": 4.57,
+    "note": "C4",
+    "conf": "Medium"
+   },
+   {
+    "start": 6.29,
+    "end": 6.46,
+    "note": "A#3",
+    "conf": "Low"
+   },
+   {
+    "start": 6.77,
+    "end": 6.98,
+    "note": "F3",
+    "conf": "Low"
+   },
+   {
+    "start": 7.7,
+    "end": 7.85,
+    "note": "D#3",
+    "conf": "Low"
+   },
+   {
+    "start": 7.87,
+    "end": 8.08,
+    "note": "D#3",
+    "conf": "Low"
+   }
+  ],
+  "n_ess": 98,
+  "n_py": 183
+ },
+ "TEST_006": {
+  "other_repo": [
+   {
+    "start": 3.46,
+    "end": 3.59,
+    "note": "G3",
+    "conf": "Low"
+   },
+   {
+    "start": 3.95,
+    "end": 4.11,
+    "note": "D4",
+    "conf": "Low"
+   },
+   {
+    "start": 6.02,
+    "end": 6.22,
+    "note": "B3",
+    "conf": "Low"
+   },
+   {
+    "start": 6.49,
+    "end": 6.8,
+    "note": "E4",
+    "conf": "Low"
+   },
+   {
+    "start": 6.82,
+    "end": 7.02,
+    "note": "G4",
+    "conf": "Low"
+   },
+   {
+    "start": 7.04,
+    "end": 7.35,
+    "note": "E4",
+    "conf": "Low"
+   },
+   {
+    "start": 8.54,
+    "end": 8.68,
+    "note": "D4",
+    "conf": "Low"
+   },
+   {
+    "start": 9.06,
+    "end": 9.37,
+    "note": "G4",
+    "conf": "Low"
+   },
+   {
+    "start": 9.71,
+    "end": 10.79,
+    "note": "D5",
+    "conf": "Low"
+   },
+   {
+    "start": 10.79,
+    "end": 10.94,
+    "note": "B4",
+    "conf": "Low"
+   }
+  ],
+  "claude": [
+   {
+    "start": 0.05,
+    "end": 1.72,
+    "note": "G2",
+    "conf": "Low"
+   },
+   {
+    "start": 3.04,
+    "end": 3.18,
+    "note": "G2",
+    "conf": "Low"
+   },
+   {
+    "start": 3.44,
+    "end": 3.63,
+    "note": "G3",
+    "conf": "Low"
+   },
+   {
+    "start": 3.76,
+    "end": 3.89,
+    "note": "B3",
+    "conf": "Low"
+   },
+   {
+    "start": 3.9,
+    "end": 4.11,
+    "note": "D4",
+    "conf": "Low"
+   },
+   {
+    "start": 4.18,
+    "end": 4.31,
+    "note": "E4",
+    "conf": "Medium"
+   },
+   {
+    "start": 4.38,
+    "end": 4.61,
+    "note": "G4",
+    "conf": "Low"
+   },
+   {
+    "start": 4.68,
+    "end": 4.84,
+    "note": "G4",
+    "conf": "High"
+   },
+   {
+    "start": 4.86,
+    "end": 5.65,
+    "note": "G4",
+    "conf": "Medium"
+   },
+   {
+    "start": 6.01,
+    "end": 6.2,
+    "note": "B3",
+    "conf": "Medium"
+   }
+  ],
+  "n_ess": 240,
+  "n_py": 444
+ },
+ "TEST_007": {
+  "other_repo": [
+   {
+    "start": 0.01,
+    "end": 0.43,
+    "note": "E3",
+    "conf": "Low"
+   },
+   {
+    "start": 1.45,
+    "end": 1.8,
+    "note": "E4",
+    "conf": "Low"
+   },
+   {
+    "start": 3.92,
+    "end": 4.45,
+    "note": "D4",
+    "conf": "Low"
+   },
+   {
+    "start": 4.92,
+    "end": 5.33,
+    "note": "D4",
+    "conf": "Low"
+   },
+   {
+    "start": 10.95,
+    "end": 11.11,
+    "note": "B4",
+    "conf": "Low"
+   },
+   {
+    "start": 11.94,
+    "end": 12.12,
+    "note": "G3",
+    "conf": "Low"
+   },
+   {
+    "start": 12.94,
+    "end": 13.09,
+    "note": "B4",
+    "conf": "Low"
+   },
+   {
+    "start": 15.0,
+    "end": 15.43,
+    "note": "G4",
+    "conf": "Low"
+   },
+   {
+    "start": 16.97,
+    "end": 17.41,
+    "note": "F#4",
+    "conf": "Low"
+   },
+   {
+    "start": 17.49,
+    "end": 17.88,
+    "note": "G3",
+    "conf": "Low"
+   }
+  ],
+  "claude": [
+   {
+    "start": 0.0,
+    "end": 0.43,
+    "note": "E2",
+    "conf": "Low"
+   },
+   {
+    "start": 3.01,
+    "end": 3.45,
+    "note": "B2",
+    "conf": "Low"
+   },
+   {
+    "start": 3.97,
+    "end": 4.42,
+    "note": "D3",
+    "conf": "Low"
+   },
+   {
+    "start": 7.08,
+    "end": 7.42,
+    "note": "F#3",
+    "conf": "Low"
+   },
+   {
+    "start": 7.5,
+    "end": 7.89,
+    "note": "C3",
+    "conf": "Low"
+   },
+   {
+    "start": 7.95,
+    "end": 8.43,
+    "note": "A2",
+    "conf": "Medium"
+   },
+   {
+    "start": 8.54,
+    "end": 8.85,
+    "note": "A#2",
+    "conf": "Low"
+   },
+   {
+    "start": 8.94,
+    "end": 9.31,
+    "note": "G#2",
+    "conf": "Low"
+   },
+   {
+    "start": 9.31,
+    "end": 9.88,
+    "note": "A2",
+    "conf": "Low"
+   },
+   {
+    "start": 9.9,
+    "end": 10.4,
+    "note": "A#2",
+    "conf": "Low"
+   }
+  ],
+  "n_ess": 59,
+  "n_py": 208
+ },
+ "TEST_008": {
+  "other_repo": [
+   {
+    "start": 1.07,
+    "end": 1.33,
+    "note": "E3",
+    "conf": "Low"
+   },
+   {
+    "start": 1.36,
+    "end": 1.49,
+    "note": "G#3",
+    "conf": "Low"
+   },
+   {
+    "start": 1.67,
+    "end": 1.8,
+    "note": "D#3",
+    "conf": "Low"
+   },
+   {
+    "start": 1.8,
+    "end": 1.99,
+    "note": "C#3",
+    "conf": "Low"
+   },
+   {
+    "start": 2.39,
+    "end": 3.18,
+    "note": "C#3",
+    "conf": "Low"
+   },
+   {
+    "start": 5.17,
+    "end": 5.32,
+    "note": "E3",
+    "conf": "Low"
+   },
+   {
+    "start": 9.89,
+    "end": 10.56,
+    "note": "G#4",
+    "conf": "Low"
+   },
+   {
+    "start": 10.84,
+    "end": 11.1,
+    "note": "E3",
+    "conf": "Low"
+   },
+   {
+    "start": 11.48,
+    "end": 11.72,
+    "note": "G#3",
+    "conf": "Low"
+   },
+   {
+    "start": 12.05,
+    "end": 12.47,
+    "note": "F#4",
+    "conf": "Low"
+   }
+  ],
+  "claude": [
+   {
+    "start": 2.08,
+    "end": 2.25,
+    "note": "E2",
+    "conf": "Low"
+   },
+   {
+    "start": 2.3,
+    "end": 3.2,
+    "note": "C#3",
+    "conf": "Medium"
+   },
+   {
+    "start": 9.3,
+    "end": 9.53,
+    "note": "E4",
+    "conf": "High"
+   },
+   {
+    "start": 9.95,
+    "end": 10.51,
+    "note": "G#4",
+    "conf": "High"
+   },
+   {
+    "start": 10.65,
+    "end": 11.12,
+    "note": "E2",
+    "conf": "Medium"
+   },
+   {
+    "start": 11.23,
+    "end": 11.73,
+    "note": "G#2",
+    "conf": "Low"
+   },
+   {
+    "start": 11.81,
+    "end": 12.0,
+    "note": "C#3",
+    "conf": "Low"
+   },
+   {
+    "start": 12.09,
+    "end": 12.32,
+    "note": "F#4",
+    "conf": "High"
+   },
+   {
+    "start": 13.32,
+    "end": 13.55,
+    "note": "A2",
+    "conf": "Medium"
+   },
+   {
+    "start": 13.62,
+    "end": 13.83,
+    "note": "A2",
+    "conf": "Medium"
+   }
+  ],
+  "n_ess": 66,
+  "n_py": 114
+ },
+ "TEST_009": {
+  "other_repo": [
+   {
+    "start": 0.39,
+    "end": 0.63,
+    "note": "C4",
+    "conf": "Low"
+   },
+   {
+    "start": 0.64,
+    "end": 0.82,
+    "note": "A3",
+    "conf": "Low"
+   },
+   {
+    "start": 1.25,
+    "end": 1.51,
+    "note": "F4",
+    "conf": "Low"
+   },
+   {
+    "start": 1.81,
+    "end": 1.95,
+    "note": "E4",
+    "conf": "Low"
+   },
+   {
+    "start": 2.05,
+    "end": 2.27,
+    "note": "F4",
+    "conf": "Low"
+   },
+   {
+    "start": 3.31,
+    "end": 3.46,
+    "note": "D5",
+    "conf": "Low"
+   },
+   {
+    "start": 3.72,
+    "end": 4.17,
+    "note": "A#4",
+    "conf": "Low"
+   },
+   {
+    "start": 4.17,
+    "end": 4.32,
+    "note": "A#4",
+    "conf": "Low"
+   },
+   {
+    "start": 4.47,
+    "end": 4.6,
+    "note": "D5",
+    "conf": "Low"
+   },
+   {
+    "start": 4.9,
+    "end": 5.39,
+    "note": "E5",
+    "conf": "Low"
+   }
+  ],
+  "claude": [
+   {
+    "start": 0.35,
+    "end": 0.49,
+    "note": "C4",
+    "conf": "Medium"
+   },
+   {
+    "start": 1.04,
+    "end": 1.24,
+    "note": "D#3",
+    "conf": "Low"
+   },
+   {
+    "start": 1.28,
+    "end": 1.44,
+    "note": "F3",
+    "conf": "Low"
+   },
+   {
+    "start": 1.92,
+    "end": 2.19,
+    "note": "F3",
+    "conf": "Low"
+   },
+   {
+    "start": 2.64,
+    "end": 2.88,
+    "note": "C#3",
+    "conf": "Low"
+   },
+   {
+    "start": 3.33,
+    "end": 3.54,
+    "note": "D5",
+    "conf": "Medium"
+   },
+   {
+    "start": 5.24,
+    "end": 5.36,
+    "note": "E5",
+    "conf": "Low"
+   },
+   {
+    "start": 5.67,
+    "end": 5.79,
+    "note": "C5",
+    "conf": "Low"
+   },
+   {
+    "start": 20.6,
+    "end": 20.91,
+    "note": "F4",
+    "conf": "Low"
+   },
+   {
+    "start": 21.48,
+    "end": 21.61,
+    "note": "A4",
+    "conf": "Low"
+   }
+  ],
+  "n_ess": 228,
+  "n_py": 157
+ },
+ "TEST_010": {
+  "other_repo": [
+   {
+    "start": 1.19,
+    "end": 1.37,
+    "note": "F#4",
+    "conf": "Low"
+   },
+   {
+    "start": 1.38,
+    "end": 1.5,
+    "note": "D#4",
+    "conf": "Low"
+   },
+   {
+    "start": 1.5,
+    "end": 1.68,
+    "note": "G#4",
+    "conf": "Low"
+   },
+   {
+    "start": 2.47,
+    "end": 2.64,
+    "note": "B3",
+    "conf": "Low"
+   },
+   {
+    "start": 6.61,
+    "end": 6.83,
+    "note": "G#4",
+    "conf": "Low"
+   },
+   {
+    "start": 6.84,
+    "end": 7.02,
+    "note": "G4",
+    "conf": "Low"
+   },
+   {
+    "start": 11.47,
+    "end": 11.64,
+    "note": "A#3",
+    "conf": "Low"
+   },
+   {
+    "start": 15.11,
+    "end": 15.31,
+    "note": "B4",
+    "conf": "Low"
+   },
+   {
+    "start": 15.41,
+    "end": 15.7,
+    "note": "F#4",
+    "conf": "Low"
+   },
+   {
+    "start": 15.9,
+    "end": 16.06,
+    "note": "A4",
+    "conf": "Low"
+   }
+  ],
+  "claude": [
+   {
+    "start": 0.27,
+    "end": 0.55,
+    "note": "B3",
+    "conf": "Medium"
+   },
+   {
+    "start": 0.81,
+    "end": 1.18,
+    "note": "B2",
+    "conf": "Low"
+   },
+   {
+    "start": 2.69,
+    "end": 2.89,
+    "note": "C#4",
+    "conf": "Medium"
+   },
+   {
+    "start": 4.78,
+    "end": 4.96,
+    "note": "D#4",
+    "conf": "Medium"
+   },
+   {
+    "start": 6.03,
+    "end": 6.23,
+    "note": "A#2",
+    "conf": "Low"
+   },
+   {
+    "start": 6.87,
+    "end": 7.02,
+    "note": "G4",
+    "conf": "Medium"
+   },
+   {
+    "start": 8.0,
+    "end": 8.16,
+    "note": "C#4",
+    "conf": "Low"
+   },
+   {
+    "start": 10.18,
+    "end": 10.36,
+    "note": "G#3",
+    "conf": "Low"
+   },
+   {
+    "start": 15.87,
+    "end": 16.03,
+    "note": "A4",
+    "conf": "Medium"
+   },
+   {
+    "start": 16.15,
+    "end": 16.38,
+    "note": "A#2",
+    "conf": "Low"
+   }
+  ],
+  "n_ess": 306,
+  "n_py": 556
+ },
+ "TEST_011": {
+  "other_repo": [
+   {
+    "start": 2.26,
+    "end": 2.44,
+    "note": "G4",
+    "conf": "Low"
+   },
+   {
+    "start": 2.58,
+    "end": 2.78,
+    "note": "E4",
+    "conf": "Low"
+   },
+   {
+    "start": 2.97,
+    "end": 3.12,
+    "note": "F#4",
+    "conf": "Low"
+   },
+   {
+    "start": 3.23,
+    "end": 3.44,
+    "note": "G4",
+    "conf": "Low"
+   },
+   {
+    "start": 3.54,
+    "end": 3.76,
+    "note": "E4",
+    "conf": "Low"
+   },
+   {
+    "start": 9.3,
+    "end": 9.44,
+    "note": "F#4",
+    "conf": "Low"
+   },
+   {
+    "start": 9.55,
+    "end": 9.79,
+    "note": "D#4",
+    "conf": "Low"
+   },
+   {
+    "start": 11.84,
+    "end": 11.99,
+    "note": "E4",
+    "conf": "Low"
+   },
+   {
+    "start": 17.41,
+    "end": 17.59,
+    "note": "D4",
+    "conf": "Low"
+   },
+   {
+    "start": 17.76,
+    "end": 17.95,
+    "note": "D4",
+    "conf": "Low"
+   }
+  ],
+  "claude": [
+   {
+    "start": 1.63,
+    "end": 1.97,
+    "note": "E4",
+    "conf": "Medium"
+   },
+   {
+    "start": 2.0,
+    "end": 2.16,
+    "note": "F#4",
+    "conf": "Medium"
+   },
+   {
+    "start": 2.25,
+    "end": 2.47,
+    "note": "G4",
+    "conf": "Medium"
+   },
+   {
+    "start": 3.22,
+    "end": 3.44,
+    "note": "G4",
+    "conf": "Low"
+   },
+   {
+    "start": 3.49,
+    "end": 3.88,
+    "note": "E4",
+    "conf": "Low"
+   },
+   {
+    "start": 3.9,
+    "end": 4.08,
+    "note": "F#4",
+    "conf": "Low"
+   },
+   {
+    "start": 4.19,
+    "end": 4.44,
+    "note": "G3",
+    "conf": "Low"
+   },
+   {
+    "start": 5.32,
+    "end": 5.53,
+    "note": "B2",
+    "conf": "Low"
+   },
+   {
+    "start": 5.8,
+    "end": 5.94,
+    "note": "D#3",
+    "conf": "Low"
+   },
+   {
+    "start": 9.51,
+    "end": 9.8,
+    "note": "D#3",
+    "conf": "Low"
+   }
+  ],
+  "n_ess": 400,
+  "n_py": 446
+ },
+ "TEST_012": {
+  "other_repo": [
+   {
+    "start": 0.0,
+    "end": 0.3,
+    "note": "G#3",
+    "conf": "Low"
+   },
+   {
+    "start": 2.84,
+    "end": 2.98,
+    "note": "D#4",
+    "conf": "Low"
+   },
+   {
+    "start": 2.98,
+    "end": 3.19,
+    "note": "C#4",
+    "conf": "Low"
+   },
+   {
+    "start": 3.22,
+    "end": 3.68,
+    "note": "C#3",
+    "conf": "Low"
+   },
+   {
+    "start": 3.68,
+    "end": 3.85,
+    "note": "C#3",
+    "conf": "Low"
+   },
+   {
+    "start": 5.26,
+    "end": 5.41,
+    "note": "B3",
+    "conf": "Low"
+   },
+   {
+    "start": 6.07,
+    "end": 6.34,
+    "note": "G#3",
+    "conf": "Low"
+   },
+   {
+    "start": 8.39,
+    "end": 8.52,
+    "note": "D#4",
+    "conf": "Low"
+   },
+   {
+    "start": 13.86,
+    "end": 14.56,
+    "note": "C#4",
+    "conf": "Low"
+   },
+   {
+    "start": 15.02,
+    "end": 15.51,
+    "note": "E4",
+    "conf": "Low"
+   }
+  ],
+  "claude": [
+   {
+    "start": 0.67,
+    "end": 0.82,
+    "note": "G#3",
+    "conf": "Medium"
+   },
+   {
+    "start": 0.84,
+    "end": 0.96,
+    "note": "A#3",
+    "conf": "Low"
+   },
+   {
+    "start": 0.98,
+    "end": 1.14,
+    "note": "G#3",
+    "conf": "Low"
+   },
+   {
+    "start": 1.51,
+    "end": 1.64,
+    "note": "B3",
+    "conf": "Low"
+   },
+   {
+    "start": 1.81,
+    "end": 2.0,
+    "note": "A#3",
+    "conf": "Medium"
+   },
+   {
+    "start": 2.15,
+    "end": 2.29,
+    "note": "A#3",
+    "conf": "Medium"
+   },
+   {
+    "start": 2.37,
+    "end": 2.53,
+    "note": "C#4",
+    "conf": "Medium"
+   },
+   {
+    "start": 2.82,
+    "end": 3.01,
+    "note": "D#3",
+    "conf": "Low"
+   },
+   {
+    "start": 6.13,
+    "end": 6.37,
+    "note": "G#2",
+    "conf": "Low"
+   },
+   {
+    "start": 6.82,
+    "end": 7.04,
+    "note": "G#2",
+    "conf": "Low"
+   }
+  ],
+  "n_ess": 167,
+  "n_py": 317
+ },
+ "TEST_013": {
+  "other_repo": [
+   {
+    "start": 5.7,
+    "end": 6.3,
+    "note": "D3",
+    "conf": "Low"
+   },
+   {
+    "start": 6.51,
+    "end": 6.85,
+    "note": "G3",
+    "conf": "Low"
+   },
+   {
+    "start": 7.22,
+    "end": 7.77,
+    "note": "C3",
+    "conf": "Low"
+   },
+   {
+    "start": 7.78,
+    "end": 7.95,
+    "note": "C3",
+    "conf": "Low"
+   },
+   {
+    "start": 8.03,
+    "end": 8.21,
+    "note": "G3",
+    "conf": "Low"
+   },
+   {
+    "start": 8.74,
+    "end": 8.9,
+    "note": "A#4",
+    "conf": "Low"
+   },
+   {
+    "start": 8.91,
+    "end": 9.09,
+    "note": "B4",
+    "conf": "Low"
+   },
+   {
+    "start": 9.66,
+    "end": 9.96,
+    "note": "B4",
+    "conf": "Low"
+   },
+   {
+    "start": 9.97,
+    "end": 10.14,
+    "note": "E3",
+    "conf": "Low"
+   },
+   {
+    "start": 13.86,
+    "end": 14.46,
+    "note": "C3",
+    "conf": "Low"
+   }
+  ],
+  "claude": [
+   {
+    "start": 0.09,
+    "end": 0.38,
+    "note": "C3",
+    "conf": "Low"
+   },
+   {
+    "start": 1.85,
+    "end": 2.02,
+    "note": "C3",
+    "conf": "Low"
+   },
+   {
+    "start": 3.56,
+    "end": 3.73,
+    "note": "F#2",
+    "conf": "Low"
+   },
+   {
+    "start": 4.76,
+    "end": 5.0,
+    "note": "C3",
+    "conf": "Low"
+   },
+   {
+    "start": 5.12,
+    "end": 5.46,
+    "note": "A2",
+    "conf": "Medium"
+   },
+   {
+    "start": 5.54,
+    "end": 5.67,
+    "note": "A2",
+    "conf": "Low"
+   },
+   {
+    "start": 5.69,
+    "end": 6.0,
+    "note": "D3",
+    "conf": "Medium"
+   },
+   {
+    "start": 6.82,
+    "end": 7.71,
+    "note": "C3",
+    "conf": "Low"
+   },
+   {
+    "start": 8.68,
+    "end": 8.82,
+    "note": "A2",
+    "conf": "Low"
+   },
+   {
+    "start": 9.2,
+    "end": 9.53,
+    "note": "C3",
+    "conf": "Low"
+   }
+  ],
+  "n_ess": 205,
+  "n_py": 578
+ },
+ "TEST_014": {
+  "other_repo": [
+   {
+    "start": 0.62,
+    "end": 0.93,
+    "note": "D#3",
+    "conf": "Low"
+   },
+   {
+    "start": 1.04,
+    "end": 1.18,
+    "note": "G3",
+    "conf": "Low"
+   },
+   {
+    "start": 1.28,
+    "end": 2.05,
+    "note": "A#3",
+    "conf": "Low"
+   },
+   {
+    "start": 2.25,
+    "end": 2.53,
+    "note": "A#3",
+    "conf": "Low"
+   },
+   {
+    "start": 2.54,
+    "end": 2.73,
+    "note": "C4",
+    "conf": "Low"
+   },
+   {
+    "start": 3.26,
+    "end": 3.57,
+    "note": "C4",
+    "conf": "Low"
+   },
+   {
+    "start": 3.76,
+    "end": 4.29,
+    "note": "A#3",
+    "conf": "Low"
+   },
+   {
+    "start": 4.42,
+    "end": 4.85,
+    "note": "G3",
+    "conf": "Low"
+   },
+   {
+    "start": 5.52,
+    "end": 6.16,
+    "note": "G3",
+    "conf": "Low"
+   },
+   {
+    "start": 6.27,
+    "end": 6.44,
+    "note": "G3",
+    "conf": "Low"
+   }
+  ],
+  "claude": [
+   {
+    "start": 0.64,
+    "end": 0.93,
+    "note": "D#3",
+    "conf": "Medium"
+   },
+   {
+    "start": 0.99,
+    "end": 1.24,
+    "note": "G3",
+    "conf": "Low"
+   },
+   {
+    "start": 1.27,
+    "end": 2.15,
+    "note": "A#3",
+    "conf": "High"
+   },
+   {
+    "start": 2.26,
+    "end": 2.55,
+    "note": "A#3",
+    "conf": "Medium"
+   },
+   {
+    "start": 3.12,
+    "end": 3.26,
+    "note": "A#3",
+    "conf": "Low"
+   },
+   {
+    "start": 3.74,
+    "end": 4.28,
+    "note": "A#3",
+    "conf": "Medium"
+   },
+   {
+    "start": 4.44,
+    "end": 4.75,
+    "note": "G3",
+    "conf": "Medium"
+   },
+   {
+    "start": 5.46,
+    "end": 6.07,
+    "note": "G3",
+    "conf": "Medium"
+   },
+   {
+    "start": 6.15,
+    "end": 6.34,
+    "note": "G3",
+    "conf": "Low"
+   },
+   {
+    "start": 6.43,
+    "end": 6.65,
+    "note": "G3",
+    "conf": "Low"
+   }
+  ],
+  "n_ess": 147,
+  "n_py": 293
+ },
+ "TEST_015": {
+  "other_repo": [
+   {
+    "start": 1.18,
+    "end": 1.7,
+    "note": "C4",
+    "conf": "Low"
+   },
+   {
+    "start": 1.7,
+    "end": 1.89,
+    "note": "C4",
+    "conf": "Low"
+   },
+   {
+    "start": 1.9,
+    "end": 2.1,
+    "note": "E4",
+    "conf": "Low"
+   },
+   {
+    "start": 2.21,
+    "end": 2.38,
+    "note": "E4",
+    "conf": "Low"
+   },
+   {
+    "start": 2.68,
+    "end": 2.86,
+    "note": "F4",
+    "conf": "Low"
+   },
+   {
+    "start": 2.86,
+    "end": 3.09,
+    "note": "D#4",
+    "conf": "Low"
+   },
+   {
+    "start": 3.68,
+    "end": 3.97,
+    "note": "D4",
+    "conf": "Low"
+   },
+   {
+    "start": 5.75,
+    "end": 5.89,
+    "note": "E4",
+    "conf": "Low"
+   },
+   {
+    "start": 5.9,
+    "end": 6.1,
+    "note": "D4",
+    "conf": "Low"
+   },
+   {
+    "start": 6.11,
+    "end": 6.24,
+    "note": "D#4",
+    "conf": "Low"
+   }
+  ],
+  "claude": [
+   {
+    "start": 0.39,
+    "end": 1.08,
+    "note": "F2",
+    "conf": "Low"
+   },
+   {
+    "start": 1.27,
+    "end": 1.63,
+    "note": "F2",
+    "conf": "Low"
+   },
+   {
+    "start": 2.19,
+    "end": 2.45,
+    "note": "E4",
+    "conf": "Low"
+   },
+   {
+    "start": 2.66,
+    "end": 2.83,
+    "note": "F4",
+    "conf": "Low"
+   },
+   {
+    "start": 3.38,
+    "end": 3.51,
+    "note": "D4",
+    "conf": "Low"
+   },
+   {
+    "start": 3.54,
+    "end": 3.68,
+    "note": "E4",
+    "conf": "Low"
+   },
+   {
+    "start": 3.73,
+    "end": 3.99,
+    "note": "D4",
+    "conf": "Medium"
+   },
+   {
+    "start": 5.75,
+    "end": 5.87,
+    "note": "E4",
+    "conf": "Low"
+   },
+   {
+    "start": 5.94,
+    "end": 6.07,
+    "note": "D3",
+    "conf": "Low"
+   },
+   {
+    "start": 8.58,
+    "end": 8.79,
+    "note": "E4",
+    "conf": "Medium"
+   }
+  ],
+  "n_ess": 119,
+  "n_py": 114
+ },
+ "TEST_016": {
+  "other_repo": [
+   {
+    "start": 1.81,
+    "end": 2.01,
+    "note": "F5",
+    "conf": "Low"
+   },
+   {
+    "start": 2.18,
+    "end": 2.37,
+    "note": "F5",
+    "conf": "Low"
+   },
+   {
+    "start": 2.38,
+    "end": 4.5,
+    "note": "A5",
+    "conf": "Low"
+   },
+   {
+    "start": 7.12,
+    "end": 7.32,
+    "note": "B5",
+    "conf": "Low"
+   },
+   {
+    "start": 15.11,
+    "end": 15.42,
+    "note": "E4",
+    "conf": "Low"
+   },
+   {
+    "start": 15.88,
+    "end": 16.29,
+    "note": "G#4",
+    "conf": "Low"
+   },
+   {
+    "start": 16.29,
+    "end": 16.7,
+    "note": "G#4",
+    "conf": "Low"
+   },
+   {
+    "start": 16.71,
+    "end": 16.84,
+    "note": "A5",
+    "conf": "Low"
+   },
+   {
+    "start": 16.85,
+    "end": 17.02,
+    "note": "A5",
+    "conf": "Low"
+   },
+   {
+    "start": 17.03,
+    "end": 18.54,
+    "note": "B4",
+    "conf": "Low"
+   }
+  ],
+  "claude": [
+   {
+    "start": 1.09,
+    "end": 1.47,
+    "note": "E4",
+    "conf": "Low"
+   },
+   {
+    "start": 5.18,
+    "end": 5.89,
+    "note": "E4",
+    "conf": "Low"
+   },
+   {
+    "start": 6.64,
+    "end": 7.05,
+    "note": "D4",
+    "conf": "Low"
+   },
+   {
+    "start": 7.09,
+    "end": 7.28,
+    "note": "E4",
+    "conf": "Low"
+   },
+   {
+    "start": 7.48,
+    "end": 7.95,
+    "note": "E3",
+    "conf": "Low"
+   },
+   {
+    "start": 7.99,
+    "end": 8.21,
+    "note": "A2",
+    "conf": "Low"
+   },
+   {
+    "start": 10.44,
+    "end": 10.57,
+    "note": "D#4",
+    "conf": "Low"
+   },
+   {
+    "start": 12.49,
+    "end": 13.27,
+    "note": "E4",
+    "conf": "Low"
+   },
+   {
+    "start": 15.07,
+    "end": 15.31,
+    "note": "D#4",
+    "conf": "Low"
+   },
+   {
+    "start": 16.0,
+    "end": 16.13,
+    "note": "G#3",
+    "conf": "Low"
+   }
+  ],
+  "n_ess": 187,
+  "n_py": 273
+ },
+ "TEST_017": {
+  "other_repo": [
+   {
+    "start": 12.76,
+    "end": 14.16,
+    "note": "F#3",
+    "conf": "Low"
+   },
+   {
+    "start": 14.28,
+    "end": 14.65,
+    "note": "F#3",
+    "conf": "Low"
+   },
+   {
+    "start": 15.96,
+    "end": 16.25,
+    "note": "D4",
+    "conf": "Low"
+   },
+   {
+    "start": 18.39,
+    "end": 19.01,
+    "note": "D4",
+    "conf": "Low"
+   },
+   {
+    "start": 20.27,
+    "end": 20.6,
+    "note": "F#3",
+    "conf": "Low"
+   },
+   {
+    "start": 20.95,
+    "end": 21.19,
+    "note": "F#3",
+    "conf": "Low"
+   },
+   {
+    "start": 21.19,
+    "end": 22.06,
+    "note": "F#3",
+    "conf": "Low"
+   },
+   {
+    "start": 30.65,
+    "end": 30.86,
+    "note": "C#4",
+    "conf": "Low"
+   },
+   {
+    "start": 30.87,
+    "end": 31.0,
+    "note": "C#4",
+    "conf": "Low"
+   },
+   {
+    "start": 31.0,
+    "end": 31.28,
+    "note": "C#4",
+    "conf": "Low"
+   }
+  ],
+  "claude": [
+   {
+    "start": 7.55,
+    "end": 7.96,
+    "note": "F#4",
+    "conf": "Medium"
+   },
+   {
+    "start": 8.0,
+    "end": 8.37,
+    "note": "A4",
+    "conf": "High"
+   },
+   {
+    "start": 8.74,
+    "end": 9.0,
+    "note": "G2",
+    "conf": "Low"
+   },
+   {
+    "start": 10.59,
+    "end": 10.79,
+    "note": "E4",
+    "conf": "Low"
+   },
+   {
+    "start": 11.52,
+    "end": 11.9,
+    "note": "F#2",
+    "conf": "Low"
+   },
+   {
+    "start": 13.49,
+    "end": 13.7,
+    "note": "F#2",
+    "conf": "Low"
+   },
+   {
+    "start": 15.21,
+    "end": 15.74,
+    "note": "E2",
+    "conf": "Low"
+   },
+   {
+    "start": 15.96,
+    "end": 16.13,
+    "note": "G2",
+    "conf": "Low"
+   },
+   {
+    "start": 18.66,
+    "end": 18.89,
+    "note": "D3",
+    "conf": "Low"
+   },
+   {
+    "start": 20.4,
+    "end": 20.61,
+    "note": "F#3",
+    "conf": "Low"
+   }
+  ],
+  "n_ess": 315,
+  "n_py": 545
+ },
+ "TEST_018": {
+  "other_repo": [
+   {
+    "start": 6.67,
+    "end": 6.84,
+    "note": "G4",
+    "conf": "Low"
+   },
+   {
+    "start": 7.65,
+    "end": 7.84,
+    "note": "C4",
+    "conf": "Low"
+   },
+   {
+    "start": 8.66,
+    "end": 8.91,
+    "note": "C#4",
+    "conf": "Low"
+   },
+   {
+    "start": 10.31,
+    "end": 10.48,
+    "note": "F#4",
+    "conf": "Low"
+   },
+   {
+    "start": 11.18,
+    "end": 11.58,
+    "note": "B3",
+    "conf": "Low"
+   },
+   {
+    "start": 11.59,
+    "end": 11.77,
+    "note": "C4",
+    "conf": "Low"
+   },
+   {
+    "start": 12.47,
+    "end": 13.06,
+    "note": "E4",
+    "conf": "Low"
+   },
+   {
+    "start": 14.94,
+    "end": 15.15,
+    "note": "B3",
+    "conf": "Low"
+   },
+   {
+    "start": 15.49,
+    "end": 15.64,
+    "note": "B3",
+    "conf": "Low"
+   },
+   {
+    "start": 15.75,
+    "end": 15.91,
+    "note": "C#4",
+    "conf": "Low"
+   }
+  ],
+  "claude": [
+   {
+    "start": 0.42,
+    "end": 0.62,
+    "note": "E2",
+    "conf": "Low"
+   },
+   {
+    "start": 0.96,
+    "end": 1.17,
+    "note": "E3",
+    "conf": "Low"
+   },
+   {
+    "start": 2.0,
+    "end": 2.31,
+    "note": "G2",
+    "conf": "Low"
+   },
+   {
+    "start": 3.37,
+    "end": 3.84,
+    "note": "B2",
+    "conf": "Low"
+   },
+   {
+    "start": 4.54,
+    "end": 4.81,
+    "note": "G2",
+    "conf": "Low"
+   },
+   {
+    "start": 4.86,
+    "end": 5.72,
+    "note": "G2",
+    "conf": "Low"
+   },
+   {
+    "start": 5.84,
+    "end": 6.08,
+    "note": "G2",
+    "conf": "Low"
+   },
+   {
+    "start": 8.21,
+    "end": 8.36,
+    "note": "G2",
+    "conf": "Low"
+   },
+   {
+    "start": 8.42,
+    "end": 8.68,
+    "note": "G2",
+    "conf": "Low"
+   },
+   {
+    "start": 8.96,
+    "end": 9.1,
+    "note": "G2",
+    "conf": "Low"
+   }
+  ],
+  "n_ess": 267,
+  "n_py": 461
+ },
+ "TEST_019": {
+  "other_repo": [
+   {
+    "start": 0.08,
+    "end": 0.24,
+    "note": "F3",
+    "conf": "Low"
+   },
+   {
+    "start": 0.41,
+    "end": 0.6,
+    "note": "F3",
+    "conf": "Low"
+   },
+   {
+    "start": 0.67,
+    "end": 0.89,
+    "note": "C#4",
+    "conf": "Low"
+   },
+   {
+    "start": 1.11,
+    "end": 1.58,
+    "note": "F3",
+    "conf": "Low"
+   },
+   {
+    "start": 4.09,
+    "end": 4.43,
+    "note": "A4",
+    "conf": "Low"
+   },
+   {
+    "start": 4.55,
+    "end": 4.87,
+    "note": "F#4",
+    "conf": "Low"
+   },
+   {
+    "start": 5.56,
+    "end": 5.86,
+    "note": "A#3",
+    "conf": "Low"
+   },
+   {
+    "start": 6.09,
+    "end": 6.34,
+    "note": "D#5",
+    "conf": "Low"
+   },
+   {
+    "start": 6.34,
+    "end": 6.52,
+    "note": "G4",
+    "conf": "Low"
+   },
+   {
+    "start": 8.14,
+    "end": 8.34,
+    "note": "C4",
+    "conf": "Low"
+   }
+  ],
+  "claude": [
+   {
+    "start": 0.08,
+    "end": 0.62,
+    "note": "F2",
+    "conf": "Low"
+   },
+   {
+    "start": 1.3,
+    "end": 1.57,
+    "note": "F2",
+    "conf": "Low"
+   },
+   {
+    "start": 2.02,
+    "end": 2.87,
+    "note": "F2",
+    "conf": "Low"
+   },
+   {
+    "start": 2.91,
+    "end": 3.05,
+    "note": "F2",
+    "conf": "Low"
+   },
+   {
+    "start": 3.1,
+    "end": 3.45,
+    "note": "F2",
+    "conf": "Low"
+   },
+   {
+    "start": 4.06,
+    "end": 4.3,
+    "note": "A2",
+    "conf": "Low"
+   },
+   {
+    "start": 6.07,
+    "end": 6.27,
+    "note": "G#2",
+    "conf": "Low"
+   },
+   {
+    "start": 6.34,
+    "end": 6.52,
+    "note": "G2",
+    "conf": "Low"
+   },
+   {
+    "start": 7.09,
+    "end": 7.56,
+    "note": "G2",
+    "conf": "Low"
+   },
+   {
+    "start": 12.06,
+    "end": 12.29,
+    "note": "F#2",
+    "conf": "Low"
+   }
+  ],
+  "n_ess": 265,
+  "n_py": 406
+ },
+ "TEST_020": {
+  "other_repo": [
+   {
+    "start": 0.1,
+    "end": 0.57,
+    "note": "G#3",
+    "conf": "Low"
+   },
+   {
+    "start": 8.86,
+    "end": 8.98,
+    "note": "G#3",
+    "conf": "Low"
+   },
+   {
+    "start": 9.11,
+    "end": 9.27,
+    "note": "G#3",
+    "conf": "Low"
+   },
+   {
+    "start": 9.27,
+    "end": 9.44,
+    "note": "A#3",
+    "conf": "Low"
+   },
+   {
+    "start": 9.79,
+    "end": 10.08,
+    "note": "A3",
+    "conf": "Low"
+   },
+   {
+    "start": 10.19,
+    "end": 10.51,
+    "note": "G#3",
+    "conf": "Low"
+   },
+   {
+    "start": 13.67,
+    "end": 13.86,
+    "note": "G#3",
+    "conf": "Low"
+   },
+   {
+    "start": 13.87,
+    "end": 14.03,
+    "note": "F#3",
+    "conf": "Low"
+   },
+   {
+    "start": 14.29,
+    "end": 14.45,
+    "note": "A3",
+    "conf": "Low"
+   },
+   {
+    "start": 14.45,
+    "end": 14.59,
+    "note": "G#3",
+    "conf": "Low"
+   }
+  ],
+  "claude": [
+   {
+    "start": 2.02,
+    "end": 2.21,
+    "note": "F#3",
+    "conf": "Low"
+   },
+   {
+    "start": 2.22,
+    "end": 2.89,
+    "note": "G#3",
+    "conf": "High"
+   },
+   {
+    "start": 3.15,
+    "end": 3.55,
+    "note": "B3",
+    "conf": "Low"
+   },
+   {
+    "start": 4.99,
+    "end": 6.29,
+    "note": "A2",
+    "conf": "Low"
+   },
+   {
+    "start": 6.44,
+    "end": 7.01,
+    "note": "E2",
+    "conf": "Low"
+   },
+   {
+    "start": 7.05,
+    "end": 7.59,
+    "note": "B2",
+    "conf": "Medium"
+   },
+   {
+    "start": 9.82,
+    "end": 10.09,
+    "note": "A3",
+    "conf": "Low"
+   },
+   {
+    "start": 10.17,
+    "end": 10.48,
+    "note": "G#3",
+    "conf": "Low"
+   },
+   {
+    "start": 10.7,
+    "end": 10.98,
+    "note": "E3",
+    "conf": "Medium"
+   },
+   {
+    "start": 12.31,
+    "end": 12.78,
+    "note": "E2",
+    "conf": "Low"
+   }
+  ],
+  "n_ess": 276,
+  "n_py": 617
+ }
+}

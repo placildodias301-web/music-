@@ -1,0 +1,542 @@
+{
+ "TEST_001": {
+  "raw": {
+   "ess_multifeature": 123.6,
+   "ess_degara": 123.6,
+   "lib_beat_track": 123.0,
+   "tempogram": 126.0,
+   "autocorr": 123.0,
+   "ioi_hist": 225.0
+  },
+  "pulse_bpm": 123.0,
+  "measured_bpm": 123.05,
+  "beats": 62,
+  "cv_pct": 7.1,
+  "direct_support": "5/6",
+  "half": 61.5,
+  "double": 246.1,
+  "tempo_conf": "MEDIUM",
+  "tempo_note": "",
+  "meter": {
+   "ts": "3/4",
+   "conf": "MEDIUM",
+   "grouping": 3,
+   "subdiv": 2,
+   "note": "accent period=3 beats (score 1.00, margin 0.46); triplet-vs-duple subdiv ratio 0.98; 61 beats",
+   "beats": 61
+  }
+ },
+ "TEST_002": {
+  "raw": {
+   "ess_multifeature": 178.2,
+   "ess_degara": 178.2,
+   "lib_beat_track": 90.7,
+   "tempogram": 178.2,
+   "autocorr": 178.2,
+   "ioi_hist": 179.0
+  },
+  "pulse_bpm": 178.2,
+  "measured_bpm": 178.21,
+  "beats": 410,
+  "cv_pct": 0.0,
+  "direct_support": "5/6",
+  "half": 89.1,
+  "double": 356.4,
+  "tempo_conf": "HIGH",
+  "tempo_note": "",
+  "meter": {
+   "ts": "AMBIGUOUS",
+   "conf": "LOW",
+   "grouping": null,
+   "subdiv": null,
+   "note": "accent period=2 beats (score 0.09, margin 0.04); triplet-vs-duple subdiv ratio 1.00; 405 beats",
+   "beats": 405
+  }
+ },
+ "TEST_003": {
+  "raw": {
+   "ess_multifeature": 154.4,
+   "ess_degara": 103.2,
+   "lib_beat_track": 147.7,
+   "tempogram": 156.6,
+   "autocorr": 51.7,
+   "ioi_hist": 147.0
+  },
+  "pulse_bpm": 147.0,
+  "measured_bpm": 156.61,
+  "beats": 66,
+  "cv_pct": 4.5,
+  "direct_support": "2/6",
+  "half": 73.5,
+  "double": 294.0,
+  "tempo_conf": "LOW",
+  "tempo_note": "methods disagree (octave/tempo ambiguity)",
+  "meter": {
+   "ts": "4/4",
+   "conf": "MEDIUM",
+   "grouping": 4,
+   "subdiv": 2,
+   "note": "accent period=4 beats (score 0.62, margin 0.39); triplet-vs-duple subdiv ratio 0.99; 66 beats",
+   "beats": 66
+  }
+ },
+ "TEST_004": {
+  "raw": {
+   "ess_multifeature": 108.4,
+   "ess_degara": 113.4,
+   "lib_beat_track": 110.0,
+   "tempogram": 215.3,
+   "autocorr": 53.8,
+   "ioi_hist": 179.0
+  },
+  "pulse_bpm": 110.0,
+  "measured_bpm": 107.67,
+  "beats": 170,
+  "cv_pct": 6.2,
+  "direct_support": "3/6",
+  "half": 55.0,
+  "double": 219.9,
+  "tempo_conf": "MEDIUM",
+  "tempo_note": "",
+  "meter": {
+   "ts": "2/4",
+   "conf": "LOW",
+   "grouping": 2,
+   "subdiv": 2,
+   "note": "accent period=2 beats (score 0.58, margin 0.20); triplet-vs-duple subdiv ratio 1.04; 171 beats",
+   "beats": 171
+  }
+ },
+ "TEST_005": {
+  "raw": {
+   "ess_multifeature": 129.5,
+   "ess_degara": 131.3,
+   "lib_beat_track": 129.2,
+   "tempogram": 129.2,
+   "autocorr": 63.8,
+   "ioi_hist": 133.0
+  },
+  "pulse_bpm": 129.2,
+  "measured_bpm": 129.2,
+  "beats": 66,
+  "cv_pct": 3.7,
+  "direct_support": "5/6",
+  "half": 64.6,
+  "double": 258.4,
+  "tempo_conf": "HIGH",
+  "tempo_note": "",
+  "meter": {
+   "ts": "AMBIGUOUS",
+   "conf": "LOW",
+   "grouping": null,
+   "subdiv": null,
+   "note": "accent period=4 beats (score 0.87, margin 0.07); triplet-vs-duple subdiv ratio 0.59; 65 beats",
+   "beats": 65
+  }
+ },
+ "TEST_006": {
+  "raw": {
+   "ess_multifeature": 104.5,
+   "ess_degara": 105.2,
+   "lib_beat_track": 105.5,
+   "tempogram": 105.5,
+   "autocorr": 105.5,
+   "ioi_hist": 179.0
+  },
+  "pulse_bpm": 105.2,
+  "measured_bpm": 103.36,
+  "beats": 127,
+  "cv_pct": 3.0,
+  "direct_support": "5/6",
+  "half": 52.6,
+  "double": 210.3,
+  "tempo_conf": "HIGH",
+  "tempo_note": "",
+  "meter": {
+   "ts": "12/8",
+   "conf": "LOW",
+   "grouping": 4,
+   "subdiv": 3,
+   "note": "accent period=4 beats (score 0.34, margin 0.21); triplet-vs-duple subdiv ratio 1.53; 125 beats",
+   "beats": 125
+  }
+ },
+ "TEST_007": {
+  "raw": {
+   "ess_multifeature": 117.9,
+   "ess_degara": 118.0,
+   "lib_beat_track": 120.2,
+   "tempogram": 120.2,
+   "autocorr": 120.2,
+   "ioi_hist": 117.0
+  },
+  "pulse_bpm": 117.0,
+  "measured_bpm": 118.8,
+  "beats": 63,
+  "cv_pct": 3.4,
+  "direct_support": "6/6",
+  "half": 58.5,
+  "double": 234.0,
+  "tempo_conf": "HIGH",
+  "tempo_note": "",
+  "meter": {
+   "ts": "AMBIGUOUS",
+   "conf": "LOW",
+   "grouping": null,
+   "subdiv": null,
+   "note": "accent period=2 beats (score 0.44, margin 0.02); triplet-vs-duple subdiv ratio 1.55; 62 beats",
+   "beats": 62
+  }
+ },
+ "TEST_008": {
+  "raw": {
+   "ess_multifeature": 98.8,
+   "ess_degara": 98.9,
+   "lib_beat_track": 99.4,
+   "tempogram": 198.8,
+   "autocorr": 198.8,
+   "ioi_hist": 199.0
+  },
+  "pulse_bpm": 99.5,
+  "measured_bpm": 99.38,
+  "beats": 49,
+  "cv_pct": 2.9,
+  "direct_support": "3/6",
+  "half": 49.8,
+  "double": 199.0,
+  "tempo_conf": "MEDIUM",
+  "tempo_note": "",
+  "meter": {
+   "ts": "2/4",
+   "conf": "MEDIUM",
+   "grouping": 2,
+   "subdiv": 2,
+   "note": "accent period=2 beats (score 1.44, margin 0.82); triplet-vs-duple subdiv ratio 0.49; 48 beats",
+   "beats": 48
+  }
+ },
+ "TEST_009": {
+  "raw": {
+   "ess_multifeature": 104.0,
+   "ess_degara": 104.0,
+   "lib_beat_track": 139.7,
+   "tempogram": 206.7,
+   "autocorr": 52.2,
+   "ioi_hist": 207.0
+  },
+  "pulse_bpm": 104.4,
+  "measured_bpm": 103.36,
+  "beats": 118,
+  "cv_pct": 0.0,
+  "direct_support": "2/6",
+  "half": 52.2,
+  "double": 208.8,
+  "tempo_conf": "LOW",
+  "tempo_note": "methods disagree (octave/tempo ambiguity)",
+  "meter": {
+   "ts": "4/4",
+   "conf": "LOW",
+   "grouping": 4,
+   "subdiv": 2,
+   "note": "accent period=4 beats (score 0.38, margin 0.09); triplet-vs-duple subdiv ratio 0.96; 116 beats",
+   "beats": 116
+  }
+ },
+ "TEST_010": {
+  "raw": {
+   "ess_multifeature": 111.6,
+   "ess_degara": 112.0,
+   "lib_beat_track": 112.3,
+   "tempogram": 112.3,
+   "autocorr": 112.3,
+   "ioi_hist": 173.0
+  },
+  "pulse_bpm": 111.6,
+  "measured_bpm": 112.35,
+  "beats": 143,
+  "cv_pct": 3.2,
+  "direct_support": "5/6",
+  "half": 55.8,
+  "double": 223.3,
+  "tempo_conf": "HIGH",
+  "tempo_note": "",
+  "meter": {
+   "ts": "6/8",
+   "conf": "MEDIUM",
+   "grouping": 2,
+   "subdiv": 3,
+   "note": "accent period=2 beats (score 0.70, margin 0.55); triplet-vs-duple subdiv ratio 1.38; 142 beats",
+   "beats": 142
+  }
+ },
+ "TEST_011": {
+  "raw": {
+   "ess_multifeature": 122.1,
+   "ess_degara": 122.1,
+   "lib_beat_track": 123.0,
+   "tempogram": 123.0,
+   "autocorr": 60.8,
+   "ioi_hist": 247.0
+  },
+  "pulse_bpm": 121.6,
+  "measured_bpm": 123.05,
+  "beats": 196,
+  "cv_pct": 0.0,
+  "direct_support": "4/6",
+  "half": 60.8,
+  "double": 243.2,
+  "tempo_conf": "HIGH",
+  "tempo_note": "",
+  "meter": {
+   "ts": "AMBIGUOUS",
+   "conf": "LOW",
+   "grouping": null,
+   "subdiv": null,
+   "note": "accent period=3 beats (score 0.13, margin 0.04); triplet-vs-duple subdiv ratio 0.91; 197 beats",
+   "beats": 197
+  }
+ },
+ "TEST_012": {
+  "raw": {
+   "ess_multifeature": 119.7,
+   "ess_degara": 89.2,
+   "lib_beat_track": 117.5,
+   "tempogram": 184.6,
+   "autocorr": 117.5,
+   "ioi_hist": 191.0
+  },
+  "pulse_bpm": 117.5,
+  "measured_bpm": 117.45,
+  "beats": 79,
+  "cv_pct": 3.4,
+  "direct_support": "3/6",
+  "half": 58.7,
+  "double": 234.9,
+  "tempo_conf": "MEDIUM",
+  "tempo_note": "",
+  "meter": {
+   "ts": "AMBIGUOUS",
+   "conf": "LOW",
+   "grouping": null,
+   "subdiv": null,
+   "note": "accent period=4 beats (score 0.34, margin 0.02); triplet-vs-duple subdiv ratio 0.87; 78 beats",
+   "beats": 78
+  }
+ },
+ "TEST_013": {
+  "raw": {
+   "ess_multifeature": 102.7,
+   "ess_degara": 102.0,
+   "lib_beat_track": 103.4,
+   "tempogram": 215.3,
+   "autocorr": 103.4,
+   "ioi_hist": 215.0
+  },
+  "pulse_bpm": 103.4,
+  "measured_bpm": 103.36,
+  "beats": 135,
+  "cv_pct": 5.9,
+  "direct_support": "4/6",
+  "half": 51.7,
+  "double": 206.7,
+  "tempo_conf": "MEDIUM",
+  "tempo_note": "",
+  "meter": {
+   "ts": "2/4",
+   "conf": "MEDIUM",
+   "grouping": 2,
+   "subdiv": 2,
+   "note": "accent period=2 beats (score 0.57, margin 0.35); triplet-vs-duple subdiv ratio 0.83; 133 beats",
+   "beats": 133
+  }
+ },
+ "TEST_014": {
+  "raw": {
+   "ess_multifeature": 99.7,
+   "ess_degara": 100.6,
+   "lib_beat_track": 99.4,
+   "tempogram": 206.7,
+   "autocorr": 198.8,
+   "ioi_hist": 191.0
+  },
+  "pulse_bpm": 103.4,
+  "measured_bpm": 99.38,
+  "beats": 70,
+  "cv_pct": 5.7,
+  "direct_support": "3/6",
+  "half": 51.7,
+  "double": 206.7,
+  "tempo_conf": "MEDIUM",
+  "tempo_note": "",
+  "meter": {
+   "ts": "2/4",
+   "conf": "MEDIUM",
+   "grouping": 2,
+   "subdiv": 2,
+   "note": "accent period=2 beats (score 1.11, margin 0.48); triplet-vs-duple subdiv ratio 0.90; 70 beats",
+   "beats": 70
+  }
+ },
+ "TEST_015": {
+  "raw": {
+   "ess_multifeature": 112.5,
+   "ess_degara": 114.0,
+   "lib_beat_track": 114.8,
+   "tempogram": 114.8,
+   "autocorr": 56.8,
+   "ioi_hist": 225.0
+  },
+  "pulse_bpm": 112.5,
+  "measured_bpm": 112.35,
+  "beats": 53,
+  "cv_pct": 3.2,
+  "direct_support": "4/6",
+  "half": 56.2,
+  "double": 225.0,
+  "tempo_conf": "HIGH",
+  "tempo_note": "",
+  "meter": {
+   "ts": "AMBIGUOUS",
+   "conf": "LOW",
+   "grouping": null,
+   "subdiv": null,
+   "note": "accent period=2 beats (score 0.57, margin 0.06); triplet-vs-duple subdiv ratio 0.68; 52 beats",
+   "beats": 52
+  }
+ },
+ "TEST_016": {
+  "raw": {
+   "ess_multifeature": 125.9,
+   "ess_degara": 125.9,
+   "lib_beat_track": 126.0,
+   "tempogram": 215.3,
+   "autocorr": 83.4,
+   "ioi_hist": 235.0
+  },
+  "pulse_bpm": 125.9,
+  "measured_bpm": 126.05,
+  "beats": 154,
+  "cv_pct": 3.6,
+  "direct_support": "3/6",
+  "half": 62.9,
+  "double": 251.8,
+  "tempo_conf": "MEDIUM",
+  "tempo_note": "",
+  "meter": {
+   "ts": "4/4",
+   "conf": "MEDIUM",
+   "grouping": 4,
+   "subdiv": 2,
+   "note": "accent period=4 beats (score 1.03, margin 0.90); triplet-vs-duple subdiv ratio 0.98; 151 beats",
+   "beats": 151
+  }
+ },
+ "TEST_017": {
+  "raw": {
+   "ess_multifeature": 111.2,
+   "ess_degara": 108.8,
+   "lib_beat_track": 123.0,
+   "tempogram": 215.3,
+   "autocorr": 172.3,
+   "ioi_hist": 235.0
+  },
+  "pulse_bpm": 107.7,
+  "measured_bpm": 108.8,
+  "beats": 231,
+  "cv_pct": 10.9,
+  "direct_support": "2/6",
+  "half": 53.8,
+  "double": 215.3,
+  "tempo_conf": "LOW",
+  "tempo_note": "VARIABLE TEMPO",
+  "meter": {
+   "ts": "3/4",
+   "conf": "LOW",
+   "grouping": 3,
+   "subdiv": 2,
+   "note": "accent period=3 beats (score 0.44, margin 0.22); triplet-vs-duple subdiv ratio 1.00; 240 beats",
+   "beats": 240
+  }
+ },
+ "TEST_018": {
+  "raw": {
+   "ess_multifeature": 120.5,
+   "ess_degara": 120.4,
+   "lib_beat_track": 120.2,
+   "tempogram": 120.2,
+   "autocorr": 120.2,
+   "ioi_hist": 247.0
+  },
+  "pulse_bpm": 120.2,
+  "measured_bpm": 120.19,
+  "beats": 154,
+  "cv_pct": 3.4,
+  "direct_support": "5/6",
+  "half": 60.1,
+  "double": 240.4,
+  "tempo_conf": "HIGH",
+  "tempo_note": "",
+  "meter": {
+   "ts": "4/4",
+   "conf": "LOW",
+   "grouping": 4,
+   "subdiv": 2,
+   "note": "accent period=4 beats (score 0.41, margin 0.23); triplet-vs-duple subdiv ratio 0.84; 146 beats",
+   "beats": 146
+  }
+ },
+ "TEST_019": {
+  "raw": {
+   "ess_multifeature": 118.7,
+   "ess_degara": 118.7,
+   "lib_beat_track": 120.2,
+   "tempogram": 120.2,
+   "autocorr": 120.2,
+   "ioi_hist": 121.0
+  },
+  "pulse_bpm": 118.7,
+  "measured_bpm": 120.19,
+  "beats": 165,
+  "cv_pct": 3.4,
+  "direct_support": "6/6",
+  "half": 59.4,
+  "double": 237.4,
+  "tempo_conf": "HIGH",
+  "tempo_note": "",
+  "meter": {
+   "ts": "9/8",
+   "conf": "LOW",
+   "grouping": 3,
+   "subdiv": 3,
+   "note": "accent period=3 beats (score 0.53, margin 0.19); triplet-vs-duple subdiv ratio 1.38; 165 beats",
+   "beats": 165
+  }
+ },
+ "TEST_020": {
+  "raw": {
+   "ess_multifeature": 113.7,
+   "ess_degara": 105.7,
+   "lib_beat_track": 112.3,
+   "tempogram": 215.3,
+   "autocorr": 53.8,
+   "ioi_hist": 91.0
+  },
+  "pulse_bpm": 112.3,
+  "measured_bpm": 109.96,
+  "beats": 183,
+  "cv_pct": 6.3,
+  "direct_support": "2/6",
+  "half": 56.2,
+  "double": 224.7,
+  "tempo_conf": "LOW",
+  "tempo_note": "methods disagree (octave/tempo ambiguity)",
+  "meter": {
+   "ts": "AMBIGUOUS",
+   "conf": "LOW",
+   "grouping": null,
+   "subdiv": null,
+   "note": "accent period=4 beats (score 0.28, margin 0.04); triplet-vs-duple subdiv ratio 1.05; 182 beats",
+   "beats": 182
+  }
+ }
+}

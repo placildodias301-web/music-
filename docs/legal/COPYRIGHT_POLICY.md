@@ -1,3 +1,9 @@
+> [!IMPORTANT]
+> **Standalone MVP Notice & Documentation Guide**
+> This document describes a planned or legacy multi-service architecture (including references to PostgreSQL, Prisma, Fastify, Next.js, React Native, etc.). 
+> The *current* active codebase in this repository is the **standalone Wilsify AI MVP** (a Python/FastAPI backend and Vite/React frontend). 
+> Please see the root `README.md` and `INSTALLATION.md` for accurate setup and usage instructions for the current product.
+
 # Wilsify AI — Copyright & Data Policy
 
 This page explains what Wilsify AI stores when you use it, for how long,
@@ -8,7 +14,7 @@ and how to request removal of anything you've uploaded.
 | Data | Stored? | For how long |
 |---|---|---|
 | The original audio/video file you upload | **No.** It is decoded in memory/temp storage for analysis and deleted immediately after processing (`services/audio_extract.py`'s `cleanup()` step). | Seconds — deleted as soon as analysis completes, success or failure. |
-| Detected analysis results (key, tempo, chords, difficulty) | Only in your browser session (`MvpContext`), not on our servers. | Until you close/reload the tab. |
+| Detected analysis results (key, tempo, chords, difficulty) and your lyrics/transpose/capo settings | Yes, when an analysis completes: saved to the Library in your browser (`localStorage`, key `wilsify_library_v1`) and, when you are signed in and Supabase is reachable, synced to your own rows in `public.user_data` (protected by row-level security so only you can read them). Never audio. | Until you delete the song from the Library or clear browser data (browser copy), or delete the row in Supabase (cloud copy). |
 | Rights attestation record (see below) | Yes — filename + timestamp only, no audio content. | Indefinitely, as an audit record. |
 | Practice session history (Practice Mode analytics) | Yes, but only in **your own browser's local storage** — never sent to or stored on our servers. | Until you clear your browser data. |
 

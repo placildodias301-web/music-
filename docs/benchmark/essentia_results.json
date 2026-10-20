@@ -1,0 +1,622 @@
+{
+ "TEST_001": {
+  "ess_bgate": [
+   "F# major",
+   0.88
+  ],
+  "ess_edma": [
+   "F# major",
+   0.84
+  ],
+  "ess_temperley": [
+   "B major",
+   0.88
+  ],
+  "ess_krumhansl": [
+   "F# major",
+   0.9
+  ],
+  "ess_bpm": [
+   123.6,
+   1.91
+  ],
+  "librosa_bpm": 123.0,
+  "ess_chords_top": [
+   "F#",
+   "B",
+   "Abm",
+   "C#m",
+   "Bbm",
+   "C#"
+  ]
+ },
+ "TEST_002": {
+  "ess_bgate": [
+   "D major",
+   0.98
+  ],
+  "ess_edma": [
+   "D major",
+   0.92
+  ],
+  "ess_temperley": [
+   "D major",
+   0.95
+  ],
+  "ess_krumhansl": [
+   "D major",
+   0.95
+  ],
+  "ess_bpm": [
+   178.2,
+   1.55
+  ],
+  "librosa_bpm": 89.1,
+  "ess_chords_top": [
+   "D",
+   "A",
+   "F#m",
+   "Bm",
+   "C#m",
+   "Em"
+  ]
+ },
+ "TEST_003": {
+  "ess_bgate": [
+   "Bb major",
+   0.86
+  ],
+  "ess_edma": [
+   "F major",
+   0.81
+  ],
+  "ess_temperley": [
+   "Bb major",
+   0.84
+  ],
+  "ess_krumhansl": [
+   "Bb major",
+   0.83
+  ],
+  "ess_bpm": [
+   154.4,
+   0.97
+  ],
+  "librosa_bpm": 76.0,
+  "ess_chords_top": [
+   "F",
+   "Bb",
+   "Gm",
+   "Dm",
+   "Eb",
+   "C"
+  ]
+ },
+ "TEST_004": {
+  "ess_bgate": [
+   "E major",
+   0.81
+  ],
+  "ess_edma": [
+   "E major",
+   0.82
+  ],
+  "ess_temperley": [
+   "E major",
+   0.84
+  ],
+  "ess_krumhansl": [
+   "E major",
+   0.86
+  ],
+  "ess_bpm": [
+   108.4,
+   0.56
+  ],
+  "librosa_bpm": 107.7,
+  "ess_chords_top": [
+   "E",
+   "B",
+   "C#m",
+   "A",
+   "Abm",
+   "F#"
+  ]
+ },
+ "TEST_005": {
+  "ess_bgate": [
+   "Eb major",
+   0.95
+  ],
+  "ess_edma": [
+   "Eb major",
+   0.93
+  ],
+  "ess_temperley": [
+   "Eb major",
+   0.88
+  ],
+  "ess_krumhansl": [
+   "Eb major",
+   0.97
+  ],
+  "ess_bpm": [
+   129.5,
+   0.89
+  ],
+  "librosa_bpm": 129.2,
+  "ess_chords_top": [
+   "Eb",
+   "Bb",
+   "Cm",
+   "Ab",
+   "Ebm",
+   "Fm"
+  ]
+ },
+ "TEST_006": {
+  "ess_bgate": [
+   "G major",
+   0.9
+  ],
+  "ess_edma": [
+   "G major",
+   0.84
+  ],
+  "ess_temperley": [
+   "G major",
+   0.79
+  ],
+  "ess_krumhansl": [
+   "G major",
+   0.86
+  ],
+  "ess_bpm": [
+   104.5,
+   2.54
+  ],
+  "librosa_bpm": 107.7,
+  "ess_chords_top": [
+   "G",
+   "D",
+   "Am",
+   "A",
+   "Bm",
+   "Em"
+  ]
+ },
+ "TEST_007": {
+  "ess_bgate": [
+   "E minor",
+   0.95
+  ],
+  "ess_edma": [
+   "E minor",
+   0.95
+  ],
+  "ess_temperley": [
+   "G major",
+   0.78
+  ],
+  "ess_krumhansl": [
+   "E minor",
+   0.89
+  ],
+  "ess_bpm": [
+   117.9,
+   2.48
+  ],
+  "librosa_bpm": 117.5,
+  "ess_chords_top": [
+   "Em",
+   "D",
+   "C",
+   "Am",
+   "Bm",
+   "G"
+  ]
+ },
+ "TEST_008": {
+  "ess_bgate": [
+   "E major",
+   0.9
+  ],
+  "ess_edma": [
+   "E major",
+   0.87
+  ],
+  "ess_temperley": [
+   "E major",
+   0.85
+  ],
+  "ess_krumhansl": [
+   "E major",
+   0.91
+  ],
+  "ess_bpm": [
+   98.8,
+   2.34
+  ],
+  "librosa_bpm": 198.8,
+  "ess_chords_top": [
+   "E",
+   "A",
+   "C#m",
+   "Ab",
+   "B",
+   "C#"
+  ]
+ },
+ "TEST_009": {
+  "ess_bgate": [
+   "D minor",
+   0.95
+  ],
+  "ess_edma": [
+   "D minor",
+   0.92
+  ],
+  "ess_temperley": [
+   "D minor",
+   0.75
+  ],
+  "ess_krumhansl": [
+   "D minor",
+   0.92
+  ],
+  "ess_bpm": [
+   104.0,
+   3.36
+  ],
+  "librosa_bpm": 136.0,
+  "ess_chords_top": [
+   "Dm",
+   "Am",
+   "F",
+   "C",
+   "Bb",
+   "C#m"
+  ]
+ },
+ "TEST_010": {
+  "ess_bgate": [
+   "B minor",
+   0.66
+  ],
+  "ess_edma": [
+   "B minor",
+   0.62
+  ],
+  "ess_temperley": [
+   "B minor",
+   0.49
+  ],
+  "ess_krumhansl": [
+   "B minor",
+   0.56
+  ],
+  "ess_bpm": [
+   111.6,
+   0.85
+  ],
+  "librosa_bpm": 112.3,
+  "ess_chords_top": [
+   "F#",
+   "E",
+   "B",
+   "A",
+   "Bm",
+   "Bb"
+  ]
+ },
+ "TEST_011": {
+  "ess_bgate": [
+   "E major",
+   0.83
+  ],
+  "ess_edma": [
+   "E major",
+   0.82
+  ],
+  "ess_temperley": [
+   "E major",
+   0.7
+  ],
+  "ess_krumhansl": [
+   "E major",
+   0.8
+  ],
+  "ess_bpm": [
+   122.1,
+   3.22
+  ],
+  "librosa_bpm": 123.0,
+  "ess_chords_top": [
+   "B",
+   "E",
+   "Am",
+   "Em",
+   "A",
+   "G"
+  ]
+ },
+ "TEST_012": {
+  "ess_bgate": [
+   "Ab minor",
+   0.86
+  ],
+  "ess_edma": [
+   "Ab minor",
+   0.85
+  ],
+  "ess_temperley": [
+   "Ab minor",
+   0.8
+  ],
+  "ess_krumhansl": [
+   "Ab minor",
+   0.79
+  ],
+  "ess_bpm": [
+   119.7,
+   0.42
+  ],
+  "librosa_bpm": 117.5,
+  "ess_chords_top": [
+   "Abm",
+   "C#m",
+   "Eb",
+   "Gm",
+   "A",
+   "F#"
+  ]
+ },
+ "TEST_013": {
+  "ess_bgate": [
+   "C major",
+   0.96
+  ],
+  "ess_edma": [
+   "C major",
+   0.91
+  ],
+  "ess_temperley": [
+   "C major",
+   0.85
+  ],
+  "ess_krumhansl": [
+   "C major",
+   0.95
+  ],
+  "ess_bpm": [
+   102.7,
+   0.17
+  ],
+  "librosa_bpm": 103.4,
+  "ess_chords_top": [
+   "C",
+   "F",
+   "Am",
+   "D",
+   "G",
+   "Em"
+  ]
+ },
+ "TEST_014": {
+  "ess_bgate": [
+   "Eb major",
+   0.85
+  ],
+  "ess_edma": [
+   "C minor",
+   0.84
+  ],
+  "ess_temperley": [
+   "Eb major",
+   0.91
+  ],
+  "ess_krumhansl": [
+   "Eb major",
+   0.85
+  ],
+  "ess_bpm": [
+   99.7,
+   1.26
+  ],
+  "librosa_bpm": 198.8,
+  "ess_chords_top": [
+   "Cm",
+   "Bb",
+   "Gm",
+   "Bm",
+   "C",
+   "Eb"
+  ]
+ },
+ "TEST_015": {
+  "ess_bgate": [
+   "C major",
+   0.89
+  ],
+  "ess_edma": [
+   "C major",
+   0.85
+  ],
+  "ess_temperley": [
+   "C major",
+   0.88
+  ],
+  "ess_krumhansl": [
+   "C major",
+   0.89
+  ],
+  "ess_bpm": [
+   112.5,
+   1.93
+  ],
+  "librosa_bpm": 112.3,
+  "ess_chords_top": [
+   "C",
+   "Am",
+   "F",
+   "Em",
+   "E",
+   "Dm"
+  ]
+ },
+ "TEST_016": {
+  "ess_bgate": [
+   "A minor",
+   0.85
+  ],
+  "ess_edma": [
+   "A minor",
+   0.75
+  ],
+  "ess_temperley": [
+   "A minor",
+   0.79
+  ],
+  "ess_krumhansl": [
+   "A minor",
+   0.73
+  ],
+  "ess_bpm": [
+   125.9,
+   0.19
+  ],
+  "librosa_bpm": 123.0,
+  "ess_chords_top": [
+   "E",
+   "Am",
+   "G",
+   "Abm",
+   "F",
+   "Em"
+  ]
+ },
+ "TEST_017": {
+  "ess_bgate": [
+   "D major",
+   0.96
+  ],
+  "ess_edma": [
+   "D major",
+   0.87
+  ],
+  "ess_temperley": [
+   "D major",
+   0.92
+  ],
+  "ess_krumhansl": [
+   "D major",
+   0.91
+  ],
+  "ess_bpm": [
+   111.2,
+   -0.12
+  ],
+  "librosa_bpm": 112.3,
+  "ess_chords_top": [
+   "D",
+   "A",
+   "G",
+   "Bm",
+   "F#m",
+   "Em"
+  ]
+ },
+ "TEST_018": {
+  "ess_bgate": [
+   "G major",
+   0.94
+  ],
+  "ess_edma": [
+   "G major",
+   0.91
+  ],
+  "ess_temperley": [
+   "G major",
+   0.88
+  ],
+  "ess_krumhansl": [
+   "G major",
+   0.96
+  ],
+  "ess_bpm": [
+   120.5,
+   1.11
+  ],
+  "librosa_bpm": 123.0,
+  "ess_chords_top": [
+   "G",
+   "B",
+   "Em",
+   "C",
+   "D",
+   "Bm"
+  ]
+ },
+ "TEST_019": {
+  "ess_bgate": [
+   "F major",
+   0.95
+  ],
+  "ess_edma": [
+   "F major",
+   0.9
+  ],
+  "ess_temperley": [
+   "F major",
+   0.87
+  ],
+  "ess_krumhansl": [
+   "F major",
+   0.91
+  ],
+  "ess_bpm": [
+   118.7,
+   1.87
+  ],
+  "librosa_bpm": 123.0,
+  "ess_chords_top": [
+   "F",
+   "C",
+   "Gm",
+   "Bb",
+   "Dm",
+   "G"
+  ]
+ },
+ "TEST_020": {
+  "ess_bgate": [
+   "E major",
+   0.81
+  ],
+  "ess_edma": [
+   "E major",
+   0.82
+  ],
+  "ess_temperley": [
+   "E major",
+   0.84
+  ],
+  "ess_krumhansl": [
+   "E major",
+   0.86
+  ],
+  "ess_bpm": [
+   113.7,
+   0.38
+  ],
+  "librosa_bpm": 107.7,
+  "ess_chords_top": [
+   "E",
+   "B",
+   "C#m",
+   "A",
+   "Abm",
+   "F#"
+  ]
+ }
+}

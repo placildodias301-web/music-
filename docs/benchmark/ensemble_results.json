@@ -1,0 +1,122 @@
+{
+ "TEST_001": {
+  "key": "F# Major",
+  "votes": "9/16",
+  "bpm": 123,
+  "bpm_agree": "4/4"
+ },
+ "TEST_002": {
+  "key": "D Major",
+  "votes": "13/16",
+  "bpm": 89,
+  "bpm_agree": "4/4"
+ },
+ "TEST_003": {
+  "key": "A# Major",
+  "votes": "13/16",
+  "bpm": 152,
+  "bpm_agree": "3/4"
+ },
+ "TEST_004": {
+  "key": "E Major",
+  "votes": "16/16",
+  "bpm": 108,
+  "bpm_agree": "3/4"
+ },
+ "TEST_005": {
+  "key": "D# Major",
+  "votes": "16/16",
+  "bpm": 129,
+  "bpm_agree": "4/4"
+ },
+ "TEST_006": {
+  "key": "G Major",
+  "votes": "15/16",
+  "bpm": 106,
+  "bpm_agree": "4/4"
+ },
+ "TEST_007": {
+  "key": "E Minor",
+  "votes": "13/16",
+  "bpm": 118,
+  "bpm_agree": "4/4"
+ },
+ "TEST_008": {
+  "key": "E Major",
+  "votes": "15/16",
+  "bpm": 99,
+  "bpm_agree": "4/4"
+ },
+ "TEST_009": {
+  "key": "D Minor",
+  "votes": "15/16",
+  "bpm": 120,
+  "bpm_agree": "0/4"
+ },
+ "TEST_010": {
+  "key": "B Minor",
+  "votes": "13/16",
+  "bpm": 112,
+  "bpm_agree": "4/4"
+ },
+ "TEST_011": {
+  "key": "E Major",
+  "votes": "11/16",
+  "bpm": 123,
+  "bpm_agree": "4/4"
+ },
+ "TEST_012": {
+  "key": "G# Minor",
+  "votes": "16/16",
+  "bpm": 117,
+  "bpm_agree": "3/4"
+ },
+ "TEST_013": {
+  "key": "C Major",
+  "votes": "16/16",
+  "bpm": 103,
+  "bpm_agree": "4/4"
+ },
+ "TEST_014": {
+  "key": "D# Major",
+  "votes": "14/16",
+  "bpm": 100,
+  "bpm_agree": "4/4"
+ },
+ "TEST_015": {
+  "key": "C Major",
+  "votes": "15/16",
+  "bpm": 112,
+  "bpm_agree": "4/4"
+ },
+ "TEST_016": {
+  "key": "A Minor",
+  "votes": "12/16",
+  "bpm": 124,
+  "bpm_agree": "4/4"
+ },
+ "TEST_017": {
+  "key": "D Major",
+  "votes": "16/16",
+  "bpm": 117,
+  "bpm_agree": "0/4"
+ },
+ "TEST_018": {
+  "key": "G Major",
+  "votes": "15/16",
+  "bpm": 122,
+  "bpm_agree": "4/4"
+ },
+ "TEST_019": {
+  "key": "F Major",
+  "votes": "16/16",
+  "bpm": 121,
+  "bpm_agree": "4/4"
+ },
+ "TEST_020": {
+  "key": "E Major",
+  "votes": "16/16",
+  "bpm": 112,
+  "bpm_agree": "3/4"
+ }
+}
