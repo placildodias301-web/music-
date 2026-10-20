@@ -25,23 +25,32 @@ NOTE_NAMES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"]
 # comfortable, non-muddy register.
 ROOT_MIDI_BASE = 48
 
-TRIAD_OFFSETS = {
-    "major": [0, 4, 7],
-    "minor": [0, 3, 7],
+# Semitone offsets for each chord quality the analysis (or a transpose of
+# it) can produce. Anything unrecognised falls back to its major/minor triad.
+CHORD_OFFSETS = {
+    "": [0, 4, 7],
+    "m": [0, 3, 7],
+    "7": [0, 4, 7, 10],
+    "m7": [0, 3, 7, 10],
+    "maj7": [0, 4, 7, 11],
+    "dim": [0, 3, 6],
+    "aug": [0, 4, 8],
+    "sus2": [0, 2, 7],
+    "sus4": [0, 5, 7],
 }
 
 TICKS_PER_BEAT = 480
 BEATS_PER_CHORD = 4  # one bar of 4/4 per chord
 
 
-def _parse_chord(chord_symbol: str) -> tuple[int, str]:
+def _parse_chord(chord_symbol: str) -> tuple[int, list[int]]:
     """
-    Parses a chord symbol like "C", "C#m", "Am", "G" into
-    (root_pitch_class 0-11, "major" | "minor").
+    Parses a chord symbol like "C", "C#m", "Bb7", "D#m7" or "G/B" into
+    (root_pitch_class 0-11, semitone offsets of its notes).
     """
-    symbol = chord_symbol.strip()
-    is_minor = symbol.endswith("m") and not symbol.endswith("dim")
-    root_name = symbol[:-1] if is_minor else symbol
+    symbol = chord_symbol.strip().split("/")[0]
+    root_len = 2 if len(symbol) > 1 and symbol[1] in "#b" else 1
+    root_name, suffix = symbol[:root_len], symbol[root_len:]
 
     # Normalize flats to sharps (e.g. "Bb" -> "A#") so lookup is simple.
     FLAT_TO_SHARP = {
@@ -54,12 +63,16 @@ def _parse_chord(chord_symbol: str) -> tuple[int, str]:
     except ValueError:
         pitch_class = 0  # fall back to C rather than raising, for a robust export
 
-    return pitch_class, ("minor" if is_minor else "major")
+    offsets = CHORD_OFFSETS.get(suffix)
+    if offsets is None:
+        minor = suffix.startswith("m") and not suffix.startswith("maj")
+        offsets = CHORD_OFFSETS["m" if minor else ""]
+    return pitch_class, offsets
 
 
 def build_midi_bytes(chord_progression: list[str], bpm: float) -> bytes:
     """
-    Renders the chord progression as sustained triads at the given tempo
+    Renders the chord progression as sustained chords at the given tempo
     and returns the raw .mid file bytes, ready to send as a download.
     """
     midi = MidiFile(ticks_per_beat=TICKS_PER_BEAT)
@@ -75,10 +88,10 @@ def build_midi_bytes(chord_progression: list[str], bpm: float) -> bytes:
         chord_progression = ["C"]
 
     for chord_symbol in chord_progression:
-        pitch_class, quality = _parse_chord(chord_symbol)
-        notes = [ROOT_MIDI_BASE + pitch_class + offset for offset in TRIAD_OFFSETS[quality]]
+        pitch_class, offsets = _parse_chord(chord_symbol)
+        notes = [ROOT_MIDI_BASE + pitch_class + offset for offset in offsets]
 
-        # Note-on events for all three notes at time 0 (relative to previous event)
+        # Note-on events for every chord tone at time 0 (relative to previous event)
         for i, note in enumerate(notes):
             track.append(Message("note_on", note=note, velocity=70, time=0 if i > 0 else 0))
 
