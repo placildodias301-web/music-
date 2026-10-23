@@ -124,7 +124,10 @@ describe("Chord Analysis Engine", () => {
     expect(analysis.rootName).toBe("C");
     expect(analysis.formula).toBe("1 - 3 - 5");
     expect(analysis.notes).toEqual(["C", "E", "G"]);
-    expect(analysis.whyItWorks).toContain("consonant");
+    // the explanation is derived from the intervals: a major third → bright and stable
+    expect(analysis.whyItWorks).toContain("major third");
+    expect(analysis.whyItWorks).toContain("bright");
+    expect(analysis.description.kind).toBe("major");
 
     // Diatonic keys should include C Major (I), F Major (V), G Major (IV), A Minor (III)
     const romanInKeys = analysis.diatonicKeys.map((dk) => `${dk.keyRoot} ${dk.mode} (${dk.romanNumeral})`);

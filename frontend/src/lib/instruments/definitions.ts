@@ -34,6 +34,7 @@ export type ChordRenderer =
   | "cavaquinho"
   | "balalaika"
   | "bass"
+  | "bowed"
   | "keyboard"
   | "harp"
   | "accordion"
@@ -149,10 +150,10 @@ export const INSTRUMENTS_DEFINITIONS: InstrumentDefinition[] = [
     id: "harmonica", name: "Harmonica", category: "wind", blurb: "10-hole diatonic (Richter)", tunerMode: "chromatic", chordDisplayMode: "harmonica", chordRenderer: "harmonica", range: { low: "C4", high: "C7" },
     caveat: "Shows the holes you can blow or draw together on a standard 10-hole diatonic harmonica. Bends, overblows and tongue-blocking are not shown, and some chords have no clean hole group.",
   },
-  /* Orchestral strings — Tuner only */
-  { id: "violin", name: "Violin", category: "orchestral", blurb: "G D A E", tunerMode: "stringed", chordDisplayMode: "none", tuner: { instrumentId: "violin" }, stringCount: 4 },
-  { id: "viola", name: "Viola", category: "orchestral", blurb: "C G D A", tunerMode: "stringed", chordDisplayMode: "none", tuner: { instrumentId: "viola" }, stringCount: 4 },
-  { id: "cello", name: "Cello", category: "orchestral", blurb: "C G D A", tunerMode: "stringed", chordDisplayMode: "none", tuner: { instrumentId: "cello" }, stringCount: 4 },
+  /* Orchestral strings — fretless: chord finger positions as semitones above the open string */
+  { id: "violin", name: "Violin", category: "orchestral", blurb: "G D A E", tunerMode: "stringed", chordDisplayMode: "strings", chordRenderer: "bowed", tuner: { instrumentId: "violin" }, stringCount: 4, caveat: "Violin-family instruments have no frets. Numbers show how many semitones above the open string to place a finger (first position) — set each finger by ear. The reference sound is a simple bowed-string tone, not a recording." },
+  { id: "viola", name: "Viola", category: "orchestral", blurb: "C G D A", tunerMode: "stringed", chordDisplayMode: "strings", chordRenderer: "bowed", tuner: { instrumentId: "viola" }, stringCount: 4, caveat: "Violin-family instruments have no frets. Numbers show how many semitones above the open string to place a finger (first position) — set each finger by ear. The reference sound is a simple bowed-string tone, not a recording." },
+  { id: "cello", name: "Cello", category: "orchestral", blurb: "C G D A", tunerMode: "stringed", chordDisplayMode: "strings", chordRenderer: "bowed", tuner: { instrumentId: "cello" }, stringCount: 4, caveat: "Violin-family instruments have no frets. Numbers show how many semitones above the open string to place a finger (first position) — set each finger by ear. The reference sound is a simple bowed-string tone, not a recording." },
   /* Chromatic */
   { id: "chromatic", name: "Chromatic", category: "chromatic", blurb: "Any note — voice, piano, anything", tunerMode: "chromatic", chordDisplayMode: "none", profile: "default" },
 ];

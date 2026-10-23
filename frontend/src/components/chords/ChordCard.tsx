@@ -3,13 +3,15 @@ import { useMemo, useState } from "react";
 import type { ParsedChord } from "../../lib/chordTheory";
 import { buildChordModel, type ChordSettings } from "../../lib/chords/model";
 import { playArpeggio, playModel } from "../../lib/chords/play";
+import { usePlayback } from "./usePlayback";
 import { findDefinition } from "../../lib/instruments/definitions";
 import { ChordDiagram } from "./ChordDiagram";
 
 /** "C♯ minor seventh" — root spelled as the symbol writes it (B♭, not A♯). */
 function chordDisplayName(chord: ParsedChord): string {
   const root = /^[A-G][#b♯♭]?/.exec(chord.label)?.[0] ?? "";
-  return `${root.replace("#", "♯").replace("b", "♭")} ${chord.quality.name}`;
+  const bass = chord.slashBassNote ? ` · bass ${chord.slashBassNote.replace("#", "♯").replace("b", "♭")}` : "";
+  return `${root.replace("#", "♯").replace("b", "♭")} ${chord.quality.name}${bass}`;
 }
 
 export function FilterPill({
@@ -50,18 +52,15 @@ export function ChordCard({
   onExplore?: (chord: ParsedChord) => void;
 }) {
   const [shapeIndex, setShapeIndex] = useState(0);
-  const [isPlaying, setIsPlaying] = useState(false);
+  const playback = usePlayback();
+  const isPlaying = playback.playing;
   const definition = findDefinition(settings.definitionId);
   const model = useMemo(() => (definition ? buildChordModel(chord, definition, settings) : null), [chord, definition, settings]);
   if (!model || !definition) return null;
   const shapeCount = model.kind === "fretted" ? model.shapes.length : 0;
   const showInversion = model.kind === "keyboard" || model.kind === "mallet" || model.kind === "accordion";
 
-  const handlePlayAudio = () => {
-    setIsPlaying(true);
-    playModel(model, shapeIndex);
-    setTimeout(() => setIsPlaying(false), 2000);
-  };
+  const handlePlayAudio = () => playback.run(() => playModel(model, shapeIndex));
 
   return (
     <div className="group flex flex-col items-center justify-between rounded-2xl border border-[var(--color-ns-border)] bg-[var(--color-ns-card)] p-4 sm:p-5 shadow-sm transition-all hover:border-[var(--color-ns-border-strong)] hover:bg-[var(--color-ns-raised)]">
@@ -73,7 +72,7 @@ export function ChordCard({
           title={`Explore ${chord.label} in depth`}
         >
           <h3 className="font-heading text-lg font-bold text-[var(--color-ns-text)] sm:text-xl group-hover/title:text-[var(--color-ns-amber)] transition-colors">
-            {chord.label.replace(/^([A-G])#/, "$1♯").replace(/^([A-G])b/, "$1♭")}
+            {chord.label.replace(/^([A-G])#/, "$1♯").replace(/^([A-G])b/, "$1♭").replace(/\/([A-G])#/, "/$1♯")}
           </h3>
           <p className="text-center text-[0.6875rem] capitalize text-[var(--color-ns-muted)]">{chordDisplayName(chord)}</p>
         </button>
@@ -117,34 +116,29 @@ export function ChordCard({
           type="button"
           onClick={handlePlayAudio}
           aria-label={`Play ${chord.label} chord audio`}
-          className={`flex items-center gap-1.5 rounded-xl border px-3 py-1.5 text-[0.6875rem] font-medium transition-all active:scale-95 ${
+          className={`flex h-8 w-28 items-center justify-center gap-1.5 rounded-xl border text-[0.6875rem] font-medium transition-colors ${
             isPlaying
-              ? "border-[var(--color-ns-amber)] bg-[var(--color-ns-amber)]/20 text-[var(--color-ns-amber)] font-bold shadow-sm"
-              : "border border-[var(--color-ns-border)] bg-[var(--color-ns-bg)] text-[var(--color-ns-muted)] hover:border-[var(--color-ns-amber)]/60 hover:text-[var(--color-ns-text)] hover:bg-[var(--color-ns-card)]"
+              ? "border-[var(--color-ns-amber)] bg-[var(--color-ns-amber)]/20 text-[var(--color-ns-amber)] font-bold"
+              : "border-[var(--color-ns-border)] bg-[var(--color-ns-bg)] text-[var(--color-ns-muted)] hover:border-[var(--color-ns-amber)]/60 hover:text-[var(--color-ns-text)] hover:bg-[var(--color-ns-card)]"
           }`}
         >
-          {isPlaying ? (
-            <>
-              <span className="flex h-2 w-2 relative">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[var(--color-ns-amber)] opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-2 w-2 bg-[var(--color-ns-amber)]"></span>
-              </span>
-              <span>Playing</span>
-            </>
-          ) : (
-            <>
+          {/* Same size and label whether idle or playing, so the button never shifts. */}
+          <span className="flex h-2.5 w-2.5 items-center justify-center">
+            {isPlaying ? (
+              <span className="h-2 w-2 rounded-full bg-[var(--color-ns-amber)]" />
+            ) : (
               <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor" className="text-[var(--color-ns-amber)]">
                 <polygon points="5 3 19 12 5 21 5 3" />
               </svg>
-              <span>Play Audio</span>
-            </>
-          )}
+            )}
+          </span>
+          <span>Play Audio</span>
         </button>
         {onExplore && (
           <button
             type="button"
             onClick={() => onExplore(chord)}
-            className="flex items-center gap-1 rounded-xl border border-[var(--color-ns-amber)]/40 bg-[var(--color-ns-amber)]/10 px-2.5 py-1.5 text-[0.6875rem] font-bold text-[var(--color-ns-amber)] transition-all hover:bg-[var(--color-ns-amber)] hover:text-[var(--color-ns-ink)] active:scale-95"
+            className="flex h-8 w-20 items-center justify-center rounded-xl border border-[var(--color-ns-amber)]/40 bg-[var(--color-ns-amber)]/10 text-[0.6875rem] font-bold text-[var(--color-ns-amber)] transition-colors hover:bg-[var(--color-ns-amber)] hover:text-[var(--color-ns-ink)]"
           >
             Explore
           </button>
@@ -152,8 +146,8 @@ export function ChordCard({
         {model.kind === "bass" && (
           <button
             type="button"
-            onClick={() => playArpeggio(model)}
-            className="rounded-xl border border-[var(--color-ns-border)] bg-[var(--color-ns-bg)] px-3 py-1.5 text-[0.6875rem] font-medium text-[var(--color-ns-muted)] transition-all hover:border-[var(--color-ns-amber)]/60 hover:text-[var(--color-ns-text)] active:scale-95"
+            onClick={() => playback.run(() => playArpeggio(model))}
+            className="flex h-8 items-center justify-center rounded-xl border border-[var(--color-ns-border)] bg-[var(--color-ns-bg)] px-3 text-[0.6875rem] font-medium text-[var(--color-ns-muted)] transition-colors hover:border-[var(--color-ns-amber)]/60 hover:text-[var(--color-ns-text)]"
           >
             Play arpeggio
           </button>

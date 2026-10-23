@@ -9,6 +9,7 @@ import {
   fetchMediaFromLink,
   logRightsAttestation,
   validateUploadFile,
+  validateMediaLink,
   validateYouTubeUrl,
   YOUTUBE_FALLBACK_MESSAGE,
   type AnalysisErrorKind,
@@ -65,8 +66,8 @@ const SOURCES: { id: Source; label: string; hint: string; icon: React.ReactNode 
   },
   {
     id: "link",
-    label: "YouTube Link",
-    hint: "Paste a YouTube video link",
+    label: "Paste a Link",
+    hint: "YouTube, Instagram, TikTok and more",
     icon: (
       <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
         <circle cx="12" cy="12" r="9.5" />
@@ -101,6 +102,14 @@ const SOCIAL_PLATFORMS: { name: string; pattern: RegExp }[] = [
   { name: "YouTube Shorts", pattern: /youtube\.com\/shorts\//i },
   { name: "YouTube Music", pattern: /music\.youtube\.com/i },
   { name: "YouTube", pattern: /(youtube\.com|youtu\.be)/i },
+  { name: "Instagram", pattern: /(^|\.|\/)instagram\.com/i },
+  { name: "TikTok", pattern: /(^|\.|\/)tiktok\.com/i },
+  { name: "Facebook", pattern: /(^|\.|\/)(facebook\.com|fb\.watch)/i },
+  { name: "X", pattern: /(^|\.|\/)(x\.com|twitter\.com)/i },
+  { name: "SoundCloud", pattern: /(^|\.|\/)soundcloud\.com/i },
+  { name: "Vimeo", pattern: /(^|\.|\/)vimeo\.com/i },
+  { name: "Reddit", pattern: /(^|\.|\/)(reddit\.com|redd\.it)/i },
+  { name: "Twitch", pattern: /(^|\.|\/)twitch\.tv/i },
 ];
 
 function detectPlatform(url: string): string | null {
@@ -186,9 +195,9 @@ export function Upload() {
         return;
       }
     } else if (source === "social" || source === "link") {
-      const ytValidationError = validateYouTubeUrl(linkUrl);
-      if (ytValidationError) {
-        setErrorMessage(ytValidationError);
+      const linkError = source === "link" ? validateMediaLink(linkUrl) : validateYouTubeUrl(linkUrl);
+      if (linkError) {
+        setErrorMessage(linkError);
         return;
       }
     }
@@ -342,7 +351,7 @@ export function Upload() {
           Select media
         </h1>
         <p className="mx-auto mt-2.5 max-w-lg text-sm leading-relaxed text-content-muted">
-          Record yourself live, paste a link, pick a file, or grab a YouTube video, Short or Instagram Reel. Wilsify AI extracts the audio and detects chords, key, and tempo.
+          Record yourself live, pick a file, or paste a link from YouTube, Instagram, TikTok, Facebook, X, SoundCloud and more. Wilsify AI extracts the audio and detects chords, key, and tempo.
         </p>
       </div>
 
@@ -423,7 +432,7 @@ export function Upload() {
         {(source === "link" || source === "social") && (
           <div className="rounded-2xl border border-ns-border bg-white/[0.015] p-5">
             <label htmlFor="media-link" className="text-xs font-semibold uppercase tracking-wider text-content-muted">
-              {source === "social" ? "Or paste a YouTube video link" : "YouTube video link"}
+              {source === "social" ? "Or paste a YouTube video link" : "Video or song link"}
             </label>
             <div className="mt-2 flex items-center gap-2 rounded-xl border border-ns-border bg-ns-raised px-3 focus-within:border-primary/60">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" className="flex-shrink-0 text-content-dim" aria-hidden="true">
@@ -447,7 +456,7 @@ export function Upload() {
                 onKeyDown={(e) => {
                   if (e.key === "Enter" && canAnalyze) void handleAnalyze();
                 }}
-                placeholder="https://www.youtube.com/watch?v=... or https://youtu.be/..."
+                placeholder={source === "social" ? "https://www.youtube.com/watch?v=..." : "Paste a YouTube, Instagram, TikTok, ... link"}
                 style={{ boxShadow: "none", outline: "none" }}
                 className="min-w-0 flex-1 border-0 bg-transparent py-3 text-sm text-content placeholder:text-content-dim focus:outline-none focus:ring-0"
               />
@@ -458,14 +467,17 @@ export function Upload() {
               )}
             </div>
             <div className="mt-3 flex flex-wrap gap-1.5">
-              {["youtube.com", "www.youtube.com", "m.youtube.com", "music.youtube.com", "youtu.be"].map((p) => (
+              {(source === "social"
+                ? ["youtube.com", "www.youtube.com", "m.youtube.com", "music.youtube.com", "youtu.be"]
+                : ["YouTube", "Instagram", "TikTok", "Facebook", "X / Twitter", "SoundCloud", "Vimeo", "and more"]
+              ).map((p) => (
                 <span key={p} className="rounded-md border border-ns-border bg-ns-raised px-2 py-0.5 text-[0.625rem] font-medium text-content-muted">
                   {p}
                 </span>
               ))}
             </div>
             <p className="mt-3 text-[0.6875rem] leading-relaxed text-content-dim">
-              Single public YouTube videos only · up to 20 minutes · you are responsible for having rights to analyze the selected video · temporary audio is deleted immediately after analysis.
+              Single public videos or tracks only · up to 20 minutes · you are responsible for having rights to analyze the selected video · temporary audio is deleted immediately after analysis.
             </p>
           </div>
         )}

@@ -4,7 +4,7 @@
  * and `rendererFor` (lib/instruments/definitions.ts) decides which one an instrument gets — no if/else per instrument.
  */
 
-import { chordIntervals, NOTE_NAMES, spellChord, type ParsedChord } from "../chordTheory";
+import { chordIntervals, NOTE_NAMES, slashToneIndex, spellChord, type ParsedChord } from "../chordTheory";
 import { findDefinition, rendererFor, type ChordRenderer, type InstrumentDefinition } from "../instruments/definitions";
 import { harpNeedsForNotes, harpStrings, LEVER_HARP_RANGE, NATURAL_STATE, PEDAL_HARP_RANGE, type HarpAccidentals, type HarpLetter, type HarpNeed } from "../tuner/harp";
 import { noteToMidi } from "../tuner/notes";
@@ -70,6 +70,13 @@ export function chordTunings(def: InstrumentDefinition): ChordTuning[] {
       };
     }),
   );
+}
+
+/** The tuning / harp-type / harmonica-key choices the Chords page offers for an instrument (empty when it has none). */
+export function tuningChoices(def: InstrumentDefinition): { id: string; name: string }[] {
+  if (def.id === "harp") return HARP_CHORD_TYPES.map((t) => ({ id: t.id, name: t.name }));
+  if (def.id === "harmonica") return HARMONICA_KEYS.map((k) => ({ id: k.id, name: k.name }));
+  return chordTunings(def).map((t) => ({ id: t.id, name: t.name }));
 }
 
 export function findChordTuning(def: InstrumentDefinition, tuningId: string | undefined): ChordTuning | undefined {
@@ -340,14 +347,21 @@ function frettedFor(renderer: ChordRenderer, chord: ParsedChord, tuning: ChordTu
 export function buildChordModel(chord: ParsedChord, definition: InstrumentDefinition, settings: Pick<ChordSettings, "tuningId" | "inversion">): ChordModel | null {
   const renderer = rendererFor(definition);
   if (!renderer) return null;
-  const b = base(chord, definition, settings.inversion);
+  // A slash chord (C/E) IS an inversion when its bass is a chord tone; otherwise the bass is an extra low note.
+  const toneIndex = slashToneIndex(chord);
+  const b = base(chord, definition, chord.slashBass !== undefined && toneIndex >= 0 ? toneIndex : settings.inversion);
+  const keysFor = (): KeyedNote[] => {
+    const keys = invertedNotes(chord, b.inversion, 60);
+    if (chord.slashBass !== undefined && toneIndex < 0) return [{ midi: 48 + chord.slashBass, name: NOTE_NAMES[chord.slashBass].replace("#", "♯") }, ...keys];
+    return keys;
+  };
   switch (renderer) {
     case "keyboard":
-      return { ...b, kind: "keyboard", keys: invertedNotes(chord, b.inversion, 60) };
+      return { ...b, kind: "keyboard", keys: keysFor() };
     case "mallet":
-      return { ...b, kind: "mallet", keys: invertedNotes(chord, b.inversion, 60) };
+      return { ...b, kind: "mallet", keys: keysFor() };
     case "accordion":
-      return { ...b, kind: "accordion", keys: invertedNotes(chord, b.inversion, 60), stradella: stradellaFor(chord) };
+      return { ...b, kind: "accordion", keys: keysFor(), stradella: stradellaFor(chord) };
     case "harp":
       return buildHarp(b, settings.tuningId);
     case "wind":

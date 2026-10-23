@@ -521,21 +521,96 @@ def test_extract_youtube_video_id_accepts_valid_domains_and_ids():
 
 
 @pytest.mark.parametrize(
-    "bad_url",
+    "link",
     [
-        "https://notyoutube.com/watch?v=dQw4w9WgXcQ",
-        "https://www.instagram.com/reel/dQw4w9WgXcQ/",
+        "https://www.instagram.com/reel/Cabc123xyz/",
+        "https://www.tiktok.com/@artist/video/7123456789012345678",
         "https://vimeo.com/123456789",
-        "https://evil-youtube.com/watch?v=dQw4w9WgXcQ",
+        "https://soundcloud.com/artist/track",
+        "https://notyoutube.com/watch?v=dQw4w9WgXcQ",
     ],
 )
-def test_youtube_invalid_domain_rejected(client, monkeypatch, bad_url):
+def test_non_youtube_links_are_routed_to_the_generic_site_downloader(client, monkeypatch, link):
     from services import media_fetch
 
     monkeypatch.setattr(media_fetch, "_assert_public_host", lambda _u: None)
-    r = client.post("/api/fetch-media", json={"url": bad_url})
+    youtube, linked = [], []
+    monkeypatch.setattr(media_fetch, "_download_youtube_video", lambda *a, **k: youtube.append(a) or ("x", "x"))
+    monkeypatch.setattr(media_fetch, "_download_linked_media", lambda *a, **k: linked.append(a) or (_ for _ in ()).throw(
+        media_fetch.MediaFetchError("stop here")))
+    r = client.post("/api/fetch-media", json={"url": link})
+    assert r.status_code == 400 and r.json()["detail"] == "stop here"
+    assert youtube == [] and len(linked) == 1
+
+
+def test_linked_media_downloads_with_site_extractors_but_never_the_generic_one(client, monkeypatch, tmp_path):
+    import yt_dlp
+    from services import media_fetch
+
+    monkeypatch.setattr(media_fetch, "_assert_public_host", lambda _u: None)
+    monkeypatch.setattr(media_fetch, "TMP_DIR", str(tmp_path))
+    seen = {}
+
+    class FakeYDL:
+        def __init__(self, opts):
+            self.opts = opts
+            seen["extractors"] = opts["allowed_extractors"]
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            pass
+
+        def extract_info(self, url, download=False):
+            seen["url"] = url
+            if download:
+                with open(self.opts["outtmpl"].replace("%(ext)s", "m4a"), "wb") as f:
+                    f.write(b"fake-audio")
+            return {"id": "abc", "title": "Reel Song", "duration": 30, "is_live": False}
+
+    monkeypatch.setattr(yt_dlp, "YoutubeDL", FakeYDL)
+    r = client.post("/api/fetch-media", json={"url": "https://www.instagram.com/reel/Cabc123xyz/"})
+    assert r.status_code == 200
+    assert seen["url"] == "https://www.instagram.com/reel/Cabc123xyz/"
+    assert "-generic" in seen["extractors"]
+    assert list(tmp_path.iterdir()) == []
+
+
+def test_unsupported_site_gets_a_clear_message(client, monkeypatch, tmp_path):
+    import yt_dlp
+    from services import media_fetch
+
+    monkeypatch.setattr(media_fetch, "_assert_public_host", lambda _u: None)
+    monkeypatch.setattr(media_fetch, "TMP_DIR", str(tmp_path))
+
+    class FakeYDL:
+        def __init__(self, opts):
+            pass
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            pass
+
+        def extract_info(self, url, download=False):
+            raise yt_dlp.utils.DownloadError("ERROR: Unsupported URL: https://example.com/page")
+
+    monkeypatch.setattr(yt_dlp, "YoutubeDL", FakeYDL)
+    r = client.post("/api/fetch-media", json={"url": "https://example.com/page"})
     assert r.status_code == 400
-    assert "Only YouTube links" in r.json()["detail"]
+    assert "isn't supported" in r.json()["detail"]
+
+
+@pytest.mark.parametrize("link", ["https://soundcloud.com/artist/sets/album", "https://vimeo.com/live/123"])
+def test_non_youtube_playlists_and_live_links_are_rejected(client, monkeypatch, link):
+    from services import media_fetch
+
+    monkeypatch.setattr(media_fetch, "_assert_public_host", lambda _u: None)
+    monkeypatch.setattr(media_fetch, "_download_linked_media", lambda *a, **k: pytest.fail("downloaded"))
+    r = client.post("/api/fetch-media", json={"url": link})
+    assert r.status_code == 400
 
 
 @pytest.mark.parametrize(
@@ -617,12 +692,13 @@ def test_youtube_video_over_20_minutes_rejected(client, monkeypatch):
 
 
 def test_youtube_timeout_produces_clear_error_and_cleans_up_temp_files(client, monkeypatch, tmp_path):
-    from concurrent.futures import TimeoutError as FuturesTimeoutError
     import yt_dlp
     from services import media_fetch
 
     monkeypatch.setattr(media_fetch, "_assert_public_host", lambda _u: None)
     monkeypatch.setattr(media_fetch, "TMP_DIR", str(tmp_path))
+    monkeypatch.setattr(media_fetch, "DOWNLOAD_TIMEOUT_SECONDS", -1)  # deadline already passed
+    progress_after_stop = []
 
     class HangingYDL:
         def __init__(self, opts):
@@ -635,11 +711,15 @@ def test_youtube_timeout_produces_clear_error_and_cleans_up_temp_files(client, m
             pass
 
         def extract_info(self, url, download=False):
+            if not download:
+                return {"id": "dQw4w9WgXcQ", "title": "Slow", "duration": 60}
             outtmpl = self.opts["outtmpl"]
             part_file = outtmpl.replace("%(ext)s", "mp3.part")
             with open(part_file, "wb") as f:
                 f.write(b"partial")
-            raise FuturesTimeoutError()
+            # Like yt-dlp's downloader: the progress hook must stop the download itself.
+            self.opts["progress_hooks"][0]({"status": "downloading"})
+            progress_after_stop.append(True)
 
     monkeypatch.setattr(yt_dlp, "YoutubeDL", HangingYDL)
 
@@ -647,6 +727,7 @@ def test_youtube_timeout_produces_clear_error_and_cleans_up_temp_files(client, m
     assert r.status_code == 504
     assert r.json()["detail"] == media_fetch.YOUTUBE_FALLBACK_MESSAGE
     assert list(tmp_path.iterdir()) == []
+    assert progress_after_stop == []  # download really stopped, not left running
 
 
 def test_youtube_temp_file_cleanup_on_success_and_failure(client, monkeypatch, tmp_path):
@@ -1159,7 +1240,7 @@ ERROR_CASES = [
     ("stream-text-file", "post", "/api/analyze/stream", {"files": {"file": ("notes.txt", b"hello", "text/plain")}}, 400, "audio or video"),
     ("stream-empty", "post", "/api/analyze/stream", {"files": {"file": ("empty.wav", b"", "audio/wav")}}, 400, "empty"),
     ("fetch-no-body", "post", "/api/fetch-media", {"json": {}}, 422, None),
-    ("fetch-blank-url", "post", "/api/fetch-media", {"json": {"url": "  "}}, 400, "youtube"),
+    ("fetch-blank-url", "post", "/api/fetch-media", {"json": {"url": "  "}}, 400, "valid link"),
     ("fetch-channel", "post", "/api/fetch-media", {"json": {"url": "https://www.youtube.com/@Coldplay"}}, 400, "channels"),
     ("fetch-private-address", "post", "/api/fetch-media", {"json": {"url": "http://127.0.0.1:8000/x.mp3"}}, 400, "private"),
     ("search-blank", "get", "/api/youtube/search?q=", {}, 400, "type a song"),
@@ -1251,9 +1332,6 @@ def test_valid_upload_to_the_stream_endpoint_passes_validation_and_cleans_up(cli
         "https://www.youtube.com/results?search_query=coldplay",
         "https://www.youtube.com/live/dQw4w9WgXcQ",
         "https://www.youtube.com/watch?v=dQw4w9WgXcQ&live=1",
-        "https://notyoutube.com/watch?v=dQw4w9WgXcQ",
-        "https://youtube.com.evil.example/watch?v=dQw4w9WgXcQ",
-        "https://vimeo.com/123456789",
         "https://youtu.be/short",
         "https://youtu.be/dQw4w9WgXcQ/extra",
         "https://www.youtube.com/watch?v=",
@@ -1281,13 +1359,30 @@ def test_youtube_url_validation_rejects_bad_links_without_downloading(client, mo
 
 @pytest.mark.parametrize("path", ["/api/fetch-media", "/api/youtube/search?q=wonderwall"])
 def test_youtube_timeout_returns_a_user_safe_structured_error(client, monkeypatch, path):
-    from concurrent.futures import TimeoutError as FuturesTimeoutError
+    import yt_dlp
     from services import media_fetch
 
-    def hang(_fn, _timeout):
-        raise FuturesTimeoutError("internal: yt-dlp worker exceeded 60s at /srv/app/media_fetch.py")
+    monkeypatch.setattr(media_fetch, "_assert_public_host", lambda _u: None)
+    monkeypatch.setattr(media_fetch, "DOWNLOAD_TIMEOUT_SECONDS", -1)  # download deadline already passed
 
-    monkeypatch.setattr(media_fetch, "_run_with_timeout", hang)
+    class SlowYDL:
+        def __init__(self, opts):
+            self.opts = opts
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            pass
+
+        def extract_info(self, url, download=False):
+            if url.startswith("ytsearch"):  # search: the socket timeout fires
+                raise TimeoutError("internal: read timed out at /srv/app/media_fetch.py")
+            if not download:
+                return {"id": "dQw4w9WgXcQ", "title": "Slow", "duration": 60}
+            self.opts["progress_hooks"][0]({"status": "downloading"})  # download: our deadline hook fires
+
+    monkeypatch.setattr(yt_dlp, "YoutubeDL", SlowYDL)
     if path.startswith("/api/fetch-media"):
         r = client.post(path, json={"url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ"})
     else:
@@ -1504,3 +1599,134 @@ def test_rate_limit_budget_is_shared_across_media_endpoints_but_not_health(clien
 def test_rate_limit_can_be_disabled(client, monkeypatch, offline_search):
     monkeypatch.setattr(main, "ANALYZE_RATE_LIMIT_PER_MINUTE", 0)
     assert all(client.get("/api/youtube/search?q=x").status_code == 200 for _ in range(5))
+
+def test_stems_upload_separate_poll_and_download(client, tmp_path, monkeypatch):
+    import time as _time
+
+    import numpy as np
+    from services import stem_separation as ss
+
+    monkeypatch.setattr(ss, "STEMS_DIR", str(tmp_path / "stems"))
+    # Real Demucs takes ~0.7x the song length; a fake keeps the API flow test fast.
+    # Bass is ~-66 dB: a vocal + guitar song where Demucs finds no real bass.
+    gains = {"vocals": 0.5, "drums": 0.3, "bass": 0.0005, "other": 0.4}
+    monkeypatch.setattr(ss, "separate", lambda wav, progress=None, model=None: {k: wav * g for k, g in gains.items()})
+
+    wav = tmp_path / "song.wav"
+    _progression_wav(wav, ["C", "G"])
+    with open(wav, "rb") as f:
+        r = client.post("/api/stems/analyze", files={"file": ("My Song.wav", f, "audio/wav")})
+    assert r.status_code == 200, r.text
+    analysis = r.json()
+    assert analysis["track"] == "My Song"
+    assert [s["id"] for s in analysis["detected_stems"]] == ["vocals", "drums", "bass", "guitar", "piano", "other", "music"]
+
+    r = client.post("/api/stems/separate", json={"upload_id": analysis["upload_id"], "stems": ["vocals", "bass", "music"]})
+    assert r.status_code == 200, r.text
+    job_id = r.json()["job_id"]
+
+    for _ in range(100):
+        status = client.get(f"/api/stems/job/{job_id}").json()
+        if status["status"] in ("complete", "failed"):
+            break
+        _time.sleep(0.05)
+    assert status["status"] == "complete", status
+
+    results = client.get(f"/api/stems/job/{job_id}/stems").json()
+    stems = results["stems"]
+    # The near-silent bass is left out and named in the notice; "music" = drums + bass + other.
+    assert [s["id"] for s in stems] == ["vocals", "music"]
+    assert "Bass" in results["notice"] and "deleted from our server after 1 hour" in results["notice"]
+    audio = client.get(stems[0]["url"])
+    assert audio.status_code == 200 and audio.content[:4] == b"RIFF"
+    assert audio.headers["content-disposition"].startswith("attachment")  # downloads, doesn't open a player page
+    import io
+
+    import soundfile as sf
+
+    mix, _ = sf.read(io.BytesIO(client.get(stems[0]["url"]).content))
+    music, _ = sf.read(io.BytesIO(client.get(stems[1]["url"]).content))
+    assert np.sqrt((music ** 2).mean()) / np.sqrt((mix ** 2).mean()) == pytest.approx((0.3 + 0.0005 + 0.4) / 0.5, rel=0.01)
+
+    # Unknown / expired ids are a clean 404, never a path lookup.
+    assert client.post("/api/stems/separate", json={"upload_id": "../../etc"}).status_code == 404
+    assert client.get(f"/api/stems/job/{job_id}/file/..%2Fsecret").status_code == 404
+
+    # Everything is removed once it is older than the TTL.
+    ss.sweep_expired(now=_time.time() + ss.STEM_TTL_SECONDS + 1)
+    assert client.get(f"/api/stems/job/{job_id}").status_code == 404
+    assert not any((tmp_path / "stems" / "uploads").iterdir())
+
+
+def test_stems_job_explains_when_demucs_is_not_installed(client, tmp_path, monkeypatch):
+    import time as _time
+
+    from services import stem_separation as ss
+
+    monkeypatch.setattr(ss, "STEMS_DIR", str(tmp_path / "stems"))
+
+    def not_installed(wav, progress=None, model=None):
+        raise ModuleNotFoundError("No module named 'torch'")
+
+    monkeypatch.setattr(ss, "separate", not_installed)
+    wav = tmp_path / "song.wav"
+    _progression_wav(wav, ["C", "G"])
+    with open(wav, "rb") as f:
+        upload_id = client.post("/api/stems/analyze", files={"file": ("s.wav", f, "audio/wav")}).json()["upload_id"]
+    job_id = client.post("/api/stems/separate", json={"upload_id": upload_id}).json()["job_id"]
+    for _ in range(100):
+        status = client.get(f"/api/stems/job/{job_id}").json()
+        if status["status"] in ("complete", "failed"):
+            break
+        _time.sleep(0.05)
+    assert status["status"] == "failed"
+    assert "isn't installed" in status["error"] and "requirements.txt" in status["error"]
+
+
+def test_six_stems_keep_a_clear_guitar_and_fold_an_unsure_piano_into_other(client, tmp_path, monkeypatch):
+    import io
+    import time as _time
+
+    import numpy as np
+    import soundfile as sf
+    from services import stem_separation as ss
+
+    monkeypatch.setattr(ss, "STEMS_DIR", str(tmp_path / "stems"))
+    used = {}
+    # Guitar ~-6 dB (clear), piano ~-34 dB (the model isn't sure), the rest as usual.
+    gains = {"vocals": 0.5, "drums": 0.3, "bass": 0.2, "guitar": 0.5, "piano": 0.02, "other": 0.1}
+
+    def fake(wav, progress=None, model=None):
+        used["model"] = model
+        return {k: wav * g for k, g in gains.items()}
+
+    monkeypatch.setattr(ss, "separate", fake)
+    wav = tmp_path / "song.wav"
+    _progression_wav(wav, ["C", "G"])
+    with open(wav, "rb") as f:
+        upload_id = client.post("/api/stems/analyze", files={"file": ("s.wav", f, "audio/wav")}).json()["upload_id"]
+    stems = ["vocals", "drums", "bass", "guitar", "piano", "other"]
+    job_id = client.post("/api/stems/separate", json={"upload_id": upload_id, "stems": stems}).json()["job_id"]
+    for _ in range(100):
+        if client.get(f"/api/stems/job/{job_id}").json()["status"] in ("complete", "failed"):
+            break
+        _time.sleep(0.05)
+
+    results = client.get(f"/api/stems/job/{job_id}/stems").json()
+    assert used["model"] == ss.MODEL_6
+    assert [s["id"] for s in results["stems"]] == ["vocals", "drums", "bass", "guitar", "other"]
+    assert "No clear piano / keys found, so it stays in Other" in results["notice"]
+    other = next(s for s in results["stems"] if s["id"] == "other")
+    assert other["label"] == "Other (everything else)"
+    # Nothing is lost: "other" now carries the piano's audio too.
+    mix, _ = sf.read(io.BytesIO(client.get(results["stems"][0]["url"]).content))
+    other_audio, _ = sf.read(io.BytesIO(client.get(other["url"]).content))
+    assert np.sqrt((other_audio ** 2).mean()) / np.sqrt((mix ** 2).mean()) == pytest.approx((0.1 + 0.02) / 0.5, rel=0.02)
+
+    # The 4-stem choice keeps using the 4-stem model.
+    job4 = client.post("/api/stems/separate", json={"upload_id": upload_id, "stems": ["vocals", "other"]}).json()["job_id"]
+    for _ in range(100):
+        if client.get(f"/api/stems/job/{job4}").json()["status"] in ("complete", "failed"):
+            break
+        _time.sleep(0.05)
+    assert used["model"] == ss.MODEL_4

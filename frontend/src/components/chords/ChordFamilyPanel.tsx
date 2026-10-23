@@ -232,7 +232,7 @@ function ChordChip({ chord, selected, onClick }: { chord: FamilyChord; selected:
       aria-pressed={selected}
       onClick={onClick}
       title={chord.note ?? (chord.function ? `${chord.function} function` : undefined)}
-      className={`flex min-w-[4.75rem] flex-col items-center rounded-xl border px-3 py-2 transition-all active:scale-95 ${
+      className={`flex min-w-[4.75rem] flex-col items-center rounded-xl border px-3 py-2 transition-all ${
         selected
           ? "border-[var(--color-ns-amber)]/60 bg-[var(--color-ns-amber)]/15"
           : "border-[var(--color-ns-border)] bg-[var(--color-ns-bg)] hover:border-[var(--color-ns-border-strong)] hover:bg-[var(--color-ns-raised)]"

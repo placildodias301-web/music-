@@ -53,11 +53,20 @@ export function stringShapes(chord: ParsedChord, tuning: number[], opts: ShapeOp
     played.length <= 4 ? [{ allStrings: true }, { allStrings: true, rootOptional: true }, { allStrings: false }] : [{ allStrings: false }];
 
   for (const attempt of attempts) {
-    const found = pickSpread(searchShapes(chord, played, { bassIsRoot: !!opts.bassIsRoot, maxPosition, ...attempt }), count);
+    // A slash chord must have its bass note lowest, whatever the instrument.
+    const bassIsRoot = !!opts.bassIsRoot || chord.slashBass !== undefined;
+    const found = pickSpread(searchShapes(chord, played, { bassIsRoot, maxPosition, ...attempt }), count);
     if (found.length) {
       return found.map((c) => {
         const frets = [...c.frets];
-        if (droneAt >= 0) frets.splice(droneAt, 0, 0);
+        // The drone string rings open only when its note is part of the chord (or the slash bass); otherwise it is left out,
+        // so the notes heard are exactly the chord's notes.
+        if (droneAt >= 0) {
+          const dronePc = tuning[droneAt] % 12;
+          const chordPcs = new Set(chordIntervals(chord).map((o) => (chord.root + o) % 12));
+          if (chord.slashBass !== undefined) chordPcs.add(chord.slashBass);
+          frets.splice(droneAt, 0, chordPcs.has(dronePc) ? 0 : null);
+        }
         return { name: voicingName(c.frets), frets };
       });
     }
@@ -98,7 +107,7 @@ export function guitar7Shapes(chord: ParsedChord, tuning7: number[]): StringShap
 
 /** The GCEA hand-checked table is valid for every tuning with the same pitch classes (High G and Low G); others use the search. */
 export function ukuleleShapesFor(chord: ParsedChord, tuning: number[]): StringShape[] {
-  if (samePitchClasses(tuning, UKULELE_TUNING)) return [{ name: "Open position", frets: getUkuleleShape(chord) }];
+  if (chord.slashBass === undefined && samePitchClasses(tuning, UKULELE_TUNING)) return [{ name: "Open position", frets: getUkuleleShape(chord) }];
   return stringShapes(chord, tuning, { count: 2 });
 }
 
@@ -126,12 +135,13 @@ const DEGREE_NAME: Record<number, string> = { 3: "3rd", 5: "5th", 7: "7th" };
  * Chord tones only — never a note the chord does not contain.
  */
 export function bassDyads(chord: ParsedChord, tuning: number[]): BassDyad[] {
-  const root = chord.root;
+  const root = chord.slashBass ?? chord.root;
   const out: BassDyad[] = [];
   for (const degree of [5, 3, 7]) {
     const tone = chord.quality.tones.find(([, d]) => d === degree);
     if (!tone) continue;
-    const targetPc = (root + tone[0]) % 12;
+    const targetPc = (chord.root + tone[0]) % 12;
+    if (targetPc === root) continue;
     let best: { low: number; rootFret: number; upFret: number; score: number } | null = null;
     for (let s = 0; s < tuning.length - 1; s++) {
       for (let r = 0; r <= 7; r++) {
@@ -164,7 +174,7 @@ export function bassArpeggio(chord: ParsedChord, tuning: number[]): ArpeggioStep
   const lowOpen = tuning[0];
   // Root: first occurrence at or above the lowest open string.
   let rootMidi = lowOpen;
-  while (((rootMidi % 12) + 12) % 12 !== chord.root) rootMidi++;
+  while (((rootMidi % 12) + 12) % 12 !== (chord.slashBass ?? chord.root)) rootMidi++;
   const steps = [...new Set(chordIntervals(chord).filter((s) => s < 12))].sort((a, b) => a - b);
   const targets = [...steps, 12].map((s) => rootMidi + s);
   const names = spellChord(chord);

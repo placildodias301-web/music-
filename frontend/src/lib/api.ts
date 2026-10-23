@@ -472,6 +472,51 @@ export function validateYouTubeUrl(urlOrId: string | null | undefined): string |
 }
 
 /**
+ * Validates a link to a single video or track on any site (Instagram, TikTok, Facebook, X,
+ * SoundCloud, Vimeo, ...). YouTube links get the strict YouTube rules; anything else only needs
+ * to be a public-looking http(s) link. The backend decides whether the site is actually supported.
+ * Returns null when valid, or a user-facing error message.
+ */
+export function validateMediaLink(link: string | null | undefined): string | null {
+  const raw = (link ?? "").trim();
+  if (!raw) {
+    return "Please paste a link to a video or song.";
+  }
+  if (raw.length > 2048) {
+    return "Please paste a valid link.";
+  }
+  if (YT_VIDEO_ID_RE.test(raw)) {
+    return null;
+  }
+
+  let parsed: URL;
+  try {
+    parsed = new URL(raw.includes("://") ? raw : `https://${raw}`);
+  } catch {
+    return "Please paste a valid link.";
+  }
+  if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+    return "Please paste a valid http(s) link.";
+  }
+
+  const host = parsed.hostname.toLowerCase().replace(/\.$/, "");
+  if (ALLOWED_YOUTUBE_HOST_SET.has(host)) {
+    return validateYouTubeUrl(raw);
+  }
+  if (!host.includes(".")) {
+    return "Please paste a valid link.";
+  }
+  const segments = parsed.pathname.toLowerCase().split("/").filter(Boolean);
+  if (segments.includes("playlist") || segments.includes("sets") || parsed.searchParams.has("list")) {
+    return "Playlists are not supported. Please paste a link to a single video or track.";
+  }
+  if (segments.includes("live")) {
+    return "Live streams cannot be analyzed. Please choose a finished video up to 20 minutes long.";
+  }
+  return null;
+}
+
+/**
  * Extracts the 11-character YouTube video ID from a valid YouTube URL or ID,
  * or returns null if invalid.
  */
@@ -496,11 +541,11 @@ export function extractYouTubeVideoId(urlOrId: string | null | undefined): strin
 }
 
 /**
- * Downloads the audio behind a validated YouTube link via the backend and
+ * Downloads the audio behind a validated media link (YouTube, Instagram, TikTok, ...) via the backend and
  * returns it as a File, ready for `analyzeFile` and local playback.
  */
 export async function fetchMediaFromLink(url: string, signal?: AbortSignal): Promise<File> {
-  const validationError = validateYouTubeUrl(url);
+  const validationError = validateMediaLink(url);
   if (validationError) {
     throw new Error(validationError);
   }

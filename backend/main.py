@@ -41,10 +41,11 @@ from services.analysis_engine import AnalysisInputError, analyze, analyze_from_a
 from services.assistant_engine import answer_question
 from services.audio_extract import TMP_DIR, AudioExtractionError, cleanup, extract_audio_to_wav
 from services.difficulty import rate_difficulty
-from services.media_fetch import MediaFetchError, YOUTUBE_FALLBACK_MESSAGE, fetch_media, search_youtube
+from services.media_fetch import LINK_FALLBACK_MESSAGE, MediaFetchError, YOUTUBE_FALLBACK_MESSAGE, fetch_media, search_youtube
 from services.midi_export import build_midi_bytes
 from services.pdf_export import build_chord_chart_pdf, build_lead_sheet_pdf
 from services.pitch_shift import pitch_shift_to_m4a
+from services import stem_separation
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("wilsify")
@@ -69,6 +70,9 @@ RATE_LIMITED_PATHS = {
     "/api/analyze",
     "/api/analyze/stream",
     "/api/pitch-shift",
+    "/api/stems/analyze",
+    "/api/stems/separate",
+    "/api/pipeline/jobs",
     "/api/fetch-media",
     "/api/youtube/search",
 }
@@ -692,7 +696,7 @@ async def analyze_upload_stream(request: Request, file: UploadFile = File(...)):
 @app.post("/api/fetch-media")
 def fetch_media_from_link(req: FetchMediaRequest, request: Request):
     """
-    Downloads the audio behind a pasted YouTube link and streams it back, so the
+    Downloads the audio behind a pasted link (YouTube, Instagram, TikTok, ...) and streams it back, so the
     browser can play it and send it through /api/analyze like any upload.
     The server copy is deleted as soon as the response has been sent.
     """
@@ -710,7 +714,7 @@ def fetch_media_from_link(req: FetchMediaRequest, request: Request):
         logger.exception("[%s] Fetching media failed unexpectedly for %r", request_id, req.url)
         raise HTTPException(
             status_code=502,
-            detail=YOUTUBE_FALLBACK_MESSAGE,
+            detail=LINK_FALLBACK_MESSAGE,
             headers={"X-Request-ID": request_id, "X-Request-Id": request_id},
         )
 
@@ -845,6 +849,114 @@ async def pitch_shift(semitones: int, file: UploadFile = File(...)):
     )
 
 
+# ── Stem separation (Demucs) ───────────────────────────────────────────────
+# Contract matches frontend/src/lib/stemJob.ts.
+
+
+class StemSeparateRequest(BaseModel):
+    upload_id: str = Field(max_length=64)
+    stems: list[str] = Field(default_factory=list, max_length=20)
+    format: Literal["wav", "flac"] = "wav"
+
+
+@app.post("/api/stems/analyze")
+async def stems_analyze(file: UploadFile = File(...)):
+    """Stores the upload for a later /separate call and lists the stems we can produce."""
+    stem_separation.sweep_expired()
+    ext = _validate_upload_type(file)
+    tmp_input_path, _size = await _save_upload(file, ext)
+    try:
+        upload_id = stem_separation.store_upload(tmp_input_path, ext)
+        duration = await run_in_threadpool(stem_separation.duration_seconds, stem_separation.upload_path(upload_id))
+    except stem_separation.StemError as e:
+        cleanup(tmp_input_path)
+        raise HTTPException(status_code=400, detail=str(e))
+    return {
+        "upload_id": upload_id,
+        "track": os.path.splitext(_safe_display_name(file.filename))[0],
+        "duration_seconds": round(duration, 1),
+        "estimated_seconds": round(duration * stem_separation.SECONDS_PER_AUDIO_SECOND) + 10,
+        # Demucs always produces these four; whether a part is really in the
+        # song is only known after separation, so none claims "high".
+        "detected_stems": [
+            {"id": sid, "label": label, "confidence": "medium", "available": True}
+            for sid, label in stem_separation.STEMS.items()
+        ],
+    }
+
+
+@app.post("/api/stems/separate")
+def stems_separate(req: StemSeparateRequest):
+    try:
+        job_id = stem_separation.start_job(req.upload_id, req.stems, req.format)
+    except stem_separation.StemError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    return {"job_id": job_id}
+
+
+def _stem_job_or_404(job_id: str) -> dict:
+    job = stem_separation.get_job(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="That separation job doesn't exist or has expired.")
+    return job
+
+
+@app.get("/api/stems/job/{job_id}")
+def stems_job_status(job_id: str):
+    job = _stem_job_or_404(job_id)
+    return {
+        "status": job["status"],
+        "progress": round(job["progress"], 1),
+        "message": job["message"],
+        "error": job["error"],
+    }
+
+
+@app.get("/api/stems/job/{job_id}/stems")
+def stems_job_results(job_id: str, request: Request):
+    job = _stem_job_or_404(job_id)
+    if job["status"] != "complete":
+        raise HTTPException(status_code=409, detail="Separation hasn't finished yet.")
+    base = str(request.base_url).rstrip("/")
+    stems = []
+    for i, (sid, path) in enumerate(job["files"].items(), start=1):
+        stems.append({
+            "id": sid,
+            "label": stem_separation.stem_label(sid, job["model"]),
+            "confidence": "medium",
+            "size_bytes": os.path.getsize(path),
+            "url": f"{base}/api/stems/job/{job_id}/file/{sid}",
+            "filename": f"{i:02d}_{sid}.{job['format']}",
+            "warning": "",
+        })
+    # An unsure guitar/piano went into Other; if Other was itself dropped as silent,
+    # that part simply isn't in the song, so list it with the left-out ones.
+    folded = job["folded"] if "other" in job["files"] else []
+    left_out = job["silent"] + [s for s in job["folded"] if s not in folded]
+    silent = [stem_separation.stem_label(s, job["model"]) for s in left_out]
+    notice = f"Not detected in this song (almost silent), so left out: {', '.join(silent)}. " if silent else ""
+    if folded:
+        notice += f"No clear {' or '.join(stem_separation.STEMS[s].lower() for s in folded)} found, so it stays in Other. "
+    # Both the Stems page and the Analysis page show this notice above the results.
+    notice += f"Download your stems now: they're deleted from our server after {stem_separation.STEM_TTL_SECONDS // 3600} hour."
+    return {"stems": stems, "notice": notice}
+
+
+@app.get("/api/stems/job/{job_id}/file/{stem}")
+def stems_job_file(job_id: str, stem: str):
+    path = stem_separation.job_file(job_id, stem)
+    if not path or not os.path.exists(path):
+        raise HTTPException(status_code=404, detail="That stem file doesn't exist or has expired.")
+    # filename= makes it an attachment: the browser saves the file instead of
+    # opening a bare player page (the app's <a download> is ignored cross-origin).
+    # <audio> playback of the same URL is unaffected.
+    return FileResponse(
+        path,
+        media_type="audio/flac" if path.endswith(".flac") else "audio/wav",
+        filename=os.path.basename(path),
+    )
+
+
 @app.post("/api/rights-attestation")
 def rights_attestation(req: RightsAttestationRequest):
     """
@@ -864,3 +976,10 @@ def rights_attestation(req: RightsAttestationRequest):
     except OSError:
         logger.warning("Could not write rights attestation log at %s", RIGHTS_ATTESTATION_LOG)
     return {"status": "logged", **record}
+
+
+# Job-based analysis pipeline (ANALYSIS_ENGINE=pipeline). Reuses this file's
+# upload validation so both engines accept exactly the same files.
+from routes.pipeline import create_pipeline_router  # noqa: E402
+
+app.include_router(create_pipeline_router(_validate_upload_type, _save_upload, _safe_display_name))

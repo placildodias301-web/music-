@@ -385,7 +385,7 @@ export function LiveChordSync({ analysis, audioUrl, selectedChord, onActiveChord
                   type="button"
                   onClick={() => void togglePlay()}
                   disabled={Boolean(clock.error)}
-                  className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-xl bg-[var(--color-ns-coral)] text-[var(--color-ns-ink)] shadow-md transition-transform hover:scale-105 active:scale-95 disabled:opacity-50"
+                  className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-xl bg-[var(--color-ns-coral)] text-[var(--color-ns-ink)] shadow-md transition-shadow hover:shadow-[0_0_14px_rgba(255,176,32,0.45)] disabled:opacity-50"
                   aria-label={counting ? "Cancel count-in" : clock.isPlaying ? "Pause track" : "Play track"}
                 >
                   {counting ? (

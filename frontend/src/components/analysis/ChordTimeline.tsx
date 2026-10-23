@@ -63,7 +63,7 @@ const ChordBlock = memo(function ChordBlock({ seg, index, pps, active, selected,
       aria-label={`${title}${interactive ? ". Play from here" : ""}`}
       aria-current={active ? "true" : undefined}
       className={`absolute top-0 flex h-full flex-col justify-center overflow-hidden rounded-lg border px-1.5 text-left transition-[box-shadow,transform,background-color] duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ns-purple-light)] ${
-        active ? "z-10 -translate-y-0.5" : "hover:-translate-y-0.5"
+        active ? "z-10" : "hover:shadow-[0_0_14px_rgba(255,176,32,0.45)]"
       } ${uncertain ? "border-dashed" : ""}`}
       style={{
         left: seg.start * pps,

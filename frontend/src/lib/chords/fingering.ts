@@ -93,6 +93,19 @@ const CANONICAL_GUITAR_FINGERINGS: Record<string, { fingers: (number | null)[]; 
   "x,x,3,2,1,1": { fingers: [null, null, 3, 2, 1, 1], difficulty: "Intermediate" },
 };
 
+/**
+ * A barre is one finger laid flat across a run of strings. It can lie over a MUTED string (touching it silences it — the
+ * classic x-3-1-x-1-2 shapes), but it cannot cross an OPEN string (the finger would fret it) or a string fretted lower.
+ */
+function barreIsPlayable(frets: (number | null)[], fret: number, from: number, to: number): boolean {
+  for (let i = from; i <= to; i++) {
+    const f = frets[i];
+    if (f === null || f === undefined) continue; // muted: the flat finger deadens it
+    if (f === 0 || f < fret) return false;
+  }
+  return true;
+}
+
 function fretsToKey(frets: (number | null)[]): string {
   return frets.map((f) => (f === null || f < 0 ? "x" : String(f))).join(",");
 }
@@ -119,7 +132,7 @@ export function assignFingers(frets: (number | null)[]): FingeringResult {
     const minFretIndices = frets
       .map((f, i) => (f === minFret ? i : -1))
       .filter((i) => i !== -1);
-    if (minFretIndices.length >= 2 && minFret > 0) {
+    if (minFretIndices.length >= 2 && minFret > 0 && barreIsPlayable(frets, minFret, Math.min(...minFretIndices), Math.max(...minFretIndices))) {
       barres.push({
         fret: minFret,
         fromString: Math.min(...minFretIndices),
@@ -169,7 +182,10 @@ export function assignFingers(frets: (number | null)[]): FingeringResult {
 
   // Check for barre condition:
   // If 2 or more strings are on minFret AND minFret > 0
-  const isBarre = lowestFretStrings.length >= 2;
+  // (and one finger can actually lie across them: an open string in between means two separate fingers)
+  const isBarre =
+    lowestFretStrings.length >= 2 &&
+    barreIsPlayable(frets, minFret, Math.min(...lowestFretStrings.map((s) => s.stringIdx)), Math.max(...lowestFretStrings.map((s) => s.stringIdx)));
 
   if (isBarre) {
     const stringIndices = lowestFretStrings.map((s) => s.stringIdx);
@@ -212,31 +228,12 @@ export function assignFingers(frets: (number | null)[]): FingeringResult {
     // Sort fretted notes by fret ascending; if frets are equal, sort by string
     const sorted = [...fretted].sort((a, b) => a.fret - b.fret || a.stringIdx - b.stringIdx);
 
-    // Assign fingers 1, 2, 3, 4 based on relative fret and string position
     const assigned = new Map<number, number>(); // stringIdx -> finger
-
-    // Simple mapping:
-    // Sort unique frets
-    const uniqueFrets = Array.from(new Set(sorted.map((s) => s.fret))).sort((a, b) => a - b);
-    
-    if (uniqueFrets.length === 1) {
-      // All on same fret (e.g. A-shape open or partial)
-      sorted.forEach((note, idx) => {
-        assigned.set(note.stringIdx, Math.min(idx + 1, 4));
-      });
-    } else {
-      let currentFinger = 1;
-      for (const fretVal of uniqueFrets) {
-        const notesOnFret = sorted.filter((n) => n.fret === fretVal);
-        for (const note of notesOnFret) {
-          assigned.set(note.stringIdx, Math.min(currentFinger, 4));
-          if (notesOnFret.length > 1) {
-            currentFinger = Math.min(currentFinger + 1, 4);
-          }
-        }
-        currentFinger = Math.min(currentFinger + 1, 4);
-      }
-    }
+    // One finger per fretted note, in fret order (then string order): a finger can never be on two different frets.
+    // The shape search only returns shapes that need four fingers or fewer (a flat barre counts as one).
+    sorted.forEach((note, idx) => {
+      assigned.set(note.stringIdx, Math.min(idx + 1, 4));
+    });
 
     for (const [sIdx, finger] of assigned.entries()) {
       resultFingers[sIdx] = finger;

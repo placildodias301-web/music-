@@ -34,6 +34,10 @@ export interface StringAcousticProperties {
 
 export interface InstrumentPreset {
   id: InstrumentType;
+  /** Lowest and highest open-string MIDI the string profiles are spread across (for picking a profile by pitch, not by string index). */
+  pitchRange?: [number, number];
+  /** Order of `strings` by ascending pitch, when the array itself is not ascending (ukulele's re-entrant G). */
+  pitchOrder?: number[];
   name: string;
   defaultPluckStyle: PluckStyle;
   bodyResonanceFreqs: { freq: number; Q: number; gainDb: number }[];
@@ -56,6 +60,10 @@ export interface NotePlayOptions {
   instrument?: InstrumentType;
   startTime?: number; // AudioContext time
   pan?: number; // -1 to 1 (stereo spread)
+  /** Linear voice gain. Set by the voice planner so many simultaneous voices stay balanced; defaults to a single-note level. */
+  gain?: number;
+  /** Strand offsets (semitones) when the note is a whole course: [0, 0] mandolin pair, [0, 12] 12-string octave pair. */
+  strands?: number[];
 }
 
 export interface ChordPlayOptions {
@@ -63,6 +71,10 @@ export interface ChordPlayOptions {
   frets: (number | null)[];
   tuningMidi: number[];
   capo?: number;
+  /** Per string/course, the semitone offsets of its strands (mandolin [[0,0],…], 12-string [[0,12],…]). Default: one strand each. */
+  courses?: number[][];
+  /** A new chord fades out whatever is still ringing from the previous one (default true), so rapid clicks never pile up. */
+  exclusive?: boolean;
   direction?: StrumDirection;
   speed?: StrumSpeed | number; // presets or duration in seconds
   velocity?: number;
@@ -76,6 +88,8 @@ export interface ArpeggioPlayOptions {
   instrument?: InstrumentType;
   frets: (number | null)[];
   tuningMidi: number[];
+  courses?: number[][];
+  exclusive?: boolean;
   speed?: StrumSpeed;
   direction?: "up" | "down" | "up-down";
   velocity?: number;

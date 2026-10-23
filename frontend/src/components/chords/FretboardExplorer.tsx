@@ -10,6 +10,10 @@ export interface FretboardExplorerProps {
   stringNames?: string[];
   activeShapeFrets?: (number | null)[];
   instrument?: string;
+  /** How many frets to draw (24 on a guitar, fewer on a ukulele or mandolin). */
+  numFrets?: number;
+  /** Heading name: "Fretboard", or "Fingerboard" for fretless instruments. */
+  boardName?: string;
   onNoteClick?: (info: {
     stringIndex: number;
     fret: number;
@@ -32,6 +36,8 @@ export function FretboardExplorer({
   stringNames: _stringNames,
   activeShapeFrets,
   instrument = "guitar",
+  numFrets = 24,
+  boardName = "Fretboard",
   onNoteClick,
 }: FretboardExplorerProps) {
   const { settings } = useSettings();
@@ -39,7 +45,6 @@ export function FretboardExplorer({
   const [labelMode, setLabelMode] = useState<LabelMode>("notes");
   const [useFlats, setUseFlats] = useState(false);
 
-  const numFrets = 24;
   const numStrings = tuningMidi.length;
   const isLeftHanded = settings.display.leftHanded;
 
@@ -97,7 +102,7 @@ export function FretboardExplorer({
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[var(--color-ns-border)] pb-4">
         <div>
           <h4 className="font-heading text-sm font-bold text-[var(--color-ns-text)]">
-            Full 24-Fret Fretboard Explorer
+            Full {numFrets}-{boardName === "Fretboard" ? "Fret Fretboard" : "Position Fingerboard"} Explorer
           </h4>
           <p className="text-[0.6875rem] text-[var(--color-ns-muted)]">
             Click any fret position to play the note and view its harmonic interval.
@@ -175,7 +180,7 @@ export function FretboardExplorer({
           className="select-none min-w-[900px]"
         >
           {/* Fret marker dots on wood */}
-          {FRET_MARKERS_SINGLE.map((fret) => {
+          {FRET_MARKERS_SINGLE.filter((f) => f <= numFrets).map((fret) => {
             const cx = nutWidth + (fret - 0.5) * fretWidth;
             const cy = (totalHeight - 20) / 2;
             return (
@@ -190,7 +195,7 @@ export function FretboardExplorer({
             );
           })}
 
-          {FRET_MARKERS_DOUBLE.map((fret) => {
+          {FRET_MARKERS_DOUBLE.filter((f) => f <= numFrets).map((fret) => {
             const cx = nutWidth + (fret - 0.5) * fretWidth;
             return (
               <g key={`double-${fret}`}>
@@ -301,7 +306,7 @@ export function FretboardExplorer({
                 <g
                   key={`dot-${sIdx}-${fret}`}
                   onClick={() => handleCellClick(sIdx, fret)}
-                  className="cursor-pointer transition-transform hover:scale-125"
+                  className="cursor-pointer transition-[filter] hover:[filter:drop-shadow(0_0_5px_var(--color-ns-amber))]"
                 >
                   <circle
                     cx={cx}

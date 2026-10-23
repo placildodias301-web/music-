@@ -108,3 +108,6 @@ backend/venv/
 .pytest_cache/
 __pycache__/
 local.properties
+
+# Analysis pipeline: jobs, temp audio, SQLite results cache
+backend/pipeline_data/

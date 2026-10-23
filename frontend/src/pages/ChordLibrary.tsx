@@ -9,13 +9,15 @@ import {
   enharmonicRoot,
   parseChordSymbol,
   qualityForSuffix,
+  slashChordsForRoot,
+  SLASH_CHORDS_PER_ROOT,
   type ChordCategory,
   type ParsedChord,
 } from "../lib/chordTheory";
 import { ChordCard, FilterPill } from "../components/chords/ChordCard";
 import { SettingsSelect } from "../components/settings/SettingsSelect";
 import { InstrumentPicker } from "../components/instruments/InstrumentPicker";
-import { chordTunings, HARMONICA_KEYS, HARP_CHORD_TYPES, loadChordSettings, saveChordSettings, type ChordSettings } from "../lib/chords/model";
+import { chordTunings, loadChordSettings, saveChordSettings, tuningChoices, type ChordSettings } from "../lib/chords/model";
 import { inversionName } from "../lib/chords/theory";
 import { chordInstruments, findDefinition } from "../lib/instruments/definitions";
 import { ChordFamilyPanel } from "../components/chords/ChordFamilyPanel";
@@ -24,6 +26,17 @@ import { ChordExplorerView } from "../components/chords/ChordExplorerView";
 type Tab = "explorer" | "library" | "family";
 
 const ALL_CHORDS: ParsedChord[] = ALL_CHORD_SYMBOLS.map(parseChordSymbol);
+
+/** Slash chords / inversions on one root (C/E, C/G, Cmaj7/B…), generated from the same quality formulas. */
+const SLASH_BY_ROOT: ParsedChord[][] = Array.from({ length: 12 }, (_, pc) => slashChordsForRoot(pc));
+
+/** A typed slash chord like "C/E", "Am7/G" or "D/F#": any known quality over any bass note. */
+function typedSlashChord(query: string): ParsedChord | null {
+  const m = /^([A-Ga-g][#b♯♭]?)\s*(.*?)\s*\/\s*([A-Ga-g][#b♯♭]?)$/.exec(query.trim().replace(/♯/g, "#").replace(/♭/g, "b"));
+  if (!m || !qualityForSuffix(m[2])) return null;
+  const cap = (n: string) => n[0].toUpperCase() + n.slice(1);
+  return parseChordSymbol(`${cap(m[1])}${m[2]}/${cap(m[3])}`);
+}
 
 /** Parses a typed query like "Bbm7", "C#ø" or "f maj7" into an exact chord, if it is one. */
 function exactChordFor(query: string): { root: number; suffix: string } | null {
@@ -52,12 +65,7 @@ export function ChordLibrary() {
   const [chordSettings, setChordSettings] = useState<ChordSettings>(loadChordSettings);
   const definition = findDefinition(chordSettings.definitionId) ?? findDefinition("guitar")!;
   const tunings = useMemo(() => chordTunings(definition), [definition]);
-  const tuningOptions =
-    definition.id === "harp"
-      ? HARP_CHORD_TYPES.map((t) => ({ id: t.id, name: t.name }))
-      : definition.id === "harmonica"
-        ? HARMONICA_KEYS.map((k) => ({ id: k.id, name: k.name }))
-        : tunings.map((t) => ({ id: t.id, name: t.name }));
+  const tuningOptions = tuningChoices(definition);
   const tuningValue = tuningOptions.find((t) => t.id === chordSettings.tuningId)?.id ?? tuningOptions[0]?.id ?? "";
   const tuningNote = tunings.find((t) => t.id === tuningValue)?.note;
   const hasInversions = definition.chordRenderer === "keyboard" || definition.chordRenderer === "mallet" || definition.chordRenderer === "accordion";
@@ -69,13 +77,14 @@ export function ChordLibrary() {
   const cardSettings = useMemo<ChordSettings>(() => ({ ...chordSettings, definitionId: definition.id, tuningId: tuningValue || undefined }), [chordSettings, definition.id, tuningValue]);
   const [searchParams, setSearchParams] = useSearchParams();
   const tabParam = searchParams.get("tab");
-  const tab: Tab = tabParam === "library" ? "library" : tabParam === "family" ? "family" : "explorer";
+  // Order: All chords, Chord family, Chord explorer — All chords is the landing tab.
+  const tab: Tab = tabParam === "explorer" ? "explorer" : tabParam === "family" ? "family" : "library";
   const [selectedChordSymbol, setSelectedChordSymbol] = useState<string>(searchParams.get("chord") ?? "C");
 
   const setTab = (next: Tab) =>
     setSearchParams(
       (params) => {
-        if (next === "explorer") {
+        if (next === "library") {
           params.delete("tab");
         } else {
           params.set("tab", next);
@@ -95,12 +104,14 @@ export function ChordLibrary() {
   }
   const [root, setRoot] = useState<number | "all">(0);
   const [alphabetical, setAlphabetical] = useState(false);
-  const [category, setCategory] = useState<ChordCategory | "all">("all");
+  const [category, setCategory] = useState<ChordCategory | "all" | "slash">("all");
 
   const searching = query.trim().length > 0;
 
   const filtered = useMemo(() => {
     if (searching) {
+      const slash = typedSlashChord(query);
+      if (slash) return [slash];
       const q = query.trim().replace(/♯/g, "#").replace(/♭/g, "b");
       const exact = exactChordFor(q);
       const lower = q.toLowerCase();
@@ -116,17 +127,18 @@ export function ChordLibrary() {
         return ea - eb;
       });
     }
-    const byFilter = ALL_CHORDS.filter(
-      (c) => (root === "all" || c.root === root) && (category === "all" || c.quality.category === category)
-    );
+    const byFilter =
+      category === "slash"
+        ? (root === "all" ? SLASH_BY_ROOT.flat() : SLASH_BY_ROOT[root])
+        : ALL_CHORDS.filter((c) => (root === "all" || c.root === root) && (category === "all" || c.quality.category === category));
     if (!alphabetical) return byFilter;
     const fromA = (pc: number) => (pc - A_PC + 12) % 12;
-    return byFilter.sort((a, b) => fromA(a.root) - fromA(b.root));
+    return [...byFilter].sort((a, b) => fromA(a.root) - fromA(b.root));
   }, [query, searching, root, category, alphabetical]);
 
   const qualitiesPerCategory = (cat: ChordCategory) => CHORD_QUALITIES.filter((q) => q.category === cat).length;
-  const totalFor = (cat: ChordCategory | "all") =>
-    (cat === "all" ? CHORD_QUALITIES.length : qualitiesPerCategory(cat)) * (root === "all" ? 12 : 1);
+  const totalFor = (cat: ChordCategory | "all" | "slash") =>
+    (cat === "slash" ? SLASH_CHORDS_PER_ROOT : cat === "all" ? CHORD_QUALITIES.length : qualitiesPerCategory(cat)) * (root === "all" ? 12 : 1);
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6 sm:py-10 md:px-8">
@@ -146,9 +158,9 @@ export function ChordLibrary() {
       {/* Tabs */}
       <div className="mb-6 flex w-fit gap-1.5 rounded-xl border border-[var(--color-ns-border)] bg-[var(--color-ns-bg)] p-1" role="tablist" aria-label="Chord views">
         {([
-          ["explorer", "Chord Explorer"],
           ["library", "All chords"],
           ["family", "Chord family"],
+          ["explorer", "Chord Explorer"],
         ] as [Tab, string][]).map(([t, label]) => (
           <button
             key={t}
@@ -168,7 +180,7 @@ export function ChordLibrary() {
       </div>
 
       {tab === "explorer" ? (
-        <ChordExplorerView initialChordSymbol={selectedChordSymbol} />
+        <ChordExplorerView initialChordSymbol={selectedChordSymbol} settings={chordSettings} onSettingsChange={update} />
       ) : tab === "family" ? (
         <ChordFamilyPanel settings={cardSettings} />
       ) : (
@@ -231,7 +243,7 @@ export function ChordLibrary() {
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 aria-label="Search all chords"
-                placeholder="Search chord (e.g. Bbm7, F#9, sus4)…"
+                placeholder="Search chord (e.g. Bbm7, F#9, sus4, C/E)…"
                 className="input-base py-2 pl-9 pr-8 text-xs rounded-xl"
               />
               {query && (
@@ -291,9 +303,9 @@ export function ChordLibrary() {
               <span className="mr-1 w-16 text-[0.6562rem] font-bold uppercase tracking-[0.12em] text-[var(--color-ns-muted)]">
                 Type
               </span>
-              {(["all", ...CHORD_CATEGORIES] as const).map((cat) => (
+              {(["all", ...CHORD_CATEGORIES, "slash"] as const).map((cat) => (
                 <FilterPill key={cat} selected={category === cat} onClick={() => setCategory(cat)}>
-                  {cat === "all" ? "All types" : cat}
+                  {cat === "all" ? "All types" : cat === "slash" ? "Slash / inversions" : cat}
                   <span className="ml-1.5 text-[0.625rem] opacity-60">{totalFor(cat)}</span>
                 </FilterPill>
               ))}
@@ -303,13 +315,15 @@ export function ChordLibrary() {
           <p className="mb-4 text-xs text-[var(--color-ns-muted)]" aria-live="polite">
             {searching
               ? `${filtered.length} ${filtered.length === 1 ? "chord match" : "chords match"} “${query.trim()}”`
-              : `Showing ${filtered.length} of ${ALL_CHORD_SYMBOLS.length} chords`}
+              : category === "slash"
+                ? `Showing ${filtered.length} slash chords — each tone of the chord in the bass`
+                : `Showing ${filtered.length} of ${ALL_CHORD_SYMBOLS.length} chords`}
           </p>
 
           {filtered.length === 0 ? (
             <div className="rounded-2xl border border-[var(--color-ns-border)] bg-[var(--color-ns-card)] p-12 text-center text-sm text-[var(--color-ns-muted)]">
-              No chords match “{query.trim()}”. Try a root plus type like <span className="font-semibold text-[var(--color-ns-text)]">Ebmaj7</span> or{" "}
-              <span className="font-semibold text-[var(--color-ns-text)]">Gsus4</span>.
+              No chords match “{query.trim()}”. Try a root plus type like <span className="font-semibold text-[var(--color-ns-text)]">Ebmaj7</span>,{" "}
+              <span className="font-semibold text-[var(--color-ns-text)]">Gsus4</span> or a slash chord like <span className="font-semibold text-[var(--color-ns-text)]">C/E</span>.
             </div>
           ) : (
             <div className="grid grid-cols-2 gap-3.5 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">

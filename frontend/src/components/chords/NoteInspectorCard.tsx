@@ -1,13 +1,15 @@
 import { type PlayedStringAnalysis } from "../../lib/chords/analysis";
-import { audioEngine } from "../../lib/audio";
+import { playPlayedString } from "../../lib/chords/play";
 
 export interface NoteInspectorCardProps {
   selectedNote: PlayedStringAnalysis | null;
   onClearSelection?: () => void;
   instrument?: string;
+  courses?: number[][];
+  totalStrings?: number;
 }
 
-export function NoteInspectorCard({ selectedNote, onClearSelection, instrument = "guitar" }: NoteInspectorCardProps) {
+export function NoteInspectorCard({ selectedNote, onClearSelection, instrument = "guitar", courses, totalStrings }: NoteInspectorCardProps) {
   if (!selectedNote) {
     return (
       <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-[var(--color-ns-border)] bg-[var(--color-ns-card)]/40 p-6 text-center">
@@ -26,17 +28,7 @@ export function NoteInspectorCard({ selectedNote, onClearSelection, instrument =
   const isOpen = selectedNote.action === "open";
 
   const handlePlay = () => {
-    if (selectedNote.midi !== null) {
-      const inst = instrument === "bass" ? "bass" : instrument === "ukulele" ? "ukulele" : "guitar";
-      audioEngine.playNote({
-        midi: selectedNote.midi,
-        stringIndex: selectedNote.stringIndex,
-        fret: selectedNote.fret,
-        isOpen,
-        isMuted,
-        instrument: inst,
-      });
-    }
+    void playPlayedString(selectedNote, { instrumentId: instrument, totalStrings: totalStrings ?? selectedNote.stringNumber + selectedNote.stringIndex, courses }).catch(() => {});
   };
 
   return (
@@ -67,7 +59,7 @@ export function NoteInspectorCard({ selectedNote, onClearSelection, instrument =
             <button
               type="button"
               onClick={handlePlay}
-              className="flex items-center gap-1.5 rounded-xl border border-[var(--color-ns-amber)] bg-[var(--color-ns-amber)]/10 px-3 py-1.5 text-xs font-bold text-[var(--color-ns-amber)] transition-all hover:bg-[var(--color-ns-amber)] hover:text-[var(--color-ns-ink)] active:scale-95"
+              className="flex items-center gap-1.5 rounded-xl border border-[var(--color-ns-amber)] bg-[var(--color-ns-amber)]/10 px-3 py-1.5 text-xs font-bold text-[var(--color-ns-amber)] transition-all hover:bg-[var(--color-ns-amber)] hover:text-[var(--color-ns-ink)]"
             >
               <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
                 <polygon points="5 3 19 12 5 21 5 3" />

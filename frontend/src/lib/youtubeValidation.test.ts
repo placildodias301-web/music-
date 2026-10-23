@@ -7,6 +7,7 @@ import {
   fetchMediaFromLink,
   searchYouTube,
   validateUploadFile,
+  validateMediaLink,
   validateYouTubeUrl,
   YOUTUBE_FALLBACK_MESSAGE,
   type YouTubeVideo,
@@ -159,6 +160,30 @@ describe("TASK-05: YouTube URL validation, selection metadata, and fallback beha
       expect(validateUploadFile(fallbackFile)).toBeNull();
     } finally {
       vi.unstubAllGlobals();
+    }
+  });
+});
+
+describe("validateMediaLink", () => {
+  it("accepts links from many sites and still applies the strict YouTube rules", () => {
+    for (const link of [
+      "https://www.instagram.com/reel/Cabc123xyz/",
+      "https://www.tiktok.com/@artist/video/7123456789012345678",
+      "https://vm.tiktok.com/ZM123/",
+      "https://soundcloud.com/artist/track",
+      "https://vimeo.com/123456789",
+      "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+      "dQw4w9WgXcQ",
+    ]) {
+      expect(validateMediaLink(link)).toBeNull();
+    }
+    expect(validateMediaLink("https://www.youtube.com/playlist?list=PL1234567890")).toEqual(expect.any(String));
+    expect(validateMediaLink("https://www.youtube.com/@artist")).toEqual(expect.any(String));
+  });
+
+  it("rejects blanks, non-http links, bare words, playlists and live streams", () => {
+    for (const link of ["", "   ", "ftp://example.com/a", "javascript:alert(1)", "notalink", "https://soundcloud.com/a/sets/b", "https://vimeo.com/live/1"]) {
+      expect(validateMediaLink(link)).toEqual(expect.any(String));
     }
   });
 });

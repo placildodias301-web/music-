@@ -5,3 +5,5 @@ export * from "./KarplusStrong";
 export * from "./StrumEngine";
 export * from "./ArpeggioEngine";
 export * from "./AudioEngine";
+export * from "./pitch";
+export * from "./voicePlan";

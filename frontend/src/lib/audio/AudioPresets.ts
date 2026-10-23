@@ -49,6 +49,7 @@ const UKULELE_STRINGS: StringAcousticProperties[] = [
 export const INSTRUMENT_PRESETS: Record<InstrumentType, InstrumentPreset> = {
   guitar: {
     id: "guitar",
+    pitchRange: [40, 64],
     name: "Acoustic Guitar",
     defaultPluckStyle: "pick",
     bodyResonanceFreqs: [
@@ -62,6 +63,7 @@ export const INSTRUMENT_PRESETS: Record<InstrumentType, InstrumentPreset> = {
   },
   "acoustic-guitar": {
     id: "acoustic-guitar",
+    pitchRange: [40, 64],
     name: "Acoustic Guitar",
     defaultPluckStyle: "pick",
     bodyResonanceFreqs: [
@@ -75,6 +77,7 @@ export const INSTRUMENT_PRESETS: Record<InstrumentType, InstrumentPreset> = {
   },
   "electric-guitar": {
     id: "electric-guitar",
+    pitchRange: [40, 64],
     name: "Electric Guitar",
     defaultPluckStyle: "pick",
     bodyResonanceFreqs: [
@@ -88,6 +91,7 @@ export const INSTRUMENT_PRESETS: Record<InstrumentType, InstrumentPreset> = {
   },
   bass: {
     id: "bass",
+    pitchRange: [28, 43],
     name: "Electric Bass",
     defaultPluckStyle: "finger",
     bodyResonanceFreqs: [
@@ -101,6 +105,9 @@ export const INSTRUMENT_PRESETS: Record<InstrumentType, InstrumentPreset> = {
   },
   ukulele: {
     id: "ukulele",
+    pitchRange: [60, 69],
+    // The array is in string order (G C E A, re-entrant); by pitch it runs C, E, G, A.
+    pitchOrder: [1, 2, 0, 3],
     name: "Ukulele",
     defaultPluckStyle: "finger",
     bodyResonanceFreqs: [
@@ -131,4 +138,18 @@ export function getPresetForInstrument(instrument: string = "guitar"): Instrumen
   if (instrument.includes("piano") || instrument.includes("keyboard")) return INSTRUMENT_PRESETS.piano;
   if (instrument.includes("electric")) return INSTRUMENT_PRESETS["electric-guitar"];
   return INSTRUMENT_PRESETS.guitar;
+}
+
+/**
+ * The acoustic profile for a note, chosen by its PITCH within the instrument's range — never by which string index it came
+ * from — so a mandolin, a 7-string or a re-entrant ukulele all get a sensible profile from the same preset.
+ */
+export function profileForMidi(preset: InstrumentPreset, midi: number): StringAcousticProperties {
+  const n = preset.strings.length;
+  if (!n || !preset.pitchRange) return preset.defaultString;
+  const [lo, hi] = preset.pitchRange;
+  const t = Math.min(1, Math.max(0, (midi - lo) / Math.max(1, hi - lo)));
+  const rank = Math.round(t * (n - 1));
+  const idx = preset.pitchOrder ? preset.pitchOrder[rank] : rank;
+  return preset.strings[idx] ?? preset.defaultString;
 }

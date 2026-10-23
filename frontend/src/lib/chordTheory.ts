@@ -75,6 +75,15 @@ export const CHORD_QUALITIES: QualityDef[] = [
   { suffix: "7b13", name: "seventh flat thirteen", category: "Altered", tones: [[0, 1], [4, 3], [7, 5], [10, 7], [20, 13]], optional: [7] },
   { suffix: "maj7#11", name: "major seventh sharp eleven", category: "Altered", tones: [[0, 1], [4, 3], [7, 5], [11, 7], [18, 11]], optional: [7] },
   { suffix: "maj7#5", name: "augmented major seventh", category: "Altered", tones: [[0, 1], [4, 3], [8, 5], [11, 7]], optional: [], aliases: ["+maj7", "maj7+5"] },
+  { suffix: "7b5b9", name: "seventh flat five flat nine", category: "Altered", tones: [[0, 1], [4, 3], [6, 5], [10, 7], [13, 9]], optional: [] },
+  { suffix: "7#5b9", name: "seventh sharp five flat nine", category: "Altered", tones: [[0, 1], [4, 3], [8, 5], [10, 7], [13, 9]], optional: [] },
+  { suffix: "7#5#9", name: "seventh sharp five sharp nine", category: "Altered", tones: [[0, 1], [4, 3], [8, 5], [10, 7], [15, 9]], optional: [] },
+  { suffix: "9#11", name: "ninth sharp eleven", category: "Altered", tones: [[0, 1], [4, 3], [7, 5], [10, 7], [14, 9], [18, 11]], optional: [7, 14] },
+  { suffix: "13b9", name: "thirteenth flat nine", category: "Altered", tones: [[0, 1], [4, 3], [7, 5], [10, 7], [13, 9], [21, 13]], optional: [7] },
+  { suffix: "maj9#11", name: "major ninth sharp eleven", category: "Altered", tones: [[0, 1], [4, 3], [7, 5], [11, 7], [14, 9], [18, 11]], optional: [7, 14] },
+  // Extra sevenths and adds
+  { suffix: "7sus2", name: "dominant seventh sus2", category: "Sevenths", tones: [[0, 1], [2, 2], [7, 5], [10, 7]], optional: [7] },
+  { suffix: "madd11", name: "minor added eleventh", category: "Sixths & adds", tones: [[0, 1], [3, 3], [7, 5], [17, 11]], optional: [7] },
 ];
 
 export const CHORD_CATEGORIES: ChordCategory[] = ["Triads", "Sixths & adds", "Sevenths", "Extended", "Altered"];
@@ -174,6 +183,35 @@ export function enharmonicRoot(pc: number): string | null {
   return flats[pc] ?? null;
 }
 
+/* ─── Slash chords (a chord over a different bass note) ─── */
+
+/** Builds "C/E" style chords programmatically: any chord quality over any bass pitch class. */
+export function slashChord(rootPc: number, quality: QualityDef, bassPc: number): ParsedChord {
+  const bass = NOTE_NAMES[bassPc];
+  return { root: rootPc, quality, label: `${NOTE_NAMES[rootPc]}${quality.suffix}/${bass}`, slashBass: bassPc, slashBassNote: bass };
+}
+
+/** Qualities that are normally written over a bass note (their tones become the inversions). */
+const SLASH_SUFFIXES = ["", "m", "dim", "aug", "sus2", "sus4", "6", "m6", "7", "maj7", "m7", "m7b5", "dim7", "mMaj7", "add9"];
+
+/** Every inversion of the common chords on one root: each non-root tone below the octave in the bass (C/E, C/G, Cmaj7/B…). */
+export function slashChordsForRoot(rootPc: number): ParsedChord[] {
+  return SLASH_SUFFIXES.flatMap((suffix) => {
+    const quality = qualityForSuffix(suffix);
+    if (!quality) return [];
+    return quality.tones.filter(([semi]) => semi > 0 && semi < 12).map(([semi]) => slashChord(rootPc, quality, (rootPc + semi) % 12));
+  });
+}
+
+/** Number of slash chords on each root (they are the same count on all twelve). */
+export const SLASH_CHORDS_PER_ROOT = slashChordsForRoot(0).length;
+
+/** The tone index (0 = root) a slash chord's bass note is, or -1 when the bass is not one of the chord's tones (C/D). */
+export function slashToneIndex(chord: ParsedChord): number {
+  if (chord.slashBass === undefined) return 0;
+  return chord.quality.tones.findIndex(([semi]) => (chord.root + semi) % 12 === chord.slashBass);
+}
+
 export function chordFullName(chord: ParsedChord): string {
   return `${NOTE_NAMES[chord.root]} ${chord.quality.name}`;
 }
@@ -267,7 +305,10 @@ export function searchShapes(
   opts: { bassIsRoot: boolean; allStrings: boolean; maxPosition: number; rootOptional?: boolean }
 ) {
   const chordPcs = new Set(chordIntervals(chord).map((o) => (chord.root + o) % 12));
+  // A slash chord's bass note must sound even when it is not one of the chord's own tones (C/D).
+  if (chord.slashBass !== undefined) chordPcs.add(chord.slashBass);
   const optionalPcs = new Set(chord.quality.optional.map((o) => (chord.root + o) % 12));
+  if (chord.slashBass !== undefined) optionalPcs.delete(chord.slashBass);
   if (opts.rootOptional) optionalPcs.add(chord.root);
   const requiredPcs = [...chordPcs].filter((pc) => !optionalPcs.has(pc));
   // Instruments with fewer strings than chord tones (3-string balalaika) can only ever sound as many as they have.
@@ -288,7 +329,7 @@ export function searchShapes(
     const current: (number | null)[] = [];
     const walk = (i: number) => {
       if (i === tuning.length) {
-        const cand = evaluate(current, tuning, chord.root, requiredPcs, optionalPcs, minPlayed, opts.bassIsRoot);
+        const cand = evaluate(current, tuning, chord.slashBass ?? chord.root, requiredPcs, optionalPcs, minPlayed, opts.bassIsRoot);
         if (cand) {
           const key = cand.frets.join(",");
           const prev = results.get(key);
@@ -405,12 +446,13 @@ const guitarCache = new Map<string, GuitarVoicing[]>();
 
 /** Returns 2-3 real, playable fingering options for a chord — the "voicing picker". */
 export function getGuitarVoicings(chord: ParsedChord): GuitarVoicing[] {
-  const cacheKey = `${chord.root}:${chord.quality.suffix}`;
+  const cacheKey = `${chord.root}:${chord.quality.suffix}:${chord.slashBass ?? ""}`;
   const cached = guitarCache.get(cacheKey);
   if (cached) return cached;
 
   const voicings: GuitarVoicing[] = [];
-  const isTriad = chord.quality.suffix === "" || chord.quality.suffix === "m";
+  const slash = chord.slashBass !== undefined;
+  const isTriad = !slash && (chord.quality.suffix === "" || chord.quality.suffix === "m");
 
   if (isTriad) {
     const openKey = `${NOTE_NAMES[chord.root]}${chord.quality.suffix}`;
@@ -419,7 +461,7 @@ export function getGuitarVoicings(chord: ParsedChord): GuitarVoicing[] {
     if (OPEN_GUITAR_CHORDS[openKey]) voicings.push({ name: voicingName(OPEN_GUITAR_CHORDS[openKey]), frets: OPEN_GUITAR_CHORDS[openKey] });
     voicings.push(eShapeBarre(chord));
     voicings.push(aShapeBarre(chord));
-  } else if (chord.quality.suffix === "5") {
+  } else if (chord.quality.suffix === "5" && !slash) {
     // Power chords: the standard root–fifth–octave shapes on the E and A strings.
     const e = distanceFromE(chord.root);
     const a = distanceFromA(chord.root);
@@ -476,8 +518,9 @@ const UKULELE_CHORDS: Record<string, (number | null)[]> = {
 const ukuleleCache = new Map<string, (number | null)[]>();
 
 export function getUkuleleShape(chord: ParsedChord): (number | null)[] {
-  const tableKey = `${NOTE_NAMES[chord.root]}${chord.quality.suffix}`;
-  if (UKULELE_CHORDS[tableKey]) return UKULELE_CHORDS[tableKey];
+  const slash = chord.slashBass !== undefined;
+  const tableKey = `${NOTE_NAMES[chord.root]}${chord.quality.suffix}${slash ? `/${chord.slashBass}` : ""}`;
+  if (!slash && UKULELE_CHORDS[tableKey]) return UKULELE_CHORDS[tableKey];
 
   const cached = ukuleleCache.get(tableKey);
   if (cached) return cached;
@@ -490,7 +533,7 @@ export function getUkuleleShape(chord: ParsedChord): (number | null)[] {
   ];
   let shape: (number | null)[] = [0, 0, 0, 0];
   for (const attempt of attempts) {
-    const best = searchShapes(chord, UKULELE_TUNING, { bassIsRoot: false, maxPosition: 10, ...attempt })[0];
+    const best = searchShapes(chord, UKULELE_TUNING, { bassIsRoot: slash, maxPosition: 10, ...attempt })[0];
     if (best) {
       shape = best.frets;
       break;

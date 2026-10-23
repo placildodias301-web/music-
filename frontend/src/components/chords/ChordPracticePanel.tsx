@@ -3,12 +3,16 @@ import { Link } from "react-router-dom";
 import { type FingeringResult } from "../../lib/chords/fingering";
 import { type PracticeGuidance } from "../../lib/chords/instructions";
 import { audioEngine } from "../../lib/audio";
+import { stringVoiceFor } from "../../lib/chords/play";
+import { usePlayback } from "./usePlayback";
 import { type ParsedChord } from "../../lib/chordTheory";
 
 export interface ChordPracticePanelProps {
   chord: ParsedChord;
   frets: (number | null)[];
   tuningMidi: number[];
+  /** Strands per string/course, so paired strings sound as pairs. */
+  courses?: number[][];
   fingering: FingeringResult;
   guidance: PracticeGuidance;
   instrument?: string;
@@ -18,38 +22,26 @@ export function ChordPracticePanel({
   chord,
   frets,
   tuningMidi,
+  courses,
   fingering,
   guidance,
   instrument = "guitar",
 }: ChordPracticePanelProps) {
   const [arpeggioSpeed, setArpeggioSpeed] = useState<"slow" | "normal" | "fast">("normal");
-  const [isPlayingStrum, setIsPlayingStrum] = useState(false);
-  const [isPlayingArpeggio, setIsPlayingArpeggio] = useState(false);
-
-  const instType = instrument === "bass" ? "bass" : instrument === "ukulele" ? "ukulele" : "guitar";
+  const [mode, setMode] = useState<"strum" | "arpeggio">("strum");
+  const playback = usePlayback();
+  const isPlayingStrum = playback.playing && mode === "strum";
+  const isPlayingArpeggio = playback.playing && mode === "arpeggio";
+  const voice = stringVoiceFor(instrument);
 
   const handlePlayChord = () => {
-    setIsPlayingStrum(true);
-    audioEngine.playChord({
-      frets,
-      tuningMidi,
-      instrument: instType,
-      direction: "down",
-      onEnded: () => setIsPlayingStrum(false),
-    });
-    setTimeout(() => setIsPlayingStrum(false), 2200);
+    setMode("strum");
+    playback.run(() => audioEngine.playChord({ frets, tuningMidi, courses, instrument: voice, direction: "down" }));
   };
 
   const handlePlayArpeggio = () => {
-    setIsPlayingArpeggio(true);
-    audioEngine.playArpeggio({
-      frets,
-      tuningMidi,
-      instrument: instType,
-      speed: arpeggioSpeed,
-      onEnded: () => setIsPlayingArpeggio(false),
-    });
-    setTimeout(() => setIsPlayingArpeggio(false), 2800);
+    setMode("arpeggio");
+    playback.run(() => audioEngine.playArpeggio({ frets, tuningMidi, courses, instrument: voice, speed: arpeggioSpeed }));
   };
 
   const difficultyColor =
@@ -83,45 +75,47 @@ export function ChordPracticePanel({
           </div>
         </div>
 
+        <p role="status" aria-live="polite" className={`mt-3 min-h-[1rem] text-[0.6875rem] ${playback.status === "error" ? "text-[var(--color-ns-error,#f43f5e)]" : "text-[var(--color-ns-dim)]"}`}>
+          {playback.status === "error" ? playback.error : playback.playing ? "Playing — every sounding string rings together." : ""}
+        </p>
+
         {/* Audio Action Buttons */}
         <div className="mt-4 flex flex-wrap items-center gap-3">
           <button
             type="button"
             onClick={handlePlayChord}
             aria-label={`Play strummed ${chord.label} chord`}
-            className={`flex items-center gap-2 rounded-xl border px-4 py-2.5 text-xs font-bold transition-all active:scale-95 ${
+            className={`flex h-10 w-52 items-center justify-center gap-2 rounded-xl border text-xs font-bold transition-colors ${
               isPlayingStrum
-                ? "border-[var(--color-ns-amber)] bg-[var(--color-ns-amber)] text-[var(--color-ns-ink)] shadow-md brightness-110"
+                ? "border-[var(--color-ns-amber)] bg-[var(--color-ns-amber)] text-[var(--color-ns-ink)] shadow-md"
                 : "border-[var(--color-ns-amber)] bg-[var(--color-ns-amber)] text-[var(--color-ns-ink)] shadow-md hover:brightness-110"
             }`}
           >
             {isPlayingStrum ? (
-              <span className="flex h-2.5 w-2.5 relative">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[var(--color-ns-ink)] opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-[var(--color-ns-ink)]"></span>
+              <span className="flex h-[14px] w-[14px] items-center justify-center">
+                <span className="h-2.5 w-2.5 rounded-full bg-current" />
               </span>
             ) : (
               <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
                 <polygon points="5 3 19 12 5 21 5 3" />
               </svg>
             )}
-            {isPlayingStrum ? "Strumming Chord..." : "Play Strummed Chord"}
+            Play Strummed Chord
           </button>
 
           <button
             type="button"
             onClick={handlePlayArpeggio}
             aria-label={`Play ${chord.label} arpeggio`}
-            className={`flex items-center gap-2 rounded-xl border px-4 py-2.5 text-xs font-bold transition-all active:scale-95 ${
+            className={`flex h-10 w-44 items-center justify-center gap-2 rounded-xl border text-xs font-bold transition-colors ${
               isPlayingArpeggio
                 ? "border-[var(--color-ns-amber)] bg-[var(--color-ns-amber)]/20 text-[var(--color-ns-amber)] shadow-sm"
                 : "border-[var(--color-ns-border)] bg-[var(--color-ns-bg)] text-[var(--color-ns-text)] hover:border-[var(--color-ns-amber)] hover:bg-[var(--color-ns-card)]"
             }`}
           >
             {isPlayingArpeggio ? (
-              <span className="flex h-2.5 w-2.5 relative">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[var(--color-ns-amber)] opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-[var(--color-ns-amber)]"></span>
+              <span className="flex h-[14px] w-[14px] items-center justify-center">
+                <span className="h-2.5 w-2.5 rounded-full bg-current" />
               </span>
             ) : (
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -129,7 +123,7 @@ export function ChordPracticePanel({
                 <polyline points="12 6 12 12 16 14" />
               </svg>
             )}
-            {isPlayingArpeggio ? "Playing Arpeggio..." : "Play Arpeggio"}
+            Play Arpeggio
           </button>
 
           {/* Arpeggio Speed Selector */}
@@ -150,10 +144,23 @@ export function ChordPracticePanel({
             ))}
           </div>
 
+          <button
+            type="button"
+            onClick={playback.stop}
+            disabled={!playback.playing}
+            aria-label="Stop audio"
+            className="flex h-10 items-center justify-center gap-2 rounded-xl border border-[var(--color-ns-border)] bg-[var(--color-ns-bg)] px-4 text-xs font-bold text-[var(--color-ns-text)] transition-shadow hover:shadow-[0_0_14px_rgba(255,176,32,0.45)] disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:shadow-none"
+          >
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+              <rect x="5" y="5" width="14" height="14" rx="2" />
+            </svg>
+            Stop
+          </button>
+
           {/* Practice Mode Link */}
           <Link
             to={`/practice?target=${encodeURIComponent(chord.label)}`}
-            className="ml-auto flex items-center gap-1.5 rounded-xl border border-[var(--color-ns-border)] bg-[var(--color-ns-raised)] px-3 py-2 text-xs font-semibold text-[var(--color-ns-text)] transition-all hover:border-[var(--color-ns-amber)] active:scale-95"
+            className="ml-auto flex items-center gap-1.5 rounded-xl border border-[var(--color-ns-border)] bg-[var(--color-ns-raised)] px-3 py-2 text-xs font-semibold text-[var(--color-ns-text)] transition-all hover:border-[var(--color-ns-amber)]"
           >
             <span>Mic Pitch Practice →</span>
           </Link>

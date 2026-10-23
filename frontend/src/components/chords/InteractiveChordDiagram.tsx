@@ -11,6 +11,8 @@ export interface InteractiveChordDiagramProps {
   onSelectString: (stringIndex: number) => void;
   fingering?: FingeringResult;
   caption?: string;
+  /** Per course, the strings it holds (semitone offsets). Courses with 2+ strings are drawn as pairs. */
+  courses?: number[][];
   dotDisplayMode?: "fingers" | "notes" | "intervals";
 }
 
@@ -22,6 +24,7 @@ export function InteractiveChordDiagram({
   onSelectString,
   fingering,
   caption,
+  courses,
   dotDisplayMode = "fingers",
 }: InteractiveChordDiagramProps) {
   const { settings } = useSettings();
@@ -44,6 +47,10 @@ export function InteractiveChordDiagram({
   // Left-handed support
   const isLeftHanded = settings.display.leftHanded;
   const xOf = (s: number) => left + (isLeftHanded ? n - 1 - s : s) * spacing;
+  const strandX = (s: number) => {
+    const k = courses?.[s]?.length ?? 1;
+    return Array.from({ length: k }, (_, j) => xOf(s) + (j - (k - 1) / 2) * 7);
+  };
 
   return (
     <div className="flex flex-col items-center">
@@ -96,14 +103,17 @@ export function InteractiveChordDiagram({
           const isSelected = selectedStringIndex === s;
           return (
             <g key={`str-${s}`}>
-              <line
-                x1={xOf(s)}
-                x2={xOf(s)}
-                y1={top}
-                y2={top + fretSpacing * fretCount}
-                stroke={isSelected ? "var(--color-ns-amber)" : "var(--color-ns-border-strong)"}
-                strokeWidth={isSelected ? 2.5 : 1 + (n - 1 - s) * 0.3}
-              />
+              {strandX(s).map((x, j) => (
+                <line
+                  key={j}
+                  x1={x}
+                  x2={x}
+                  y1={top}
+                  y2={top + fretSpacing * fretCount}
+                  stroke={isSelected ? "var(--color-ns-amber)" : "var(--color-ns-border-strong)"}
+                  strokeWidth={isSelected ? 2 : 1 + (n - 1 - s) * 0.3}
+                />
+              ))}
               <text
                 x={xOf(s)}
                 y={height - 8}
@@ -152,7 +162,15 @@ export function InteractiveChordDiagram({
               <g
                 key={`mute-${s}`}
                 onClick={() => onSelectString(s)}
-                className="cursor-pointer transition-transform hover:scale-125"
+                role="button"
+                tabIndex={0}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    onSelectString(s);
+                  }
+                }}
+                className="cursor-pointer outline-none transition-[filter] hover:[filter:drop-shadow(0_0_5px_var(--color-ns-amber))] focus-visible:[filter:drop-shadow(0_0_5px_var(--color-ns-amber))]"
               >
                 <title>{`String ${n - s}: Muted (Click to inspect)`}</title>
                 <circle cx={cx} cy={cy} r={9} fill="transparent" />
@@ -178,7 +196,15 @@ export function InteractiveChordDiagram({
               <g
                 key={`open-${s}`}
                 onClick={() => onSelectString(s)}
-                className="cursor-pointer transition-transform hover:scale-125"
+                role="button"
+                tabIndex={0}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    onSelectString(s);
+                  }
+                }}
+                className="cursor-pointer outline-none transition-[filter] hover:[filter:drop-shadow(0_0_5px_var(--color-ns-amber))] focus-visible:[filter:drop-shadow(0_0_5px_var(--color-ns-amber))]"
               >
                 <title>{`String ${n - s}: Open ${stringInfo?.noteName || ""} (Click to play)`}</title>
                 <circle
@@ -226,7 +252,15 @@ export function InteractiveChordDiagram({
             <g
               key={`dot-${s}`}
               onClick={() => onSelectString(s)}
-              className="cursor-pointer transition-transform hover:scale-110"
+              role="button"
+              tabIndex={0}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  onSelectString(s);
+                }
+              }}
+              className="cursor-pointer outline-none transition-[filter] hover:[filter:drop-shadow(0_0_5px_var(--color-ns-amber))] focus-visible:[filter:drop-shadow(0_0_5px_var(--color-ns-amber))]"
             >
               <title>{`String ${n - s}: Fret ${fret}, Note ${stringInfo?.noteName || ""} (Click to play)`}</title>
               {/* Highlight halo when selected */}

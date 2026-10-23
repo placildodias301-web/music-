@@ -1,39 +1,53 @@
 import { chordMidiNotes, getGuitarVoicings, getUkuleleShape, GUITAR_TUNING, UKULELE_TUNING, type ParsedChord } from "./chordTheory";
-import { audioEngine } from "./audio";
+import { audioEngine, audioContextManager, INSTRUMENT_PRESETS, voiceGainFor } from "./audio";
 
 function midiToFrequency(midi: number): number {
   return 440 * Math.pow(2, (midi - 69) / 12);
 }
 
-/** Plays a chord's triad live through the Web Audio API — used by the Chord Library's "play" button. */
-export function playChordLive(chord: ParsedChord, durationSeconds = 1.4) {
-  const AudioCtx =
-    window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
-  const ctx = new AudioCtx();
-  const master = ctx.createGain();
-  master.gain.value = 0.2;
-  master.connect(ctx.destination);
+/**
+ * Soft attack, a short hold, then a slow cosine fade to silence — a note that rings and dies away
+ * instead of playing at full volume and then stopping.
+ */
+function softEnvelope(gain: AudioParam, t0: number, attack: number, total: number, peak = 1) {
+  gain.setValueAtTime(0, t0);
+  gain.linearRampToValueAtTime(peak, t0 + attack);
+  const fadeStart = t0 + attack + (total - attack) * 0.25;
+  gain.setValueAtTime(peak, fadeStart);
+  const points = 64;
+  const curve = new Float32Array(points);
+  for (let i = 0; i < points; i++) curve[i] = peak * 0.5 * (1 + Math.cos((Math.PI * i) / (points - 1)));
+  gain.setValueCurveAtTime(curve, fadeStart, t0 + total - fadeStart);
+}
 
-  const notes = chordMidiNotes(chord, 60);
+/** What a synth (non-string) play call scheduled: the notes and how long they ring. */
+export interface SynthResult {
+  notes: number[];
+  durationSeconds: number;
+}
 
-  notes.forEach((midi) => {
-    const osc = ctx.createOscillator();
-    osc.type = "triangle";
-    osc.frequency.value = midiToFrequency(midi);
+/**
+ * Synth voices (keys, mallets, harp, wind…) use the SAME shared AudioContext and master bus as the string engine, so there is
+ * one context for the whole app, one volume path, and one Stop. Starting a new sound fades the previous one out.
+ */
+async function synthOutput(): Promise<{ ctx: AudioContext; out: AudioNode }> {
+  const ctx = await audioContextManager.getContext();
+  audioContextManager.stopAll();
+  return { ctx, out: audioContextManager.getVoiceInputNode(INSTRUMENT_PRESETS.piano) };
+}
 
-    const gain = ctx.createGain();
-    gain.gain.setValueAtTime(0, ctx.currentTime);
-    gain.gain.linearRampToValueAtTime(1, ctx.currentTime + 0.03);
-    gain.gain.setValueAtTime(1, ctx.currentTime + durationSeconds - 0.2);
-    gain.gain.linearRampToValueAtTime(0, ctx.currentTime + durationSeconds);
+/** Rounds off a synth voice's harsh top end. */
+function warmFilter(ctx: AudioContext, cutoff = 3200): BiquadFilterNode {
+  const f = ctx.createBiquadFilter();
+  f.type = "lowpass";
+  f.frequency.value = cutoff;
+  f.Q.value = 0.5;
+  return f;
+}
 
-    osc.connect(gain);
-    gain.connect(master);
-    osc.start();
-    osc.stop(ctx.currentTime + durationSeconds);
-  });
-
-  window.setTimeout(() => ctx.close().catch(() => {}), (durationSeconds + 0.2) * 1000);
+/** Plays a chord's triad as a soft sustained tone through the shared audio bus. */
+export function playChordLive(chord: ParsedChord, durationSeconds = 2.2): Promise<SynthResult> {
+  return playToneNotes(chordMidiNotes(chord, 60), "sustained", durationSeconds);
 }
 
 /** Turns a fretted shape (null = muted) into the MIDI notes it sounds, string by string. */
@@ -41,43 +55,8 @@ export function fretsToMidi(frets: (number | null)[], tuning: number[]): number[
   return frets.flatMap((f, i) => (f === null ? [] : [tuning[i] + f]));
 }
 
-const PLUCK_TONE = {
-  // Steel strings: bright attack, long sustain.
-  guitar: { brightness: 0.75, decay: 0.996, strumGap: 0.035, seconds: 2.6 },
-  // Nylon strings: softer attack, shorter ring.
-  ukulele: { brightness: 0.45, decay: 0.993, strumGap: 0.045, seconds: 1.8 },
-  // Heavier strings: darker, longer.
-  bass: { brightness: 0.35, decay: 0.998, strumGap: 0.06, seconds: 2.4 },
-  // Bright, quick strings.
-  mandolin: { brightness: 0.85, decay: 0.99, strumGap: 0.03, seconds: 1.5 },
-  banjo: { brightness: 0.9, decay: 0.988, strumGap: 0.03, seconds: 1.3 },
-  // Soft, long ring.
-  harp: { brightness: 0.5, decay: 0.997, strumGap: 0.07, seconds: 3.0 },
-};
-
 /** Which plucked-string voice to use. These are simple string simulations, not recordings of the real instruments. */
-export type PluckKind = keyof typeof PLUCK_TONE;
-
-/** Renders one plucked string with Karplus–Strong synthesis (legacy helper). */
-export function renderPluck(ctx: AudioContext, midi: number, tone: (typeof PLUCK_TONE)["guitar"]): AudioBuffer {
-  const sr = ctx.sampleRate;
-  const length = Math.floor(sr * tone.seconds);
-  const buffer = ctx.createBuffer(1, length, sr);
-  const out = buffer.getChannelData(0);
-  // The averaging filter adds half a sample of delay, so subtract it from the period.
-  const period = Math.max(2, Math.round(sr / midiToFrequency(midi) - 0.5));
-
-  // Excitation: noise burst, low-passed so lower brightness = softer pick.
-  let prev = 0;
-  for (let i = 0; i < period; i++) {
-    prev = prev + tone.brightness * (Math.random() * 2 - 1 - prev);
-    out[i] = prev;
-  }
-  for (let i = period; i < length; i++) {
-    out[i] = tone.decay * 0.5 * (out[i - period] + out[Math.max(0, i - period - 1)]);
-  }
-  return buffer;
-}
+export type PluckKind = "guitar" | "ukulele" | "bass" | "mandolin" | "banjo" | "harp";
 
 /** Strums a guitar or ukulele shape exactly as drawn in its chord diagram, first string to last. */
 export function playStrummedShape(frets: (number | null)[], instrument: PluckKind, tuning: number[]) {
@@ -109,7 +88,7 @@ export function playPluckedNotes(midis: number[], instrument: PluckKind, gapSeco
       frets: midis.map(() => 0),
       tuningMidi: midis,
       instrument: instType,
-      speed: gapSeconds ?? 0.034,
+      speed: gapSeconds ?? "normal",
       direction: "down",
     });
   }
@@ -141,35 +120,50 @@ export function playArpeggioNotes(
 
 /**
  * A neutral reference tone for instruments Wilsify cannot synthesise convincingly (keys, accordion, mallets):
- * plain oscillators, so you hear WHICH notes the chord has — not what the real instrument sounds like.
+ * soft sine voices, so you hear WHICH notes the chord has — not what the real instrument sounds like.
+ * One voice per note, all overlapping, level-balanced for however many notes there are.
  */
-export function playToneNotes(midis: number[], style: "sustained" | "struck" = "sustained") {
-  const AudioCtx =
-    window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
-  const ctx = new AudioCtx();
-  const seconds = style === "struck" ? 1.6 : 1.4;
-  const master = ctx.createGain();
-  master.gain.value = 0.2;
-  master.connect(ctx.destination);
-  midis.forEach((midi) => {
-    const osc = ctx.createOscillator();
-    osc.type = style === "struck" ? "sine" : "triangle";
-    osc.frequency.value = midiToFrequency(midi);
+export async function playToneNotes(midis: number[], style: "sustained" | "struck" = "sustained", seconds = style === "struck" ? 2.4 : 2.2): Promise<SynthResult> {
+  const notes = midis.filter((m) => Number.isFinite(m));
+  if (!notes.length) return { notes, durationSeconds: 0 };
+  const { ctx, out } = await synthOutput();
+  const warm = warmFilter(ctx, style === "struck" ? 4200 : 3000);
+  warm.connect(out);
+  const perNote = voiceGainFor(notes.length) * 0.5;
+  notes.forEach((midi, i) => {
+    const t = ctx.currentTime + 0.02 + (style === "struck" ? i * 0.03 : i * 0.012);
     const gain = ctx.createGain();
-    const t = ctx.currentTime;
-    gain.gain.setValueAtTime(0, t);
-    gain.gain.linearRampToValueAtTime(1, t + (style === "struck" ? 0.005 : 0.03));
-    if (style === "struck") gain.gain.exponentialRampToValueAtTime(0.001, t + seconds);
-    else {
-      gain.gain.setValueAtTime(1, t + seconds - 0.2);
-      gain.gain.linearRampToValueAtTime(0, t + seconds);
+    if (style === "struck") {
+      // A bell-like strike: instant attack, then a long smooth decay to silence.
+      gain.gain.setValueAtTime(0, t);
+      gain.gain.linearRampToValueAtTime(perNote, t + 0.004);
+      gain.gain.setTargetAtTime(0, t + 0.004, seconds / 5);
+    } else {
+      softEnvelope(gain.gain, t, 0.05, seconds, perNote);
     }
-    osc.connect(gain);
-    gain.connect(master);
-    osc.start();
-    osc.stop(t + seconds);
+    gain.connect(warm);
+    // A sine plus a quiet octave-up sine: a pure, sweet tone rather than a buzzy triangle/square.
+    for (const [mult, level] of [[1, 1], [2, style === "struck" ? 0.18 : 0.1]] as const) {
+      const osc = ctx.createOscillator();
+      osc.type = "sine";
+      osc.frequency.value = midiToFrequency(midi) * mult;
+      const g = ctx.createGain();
+      g.gain.value = level;
+      osc.connect(g);
+      g.connect(gain);
+      osc.start(t);
+      osc.stop(t + seconds);
+      audioContextManager.registerSource(osc, gain);
+      osc.onended = () => {
+        audioContextManager.unregisterSource(osc);
+        try {
+          osc.disconnect();
+          g.disconnect();
+        } catch {}
+      };
+    }
   });
-  window.setTimeout(() => ctx.close().catch(() => {}), (seconds + 0.2) * 1000);
+  return { notes, durationSeconds: seconds + notes.length * 0.03 };
 }
 
 /* ─── Wind voices: simple additive synthesis, so a flute, a clarinet and a trumpet do not all sound alike ─── */
@@ -200,23 +194,25 @@ export const WIND_VOICES = {
   trombone: { harmonics: [1, 0.8, 0.6, 0.45, 0.3, 0.2, 0.1], attack: 0.07, release: 0.12, cutoff: 2.5, swell: 7, vibratoHz: 0, vibratoDepth: 0, breath: 0.01, gain: 0.5 },
   horn: { harmonics: [1, 0.55, 0.3, 0.15, 0.08], attack: 0.1, release: 0.18, cutoff: 3, swell: 5, vibratoHz: 0, vibratoDepth: 0, breath: 0.01, gain: 0.8 },
   tuba: { harmonics: [1, 0.6, 0.3, 0.12, 0.05], attack: 0.1, release: 0.15, cutoff: 3, swell: 4, vibratoHz: 0, vibratoDepth: 0, breath: 0.01, gain: 0.9 },
+  bowed: { harmonics: [1, 0.55, 0.38, 0.28, 0.2, 0.14, 0.1, 0.06], attack: 0.14, release: 0.3, cutoff: 4.5, vibratoHz: 5.5, vibratoDepth: 0.004, breath: 0.012, gain: 0.55 },
   harmonica: { harmonics: [1, 0.6, 0.5, 0.4, 0.3, 0.22, 0.15, 0.1], attack: 0.05, release: 0.2, cutoff: 7, vibratoHz: 6, vibratoDepth: 0.002, breath: 0.02, gain: 0.5 },
 } satisfies Record<string, WindVoice>;
 
 export type WindVoiceName = keyof typeof WIND_VOICES;
 
 /**
- * Plays notes with a wind-like synthetic voice. `gapSeconds` > 0 steps through them one by one (a wind instrument plays one note
- * at a time); 0 sounds them together (harmonica holes). Not a recording or a model of the real instrument.
+ * Plays notes with a wind-like synthetic voice on the shared audio bus. `gapSeconds` > 0 steps through them one by one
+ * (a wind instrument plays one note at a time); 0 sounds them together (harmonica holes, a bowed chord).
+ * Not a recording or a model of the real instrument.
  */
-export function playWindNotes(midis: number[], voiceName: WindVoiceName, gapSeconds = 0.5) {
-  const AudioCtx =
-    window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
-  const ctx = new AudioCtx();
+export async function playWindNotes(midis: number[], voiceName: WindVoiceName, gapSeconds = 0.5): Promise<SynthResult> {
+  const notes = midis.filter((m) => Number.isFinite(m));
+  if (!notes.length) return { notes, durationSeconds: 0 };
+  const { ctx, out } = await synthOutput();
   const v: WindVoice = WIND_VOICES[voiceName];
   const master = ctx.createGain();
-  master.gain.value = 0.22;
-  master.connect(ctx.destination);
+  master.gain.value = gapSeconds > 0 ? 0.22 : 0.22 * Math.sqrt(1.5 / Math.max(1, notes.length)) * 1.2;
+  master.connect(out);
   const hold = gapSeconds > 0 ? Math.max(gapSeconds * 0.95, 0.5) : 1.6;
   const real = new Float32Array([0, ...v.harmonics.map(() => 0)]);
   const imag = new Float32Array([0, ...v.harmonics]);
@@ -227,7 +223,7 @@ export function playWindNotes(midis: number[], voiceName: WindVoiceName, gapSeco
     const d = noiseBuffer.getChannelData(0);
     for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
   }
-  midis.forEach((midi, i) => {
+  notes.forEach((midi, i) => {
     const f = midiToFrequency(midi);
     const t0 = ctx.currentTime + 0.02 + i * gapSeconds;
     const osc = ctx.createOscillator();
@@ -241,7 +237,7 @@ export function playWindNotes(midis: number[], voiceName: WindVoiceName, gapSeco
       lfo.connect(depth);
       depth.connect(osc.frequency);
       lfo.start(t0);
-      lfo.stop(t0 + hold + v.release);
+      lfo.stop(t0 + hold + v.release + 0.1);
     }
     const filter = ctx.createBiquadFilter();
     filter.type = "lowpass";
@@ -250,29 +246,42 @@ export function playWindNotes(midis: number[], voiceName: WindVoiceName, gapSeco
     const env = ctx.createGain();
     env.gain.setValueAtTime(0, t0);
     env.gain.linearRampToValueAtTime(v.gain, t0 + v.attack);
-    env.gain.setValueAtTime(v.gain, t0 + hold - v.release);
-    env.gain.linearRampToValueAtTime(0, t0 + hold);
+    const release = Math.min(Math.max(v.release * 2.5, 0.3), hold * 0.6);
+    env.gain.setValueAtTime(v.gain, t0 + hold - release);
+    env.gain.setTargetAtTime(0, t0 + hold - release, release / 4);
     osc.connect(filter);
+    let noise: AudioBufferSourceNode | null = null;
     if (noiseBuffer) {
-      const n = ctx.createBufferSource();
-      n.buffer = noiseBuffer;
+      noise = ctx.createBufferSource();
+      noise.buffer = noiseBuffer;
       const bp = ctx.createBiquadFilter();
       bp.type = "bandpass";
       bp.frequency.value = Math.min(f * 2, 8000);
       const ng = ctx.createGain();
       ng.gain.value = v.breath;
-      n.connect(bp);
+      noise.connect(bp);
       bp.connect(ng);
       ng.connect(env);
-      n.start(t0);
-      n.stop(t0 + hold);
+      noise.start(t0);
+      noise.stop(t0 + hold + 0.1);
+      audioContextManager.registerSource(noise, env);
     }
     filter.connect(env);
     env.connect(master);
     osc.start(t0);
-    osc.stop(t0 + hold + 0.02);
+    osc.stop(t0 + hold + 0.1);
+    audioContextManager.registerSource(osc, env);
+    osc.onended = () => {
+      audioContextManager.unregisterSource(osc);
+      if (noise) audioContextManager.unregisterSource(noise);
+      try {
+        osc.disconnect();
+        filter.disconnect();
+        env.disconnect();
+      } catch {}
+    };
   });
-  window.setTimeout(() => ctx.close().catch(() => {}), (hold + midis.length * gapSeconds + 0.6) * 1000);
+  return { notes, durationSeconds: hold + notes.length * gapSeconds + 0.3 };
 }
 
 export type ChordView = "guitar" | "ukulele" | "piano";

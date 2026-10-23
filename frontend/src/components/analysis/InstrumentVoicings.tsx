@@ -18,6 +18,26 @@ import type { Instrument } from "../../lib/settings/model";
 import { GuitarChordDiagram } from "../GuitarChordDiagram";
 import { UkuleleChordDiagram } from "../UkuleleChordDiagram";
 import { PianoRoll } from "../PianoRoll";
+import { InstrumentPicker } from "../instruments/InstrumentPicker";
+import { ChordDiagram } from "../chords/ChordDiagram";
+import { chordInstruments, findDefinition } from "../../lib/instruments/definitions";
+import { bassOptions, buildChordModel, type ChordModel } from "../../lib/chords/model";
+import { playModel } from "../../lib/chords/play";
+
+/** Every instrument the Chords page knows can show the song's chords; the three originals keep their dedicated tabs. */
+const CORE_VIEWS = ["guitar", "ukulele", "piano"];
+
+function modelFor(parsed: ParsedChord | null, instrumentId: string): ChordModel | null {
+  const def = findDefinition(instrumentId);
+  return parsed && def ? buildChordModel(parsed, def, { inversion: 0 }) : null;
+}
+
+function shapeNames(model: ChordModel | null): string[] {
+  if (!model) return [];
+  if (model.kind === "fretted") return model.shapes.map((s) => s.name);
+  if (model.kind === "bass") return bassOptions(model).map((o) => o.name);
+  return [];
+}
 
 export type InstrumentView = "guitar" | "ukulele" | "piano";
 
@@ -35,8 +55,13 @@ function Unavailable({ chord, view, label }: { chord: string; view: InstrumentVi
   );
 }
 
-function Diagram({ symbol, parsed, view, voicingIndex }: { symbol: string; parsed: ParsedChord | null; view: InstrumentView; voicingIndex: number }) {
+function Diagram({ symbol, parsed, view, voicingIndex, extraId }: { symbol: string; parsed: ParsedChord | null; view: InstrumentView; voicingIndex: number; extraId?: string | null }) {
   if (!parsed) return <Unavailable chord={symbol} view={view} label={symbol} />;
+  if (extraId) {
+    const model = modelFor(parsed, extraId);
+    if (!model) return <Unavailable chord={symbol} view={view} label={symbol} />;
+    return <ChordDiagram model={model} shapeIndex={voicingIndex} onShape={() => {}} />;
+  }
   if (view === "guitar") {
     const voicings = getGuitarVoicings(parsed);
     if (!voicings.length) return <Unavailable chord={symbol} view={view} label={symbol} />;
@@ -70,6 +95,8 @@ export function InstrumentVoicings({ chords, songKey, playingChord, selectedChor
   const notation = useNotation(songKey);
   const displayChord = notation.chord;
   const [view, setView] = useState<InstrumentView>(() => VIEW_FOR[settings.display.instrument]);
+  // An instrument chosen from the full list (anything beyond guitar / ukulele / piano).
+  const [extraId, setExtraId] = useState<string | null>(null);
   const [follow, setFollow] = useState(true);
   const [voicingByChord, setVoicingByChord] = useState<Record<string, number>>({});
 
@@ -81,7 +108,9 @@ export function InstrumentVoicings({ chords, songKey, playingChord, selectedChor
   const focus = (follow && playingChord) || selectedChord || chords[0] || null;
   const focusIdx = focus ? chords.indexOf(focus) : -1;
   const focusParsed = focus ? parsed[focus] ?? null : null;
-  const guitarVoicings = focusParsed && view === "guitar" ? getGuitarVoicings(focusParsed) : [];
+  const guitarVoicings = focusParsed && view === "guitar" && !extraId ? getGuitarVoicings(focusParsed) : [];
+  const extraModel = extraId ? modelFor(focusParsed, extraId) : null;
+  const extraShapes = shapeNames(extraModel);
   const voicingIndex = focus ? voicingByChord[focus] ?? 0 : 0;
 
   function pick(chord: string) {
@@ -98,7 +127,9 @@ export function InstrumentVoicings({ chords, songKey, playingChord, selectedChor
 
   function hear() {
     if (!focusParsed) return;
-    if (view === "guitar" && guitarVoicings.length) {
+    if (extraModel) {
+      playModel(extraModel, voicingIndex);
+    } else if (view === "guitar" && guitarVoicings.length) {
       playStrummedShape(guitarVoicings[Math.min(voicingIndex, guitarVoicings.length - 1)].frets, "guitar", GUITAR_TUNING);
     } else if (view === "ukulele") {
       playStrummedShape(getUkuleleShape(focusParsed), "ukulele", UKULELE_TUNING);
@@ -120,16 +151,36 @@ export function InstrumentVoicings({ chords, songKey, playingChord, selectedChor
           </p>
           {notation.legend && <p className="mt-1 text-[0.6875rem] text-[var(--color-ns-muted)]">{notation.legend}</p>}
         </div>
+        <div className="flex flex-wrap items-center gap-2">
+        <div className="w-44">
+          <InstrumentPicker
+            label="More instruments"
+            variant="field"
+            value={extraId ?? (CORE_VIEWS.includes(view) ? view : "guitar")}
+            definitions={chordInstruments()}
+            onChange={(id) => {
+              if (CORE_VIEWS.includes(id)) {
+                setView(id as InstrumentView);
+                setExtraId(null);
+              } else {
+                setExtraId(id);
+              }
+            }}
+          />
+        </div>
         <div className="flex gap-1 rounded-xl border border-[var(--color-ns-border)] bg-[var(--color-ns-bg)] p-1" role="tablist" aria-label="Instrument">
           {(["guitar", "ukulele", "piano"] as InstrumentView[]).map((v) => (
             <button
               key={v}
               type="button"
               role="tab"
-              aria-selected={view === v}
-              onClick={() => setView(v)}
+              aria-selected={view === v && !extraId}
+              onClick={() => {
+                setView(v);
+                setExtraId(null);
+              }}
               className={`rounded-lg px-3.5 py-1.5 text-xs font-semibold capitalize transition-all ${
-                view === v
+                view === v && !extraId
                   ? "bg-[var(--color-ns-coral)] font-bold text-[var(--color-ns-ink)] shadow-sm"
                   : "text-[var(--color-ns-muted)] hover:text-[var(--color-ns-text)]"
               }`}
@@ -137,6 +188,7 @@ export function InstrumentVoicings({ chords, songKey, playingChord, selectedChor
               {v}
             </button>
           ))}
+        </div>
         </div>
       </div>
 
@@ -153,7 +205,7 @@ export function InstrumentVoicings({ chords, songKey, playingChord, selectedChor
               ‹
             </button>
             <div className="flex min-h-[170px] min-w-[170px] items-center justify-center">
-              <Diagram symbol={focus} parsed={focusParsed} view={view} voicingIndex={voicingIndex} />
+              <Diagram symbol={focus} parsed={focusParsed} view={view} voicingIndex={extraId ? Math.min(voicingIndex, Math.max(extraShapes.length - 1, 0)) : voicingIndex} extraId={extraId} />
             </div>
             <button
               type="button"
@@ -186,7 +238,26 @@ export function InstrumentVoicings({ chords, songKey, playingChord, selectedChor
               </>
             )}
 
-            {view === "guitar" && guitarVoicings.length > 1 && (
+            {extraId && extraShapes.length > 1 && (
+              <div className="mt-3 flex flex-wrap gap-1.5">
+                {extraShapes.map((name, i) => (
+                  <button
+                    key={name + i}
+                    type="button"
+                    onClick={() => setVoicingByChord((prev) => ({ ...prev, [focus]: i }))}
+                    className={`rounded-lg px-2.5 py-1 text-[0.6875rem] font-semibold transition-colors ${
+                      Math.min(voicingIndex, extraShapes.length - 1) === i
+                        ? "bg-[var(--color-ns-coral)] text-[var(--color-ns-ink)]"
+                        : "border border-[var(--color-ns-border)] bg-[var(--color-ns-card)] text-[var(--color-ns-muted)] hover:text-[var(--color-ns-text)]"
+                    }`}
+                  >
+                    {name}
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {view === "guitar" && !extraId && guitarVoicings.length > 1 && (
               <div className="mt-3 flex flex-wrap gap-1.5">
                 {guitarVoicings.map((v, i) => (
                   <button
@@ -215,7 +286,7 @@ export function InstrumentVoicings({ chords, songKey, playingChord, selectedChor
                 <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor">
                   <polygon points="5 3 19 12 5 21 5 3" />
                 </svg>
-                Hear {view === "piano" ? "chord" : "strum"}
+                Hear {extraId ? "chord" : view === "piano" ? "chord" : "strum"}
               </button>
               {playingChord && (
                 <label className="inline-flex cursor-pointer items-center gap-2 text-[0.6875rem] font-medium text-[var(--color-ns-muted)]">
@@ -256,7 +327,7 @@ export function InstrumentVoicings({ chords, songKey, playingChord, selectedChor
               <span className="font-heading text-base font-bold" style={{ color: chordColors(symbol).fg }}>
                 {displayChord(symbol)}
               </span>
-              <Diagram symbol={symbol} parsed={parsed[symbol]} view={view} voicingIndex={voicingByChord[symbol] ?? 0} />
+              <Diagram symbol={symbol} parsed={parsed[symbol]} view={view} voicingIndex={voicingByChord[symbol] ?? 0} extraId={extraId} />
             </button>
           );
         })}

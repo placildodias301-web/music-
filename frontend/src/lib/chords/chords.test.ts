@@ -54,10 +54,10 @@ describe("instrument registry", () => {
     expect([r("marimba"), r("xylophone")]).toEqual(["mallet", "mallet"]);
     expect(r("ukulele")).toBe("ukulele");
   });
-  it("violin, viola and cello stay in the Tuner only", () => {
+  it("violin, viola and cello show chords (fretless) and stay in the Tuner", () => {
     for (const id of ["violin", "viola", "cello"]) {
-      expect(rendererFor(def(id))).toBeUndefined();
-      expect(chordInstruments().some((d) => d.id === id)).toBe(false);
+      expect(rendererFor(def(id))).toBe("bowed");
+      expect(chordInstruments().some((d) => d.id === id)).toBe(true);
       expect(tunerInstruments().some((d) => d.id === id)).toBe(true);
     }
   });
@@ -212,8 +212,10 @@ describe("keys, mallet, harp and accordion models", () => {
     const m = model("C", "accordion");
     expect(m.kind === "accordion" && m.keys).toHaveLength(3);
   });
-  it("orchestral strings and Chromatic have no chord model", () => {
-    expect(buildChordModel(ch("C"), def("violin"), { inversion: 0 })).toBeNull();
+  it("violin gets a chord model; Chromatic has none", () => {
+    const violin = buildChordModel(ch("G"), def("violin"), { inversion: 0 });
+    expect(violin?.kind).toBe("fretted");
+    expect(violin?.kind === "fretted" && violin.stringNames).toEqual(["G", "D", "A", "E"]);
     expect(buildChordModel(ch("C"), def("chromatic"), { inversion: 0 })).toBeNull();
   });
 });
@@ -268,5 +270,122 @@ describe("wind instruments", () => {
     const pcs = pcSet(ch("C"));
     for (const g of m.groups) for (const n of g.notes) expect(pcs.has(n.midi % 12)).toBe(true);
     expect(modelMidi(m).length).toBeGreaterThan(1);
+  });
+});
+
+describe("complete chord library: formulas, slash chords", () => {
+  const FORMULAS: [string, string[]][] = [
+    ["C", ["C", "E", "G"]],
+    ["Cm", ["C", "E♭", "G"]],
+    ["Cdim", ["C", "E♭", "G♭"]],
+    ["Caug", ["C", "E", "G♯"]],
+    ["Csus2", ["C", "D", "G"]],
+    ["Csus4", ["C", "F", "G"]],
+    ["C5", ["C", "G"]],
+    ["C6", ["C", "E", "G", "A"]],
+    ["Cm6", ["C", "E♭", "G", "A"]],
+    ["Cm7b5", ["C", "E♭", "G♭", "B♭"]],
+    ["Cmaj9", ["C", "E", "G", "B", "D"]],
+    ["C11", ["C", "E", "G", "B♭", "D", "F"]],
+    ["Cm13", ["C", "E♭", "G", "B♭", "D", "A"]],
+    ["Cadd9", ["C", "E", "G", "D"]],
+    ["C7b9", ["C", "E", "G", "B♭", "D♭"]],
+    ["C7#9", ["C", "E", "G", "B♭", "D♯"]],
+    ["C7#5#9", ["C", "E", "G♯", "B♭", "D♯"]],
+    ["C7b5b9", ["C", "E", "G♭", "B♭", "D♭"]],
+    ["C13b9", ["C", "E", "G", "B♭", "D♭", "A"]],
+    ["C9#11", ["C", "E", "G", "B♭", "D", "F♯"]],
+  ];
+  it.each(FORMULAS)("%s is spelled from its formula", (symbol, notes) => {
+    expect(spellChord(ch(symbol))).toEqual(notes);
+  });
+
+  it("every chord type exists on all twelve roots", async () => {
+    const { ALL_CHORD_SYMBOLS, CHORD_QUALITIES } = await import("../chordTheory");
+    expect(ALL_CHORD_SYMBOLS).toHaveLength(CHORD_QUALITIES.length * 12);
+    for (const suffix of ["", "m", "dim", "aug", "sus2", "sus4", "5", "6", "m6", "7", "maj7", "m7", "dim7", "m7b5", "9", "maj9", "m9", "11", "maj11", "m11", "13", "maj13", "m13", "add9", "add11"]) {
+      expect(CHORD_QUALITIES.some((q) => q.suffix === suffix), suffix).toBe(true);
+    }
+  });
+
+  it("generates slash chords for every root from the quality formulas", async () => {
+    const { slashChordsForRoot, slashToneIndex } = await import("../chordTheory");
+    const c = slashChordsForRoot(0);
+    expect(c.map((x) => x.label)).toEqual(expect.arrayContaining(["C/E", "C/G", "Cm/D#", "C7/A#", "Cmaj7/B"]));
+    expect(c.every((x) => slashToneIndex(x) > 0)).toBe(true);
+    expect(slashChordsForRoot(7).map((x) => x.label)).toContain("G/B");
+  });
+
+  it("parses typed slash chords, including a bass that is not a chord tone", () => {
+    expect(ch("C/E").slashBass).toBe(4);
+    expect(ch("Am7/G").slashBass).toBe(7);
+    expect(ch("C/D").slashBass).toBe(2);
+  });
+
+  it("slash chords keep the bass note lowest on string instruments", () => {
+    for (const [symbol, bassPc] of [["C/E", 4], ["G/B", 11], ["Am/G", 7], ["D/F#", 6]] as const) {
+      const m = model(symbol, "guitar");
+      expect(m.kind).toBe("fretted");
+      if (m.kind !== "fretted") continue;
+      expect(m.shapes.length, symbol).toBeGreaterThan(0);
+      for (const s of m.shapes) {
+        const sounded = s.frets.flatMap((f, i) => (f === null ? [] : [m.tuning.midi[i] + f]));
+        expect(Math.min(...sounded) % 12, `${symbol} ${s.frets}`).toBe(bassPc);
+      }
+    }
+  });
+
+  it("on keys a slash chord is the matching inversion, and an outside bass note is added below", () => {
+    const e = model("C/E", "piano");
+    expect(e.kind === "keyboard" && e.keys.map((k) => k.name)).toEqual(["E", "G", "C"]);
+    const d = model("C/D", "piano");
+    expect(d.kind === "keyboard" && d.keys[0].midi % 12).toBe(2);
+  });
+});
+
+describe("physical strings vs courses", () => {
+  it("mandolin has 8 strings in 4 courses and a 12-string guitar 12 in 6", () => {
+    const mandolin = chordTunings(def("mandolin"))[0];
+    expect(mandolin.allMidi).toHaveLength(8);
+    expect(mandolin.midi).toHaveLength(4);
+    expect(mandolin.offsets.flat()).toHaveLength(8);
+    const twelve = chordTunings(def("guitar-12"))[0];
+    expect(twelve.allMidi).toHaveLength(12);
+    expect(twelve.offsets.flat()).toHaveLength(12);
+    expect(twelve.offsets.some((o) => o.includes(12))).toBe(true); // octave pairs on the low courses
+  });
+});
+
+describe("fingerings are physically playable on every fretted instrument", () => {
+  it("never lays a barre across an open string", async () => {
+    const { assignFingers } = await import("./fingering");
+    // The mandolin case that used to draw a barre over two open strings: G# . . F  =  1 0 0 1
+    const r = assignFingers([1, 0, 0, 1]);
+    expect(r.barres).toEqual([]);
+    expect(r.fingers[0]).not.toBeNull();
+    expect(r.fingers[3]).not.toBeNull();
+    expect(r.fingers[0]).not.toBe(r.fingers[3]);
+
+    const ids = chordInstruments().map((d) => d.id).filter((id) => {
+      const k = model("C", id).kind;
+      return k === "fretted" || k === "bass";
+    });
+    expect(ids).toEqual(expect.arrayContaining(["guitar", "mandolin", "ukulele", "banjo", "bass", "violin"]));
+    for (const id of ids) {
+      for (const symbol of ["C", "Am", "G7", "Dm7", "F", "Bm", "E7", "Cmaj7", "A7", "Gm"]) {
+        const m = model(symbol, id);
+        const shapes = m.kind === "fretted" ? m.shapes : m.kind === "bass" ? m.shapes : [];
+        for (const s of shapes) {
+          const f = assignFingers(s.frets);
+          for (const b of f.barres) {
+            for (let i = b.fromString; i <= b.toString; i++) {
+              const fret = s.frets[i];
+              if (fret === null) continue; // a muted string under a flat finger is silenced by it
+              expect(fret >= b.fret && fret > 0, `${id} ${symbol} ${s.frets} barre over an open string ${i}`).toBe(true);
+            }
+          }
+        }
+      }
+    }
   });
 });

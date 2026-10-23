@@ -18,6 +18,7 @@ export function FretboardDiagram({
   drone,
   caption,
   ariaLabel,
+  courses,
 }: {
   stringNames: string[];
   /** Chord-shape mode: one entry per string. */
@@ -28,6 +29,8 @@ export function FretboardDiagram({
   drone?: number;
   caption?: string;
   ariaLabel?: string;
+  /** Per course, the strings it holds (semitone offsets): paired courses (mandolin, 12-string) are drawn as two strings. */
+  courses?: number[][];
 }) {
   const { settings } = useSettings();
   const n = stringNames.length;
@@ -48,6 +51,10 @@ export function FretboardDiagram({
   const height = top + fretSpacing * fretCount + 18;
   // Left-handed: mirror so the lowest string is on the right.
   const xOf = (s: number) => left + (settings.display.leftHanded ? n - 1 - s : s) * spacing;
+  const strandX = (s: number) => {
+    const k = courses?.[s]?.length ?? 1;
+    return Array.from({ length: k }, (_, j) => xOf(s) + (j - (k - 1) / 2) * 5);
+  };
 
   return (
     <div className="flex flex-col items-center gap-1">
@@ -63,7 +70,9 @@ export function FretboardDiagram({
         ))}
         {stringNames.map((name, s) => (
           <g key={s}>
-            <line x1={xOf(s)} x2={xOf(s)} y1={top} y2={top + fretSpacing * fretCount} stroke="var(--color-content-dim)" strokeWidth={1} strokeDasharray={s === drone ? "3 3" : undefined} />
+            {strandX(s).map((x, j) => (
+              <line key={j} x1={x} x2={x} y1={top} y2={top + fretSpacing * fretCount} stroke="var(--color-content-dim)" strokeWidth={1} strokeDasharray={s === drone ? "3 3" : undefined} />
+            ))}
             <text x={xOf(s)} y={height - 4} fontSize="9" textAnchor="middle" fill="var(--color-content-dim)">
               {name}
             </text>

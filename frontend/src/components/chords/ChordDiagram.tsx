@@ -17,6 +17,7 @@ export function ChordDiagram({ model, shapeIndex, onShape }: { model: ChordModel
           stringNames={model.stringNames}
           frets={shape.frets}
           drone={model.tuning.drone}
+          courses={model.courses ? model.tuning.offsets : undefined}
           caption={shape.name}
           ariaLabel={`${model.chord.label} on ${model.definition.name}, ${model.tuning.name}`}
         />

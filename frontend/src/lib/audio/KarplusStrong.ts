@@ -12,15 +12,11 @@
  */
 
 import { type NotePlayOptions, type StringAcousticProperties } from "./AudioTypes";
-import { getPresetForInstrument } from "./AudioPresets";
+import { getPresetForInstrument, profileForMidi } from "./AudioPresets";
 import { audioContextManager } from "./AudioContextManager";
 
-/**
- * Standard pitch to frequency using 12-TET
- */
-export function midiToFreq(midi: number): number {
-  return 440 * Math.pow(2, (midi - 69) / 12);
-}
+import { midiToFreq } from "./pitch";
+export { midiToFreq };
 
 /**
  * Synthesizes an AudioBuffer of a physically plucked or muted string.
@@ -70,10 +66,13 @@ export function renderStringAudioBuffer(
   );
   const totalSamples = Math.floor(sr * duration);
 
-  // Period in samples for Karplus-Strong loop
-  // The 2-point averaging filter adds 0.5 sample delay; subtract it.
-  const periodExact = sr / freq;
-  const period = Math.max(4, Math.round(periodExact - 0.5));
+  // Loop delay in samples. The 2-point averaging filter already adds 0.5 sample, so the delay line
+  // supplies the rest: an integer part plus a fraction that is interpolated, so EVERY fret is in tune
+  // (rounding to whole samples left high notes up to ~25 cents off).
+  const remaining = Math.max(2, sr / freq - 0.5);
+  const delayInt = Math.floor(remaining);
+  const delayFrac = remaining - delayInt;
+  const period = delayInt + 2;
 
   const buffer = ctx.createBuffer(1, totalSamples, sr);
   const out = buffer.getChannelData(0);
@@ -82,10 +81,10 @@ export function renderStringAudioBuffer(
   const pluckPos = Math.min(0.45, Math.max(0.08, options.pluckPosition ?? stringProps.pluckPosition));
   const pluckCombDelay = Math.max(2, Math.round(period * pluckPos));
 
-  // Velocity affects excitation brightness
+  // Velocity affects excitation brightness. Kept on the mellow side: a softer pick is the sweeter sound.
   const dynamicBrightness = Math.min(
-    0.98,
-    stringProps.brightness * (0.65 + velocity * 0.45)
+    0.9,
+    stringProps.brightness * (0.55 + velocity * 0.4)
   );
 
   // Decay factor per loop cycle
@@ -127,18 +126,30 @@ export function renderStringAudioBuffer(
 
   // Karplus-Strong Loop with 2-Point Low-Pass Averaging
   for (let i = period; i < totalSamples; i++) {
-    const prev1 = out[i - period];
-    const prev2 = out[Math.max(0, i - period - 1)];
-    // Averaging filter with string-specific decay loss
-    out[i] = decayFactor * 0.5 * (prev1 + prev2);
+    // Fractionally delayed copy of the string, then the averaging filter with string-specific decay loss.
+    const a = (1 - delayFrac) * out[i - delayInt] + delayFrac * out[i - delayInt - 1];
+    const b = (1 - delayFrac) * out[i - delayInt - 1] + delayFrac * out[i - delayInt - 2];
+    out[i] = decayFactor * 0.5 * (a + b);
   }
 
-  // Smooth tail fade-out to prevent clicks
-  const fadeSamples = Math.min(512, Math.floor(totalSamples * 0.05));
-  for (let i = 0; i < fadeSamples; i++) {
-    const idx = totalSamples - fadeSamples + i;
-    const fade = 1 - i / fadeSamples;
-    out[idx] *= fade;
+  // Warmth: a gentle one-pole low-pass takes the pick's harsh edge off the whole note.
+  const warmth = Math.min(0.9, 0.5 + dynamicBrightness * 0.35);
+  let lp = 0;
+  for (let i = 0; i < totalSamples; i++) {
+    lp += warmth * (out[i] - lp);
+    out[i] = lp;
+  }
+
+  // Natural release: a soft attack (no click), then the ring-out fades over the last
+  // ~55% of the note on a smooth cosine curve, so the sound dies away slowly instead of being cut off.
+  const attackSamples = Math.min(Math.floor(sr * 0.004), totalSamples);
+  const releaseStart = 0.45;
+  for (let i = 0; i < totalSamples; i++) {
+    const t = i / totalSamples;
+    let env = 1;
+    if (i < attackSamples) env = i / attackSamples;
+    if (t > releaseStart) env *= 0.5 * (1 + Math.cos(Math.PI * ((t - releaseStart) / (1 - releaseStart))));
+    out[i] *= env;
   }
 
   return buffer;
@@ -148,14 +159,14 @@ export function renderStringAudioBuffer(
  * Plays a single physical string note through the audio graph.
  */
 export async function playPhysicalStringNote(options: NotePlayOptions): Promise<void> {
+  // A muted or invalid string makes no sound at all.
+  if (options.isMuted || options.fret === null || (options.fret !== undefined && options.fret < 0) || !Number.isFinite(options.midi)) return;
+
   const ctx = await audioContextManager.getContext();
   const preset = getPresetForInstrument(options.instrument || "guitar");
 
-  // Determine acoustic properties of this specific string
-  let stringProps = preset.defaultString;
-  if (options.stringIndex !== undefined && preset.strings[options.stringIndex]) {
-    stringProps = preset.strings[options.stringIndex];
-  }
+  // Acoustic profile by PITCH within the instrument's range (not by string index, which differs between instruments).
+  const stringProps = profileForMidi(preset, options.midi);
 
   const audioBuf = renderStringAudioBuffer(ctx, options, stringProps);
   const source = ctx.createBufferSource();
@@ -164,13 +175,12 @@ export async function playPhysicalStringNote(options: NotePlayOptions): Promise<
   // Individual voice gain
   const voiceGain = ctx.createGain();
   const velocity = options.velocity ?? 0.8;
-  const isMuted = options.isMuted || options.fret === null || (options.fret !== undefined && options.fret < 0);
-  voiceGain.gain.setValueAtTime(isMuted ? 0.3 * velocity : 0.75 * velocity, ctx.currentTime);
+  // The voice planner sets `gain` so any number of simultaneous voices stays balanced; a lone note defaults to the single-note level.
+  voiceGain.gain.setValueAtTime(options.gain ?? 0.75 * velocity, ctx.currentTime);
 
-  // Stereo Panning for natural spatial depth across the instrument
+  // Stereo panning for natural spatial depth: low strings slightly left, high slightly right.
   let panValue = options.pan ?? 0;
-  if (options.stringIndex !== undefined && options.totalStrings) {
-    // Strings spread slightly across stereo field: low strings left, high right
+  if (options.pan === undefined && options.stringIndex !== undefined && options.totalStrings) {
     const relPos = options.stringIndex / Math.max(1, options.totalStrings - 1);
     panValue = (relPos - 0.5) * 0.28; // subtle ±0.14 spread
   }
@@ -188,7 +198,7 @@ export async function playPhysicalStringNote(options: NotePlayOptions): Promise<
 
   const startTime = options.startTime ?? ctx.currentTime;
   source.start(startTime);
-  audioContextManager.registerSource(source);
+  audioContextManager.registerSource(source, voiceGain);
 
   source.onended = () => {
     audioContextManager.unregisterSource(source);

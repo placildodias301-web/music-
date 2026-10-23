@@ -1,7 +1,7 @@
 import React from "react";
 import { type PlayedStringAnalysis } from "../../lib/chords/analysis";
 import { type FingeringResult } from "../../lib/chords/fingering";
-import { audioEngine } from "../../lib/audio";
+import { playPlayedString } from "../../lib/chords/play";
 
 export interface StringInfoTableProps {
   playedStrings: PlayedStringAnalysis[];
@@ -9,6 +9,8 @@ export interface StringInfoTableProps {
   onSelectString: (index: number) => void;
   fingering: FingeringResult;
   instrumentName?: string;
+  /** Strands per string/course (mandolin pairs, 12-string octaves) so a pair sounds as a pair. */
+  courses?: number[][];
 }
 
 export function StringInfoTable({
@@ -17,20 +19,12 @@ export function StringInfoTable({
   onSelectString,
   fingering,
   instrumentName = "guitar",
+  courses,
 }: StringInfoTableProps) {
   const handlePlayString = (e: React.MouseEvent, stringInfo: PlayedStringAnalysis) => {
     e.stopPropagation();
     onSelectString(stringInfo.stringIndex);
-    const inst = instrumentName === "bass" ? "bass" : instrumentName === "ukulele" ? "ukulele" : "guitar";
-    audioEngine.playNote({
-      midi: stringInfo.midi ?? 40,
-      stringIndex: stringInfo.stringIndex,
-      totalStrings: playedStrings.length,
-      fret: stringInfo.fret,
-      isOpen: stringInfo.action === "open",
-      isMuted: stringInfo.action === "muted",
-      instrument: inst,
-    });
+    void playPlayedString(stringInfo, { instrumentId: instrumentName, totalStrings: playedStrings.length, courses }).catch(() => {});
   };
 
   return (
@@ -72,7 +66,15 @@ export function StringInfoTable({
                 <tr
                   key={str.stringIndex}
                   onClick={() => onSelectString(str.stringIndex)}
-                  className={`group cursor-pointer transition-colors ${
+                  tabIndex={0}
+                  aria-selected={isSelected}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      onSelectString(str.stringIndex);
+                    }
+                  }}
+                  className={`group cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ns-amber)] transition-colors ${
                     isSelected
                       ? "bg-[var(--color-ns-amber)]/15 font-semibold text-[var(--color-ns-text)]"
                       : "hover:bg-[var(--color-ns-raised)]/60 text-[var(--color-ns-muted)]"
@@ -178,7 +180,7 @@ export function StringInfoTable({
                         type="button"
                         onClick={(e) => handlePlayString(e, str)}
                         title={`Play ${str.noteName}`}
-                        className="inline-flex items-center gap-1 rounded-lg border border-[var(--color-ns-border)] bg-[var(--color-ns-bg)] px-2 py-1 text-[0.6875rem] font-medium text-[var(--color-ns-text)] transition-all hover:border-[var(--color-ns-amber)] hover:bg-[var(--color-ns-amber)]/10 active:scale-95"
+                        className="inline-flex items-center gap-1 rounded-lg border border-[var(--color-ns-border)] bg-[var(--color-ns-bg)] px-2 py-1 text-[0.6875rem] font-medium text-[var(--color-ns-text)] transition-all hover:border-[var(--color-ns-amber)] hover:bg-[var(--color-ns-amber)]/10"
                       >
                         <svg
                           width="10"
