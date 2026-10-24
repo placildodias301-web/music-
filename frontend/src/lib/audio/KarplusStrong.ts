@@ -18,6 +18,9 @@ import { audioContextManager } from "./AudioContextManager";
 import { midiToFreq } from "./pitch";
 export { midiToFreq };
 
+/** Peak level of every rendered string (before the voice gain). */
+export const TARGET_PEAK = 0.85;
+
 /**
  * Synthesizes an AudioBuffer of a physically plucked or muted string.
  */
@@ -60,9 +63,10 @@ export function renderStringAudioBuffer(
   const freq = options.frequency ?? midiToFreq(options.midi);
   // Total duration: base string maxSeconds modified by fret position and velocity
   const fretShortenFactor = Math.max(0.5, 1 - fret * 0.025);
+  // Real strings ring on: the buffer is long enough for the natural decay to finish before the final fade.
   const duration = Math.min(
-    stringProps.maxSeconds * fretShortenFactor * (0.8 + velocity * 0.3),
-    4.5
+    stringProps.maxSeconds * 1.5 * fretShortenFactor * (0.8 + velocity * 0.3),
+    6
   );
   const totalSamples = Math.floor(sr * duration);
 
@@ -81,10 +85,10 @@ export function renderStringAudioBuffer(
   const pluckPos = Math.min(0.45, Math.max(0.08, options.pluckPosition ?? stringProps.pluckPosition));
   const pluckCombDelay = Math.max(2, Math.round(period * pluckPos));
 
-  // Velocity affects excitation brightness. Kept on the mellow side: a softer pick is the sweeter sound.
+  // Velocity affects excitation brightness: a harder pick has more highs. Full-range, not dulled: a real guitar is bright.
   const dynamicBrightness = Math.min(
-    0.9,
-    stringProps.brightness * (0.55 + velocity * 0.4)
+    0.97,
+    stringProps.brightness * (0.72 + velocity * 0.5)
   );
 
   // Decay factor per loop cycle
@@ -132,24 +136,43 @@ export function renderStringAudioBuffer(
     out[i] = decayFactor * 0.5 * (a + b);
   }
 
-  // Warmth: a gentle one-pole low-pass takes the pick's harsh edge off the whole note.
-  const warmth = Math.min(0.9, 0.5 + dynamicBrightness * 0.35);
+  // A touch of warmth only: a light one-pole low-pass that rounds the very top without dulling the sound.
+  const warmth = Math.min(0.98, 0.72 + dynamicBrightness * 0.28);
   let lp = 0;
   for (let i = 0; i < totalSamples; i++) {
     lp += warmth * (out[i] - lp);
     out[i] = lp;
   }
 
+  // Pick attack: a few milliseconds of bright, high-passed noise, the snap that makes it sound like a plucked string.
+  const clickSamples = Math.min(Math.floor(sr * 0.012), totalSamples);
+  let prevNoise = 0;
+  for (let i = 0; i < clickSamples; i++) {
+    const white = Math.random() * 2 - 1;
+    const highPassed = white - prevNoise;
+    prevNoise = white;
+    out[i] += highPassed * 0.35 * stringProps.transientSharpness * velocity * Math.exp(-i / (sr * 0.0025));
+  }
+
   // Natural release: a soft attack (no click), then the ring-out fades over the last
   // ~55% of the note on a smooth cosine curve, so the sound dies away slowly instead of being cut off.
   const attackSamples = Math.min(Math.floor(sr * 0.004), totalSamples);
-  const releaseStart = 0.45;
+  const releaseStart = 0.7;
   for (let i = 0; i < totalSamples; i++) {
     const t = i / totalSamples;
     let env = 1;
     if (i < attackSamples) env = i / attackSamples;
     if (t > releaseStart) env *= 0.5 * (1 + Math.cos(Math.PI * ((t - releaseStart) / (1 - releaseStart))));
     out[i] *= env;
+  }
+
+  // Level: every string is rendered to the same peak, so loudness is decided by the voice gain alone:
+  // a low string, a high string and a fretted note all come out at the same level and nothing is left quiet.
+  let peak = 0;
+  for (let i = 0; i < totalSamples; i++) peak = Math.max(peak, Math.abs(out[i]));
+  if (peak > 1e-6) {
+    const scale = TARGET_PEAK / peak;
+    for (let i = 0; i < totalSamples; i++) out[i] *= scale;
   }
 
   return buffer;

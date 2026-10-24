@@ -11,6 +11,8 @@ export interface StringInfoTableProps {
   instrumentName?: string;
   /** Strands per string/course (mandolin pairs, 12-string octaves) so a pair sounds as a pair. */
   courses?: number[][];
+  /** Violin family: say "semitones" instead of "fret". */
+  fretless?: boolean;
 }
 
 export function StringInfoTable({
@@ -20,6 +22,7 @@ export function StringInfoTable({
   fingering,
   instrumentName = "guitar",
   courses,
+  fretless = false,
 }: StringInfoTableProps) {
   const handlePlayString = (e: React.MouseEvent, stringInfo: PlayedStringAnalysis) => {
     e.stopPropagation();
@@ -43,7 +46,7 @@ export function StringInfoTable({
           <thead className="border-b border-[var(--color-ns-border)] bg-[var(--color-ns-bg)]/30 text-[0.6875rem] font-semibold text-[var(--color-ns-muted)]">
             <tr>
               <th className="px-3 py-2.5">String</th>
-              <th className="px-3 py-2.5">Fret</th>
+              <th className="px-3 py-2.5">{fretless ? "Finger spot" : "Fret"}</th>
               <th className="px-3 py-2.5">Note</th>
               <th className="px-3 py-2.5">Interval / Function</th>
               <th className="px-3 py-2.5">Finger</th>
@@ -102,7 +105,7 @@ export function StringInfoTable({
                       </span>
                     ) : (
                       <span className="font-mono font-bold text-[var(--color-ns-text)]">
-                        Fret {str.fret}
+                        {fretless ? `+${str.fret} semitones` : `Fret ${str.fret}`}
                       </span>
                     )}
                   </td>

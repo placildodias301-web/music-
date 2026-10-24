@@ -77,15 +77,15 @@ class AudioContextManager {
     const t = ctx.currentTime;
 
     this.masterGain = ctx.createGain();
-    this.masterGain.gain.setValueAtTime(0.85, t);
+    this.masterGain.gain.setValueAtTime(1, t);
 
     // Peak safety limiter: only catches the rare peak; per-voice gains are already balanced by the voice planner.
     this.compressor = ctx.createDynamicsCompressor();
-    this.compressor.threshold.setValueAtTime(-3, t);
-    this.compressor.knee.setValueAtTime(4, t);
-    this.compressor.ratio.setValueAtTime(10, t);
-    this.compressor.attack.setValueAtTime(0.003, t);
-    this.compressor.release.setValueAtTime(0.12, t);
+    this.compressor.threshold.setValueAtTime(-9, t);
+    this.compressor.knee.setValueAtTime(12, t);
+    this.compressor.ratio.setValueAtTime(5, t);
+    this.compressor.attack.setValueAtTime(0.004, t);
+    this.compressor.release.setValueAtTime(0.18, t);
 
     // Room ambience: a short, dark, decaying reverb tail so notes bloom and fade like a real room.
     const roomIn = ctx.createGain();
@@ -111,10 +111,10 @@ class AudioContextManager {
     roomFilter.connect(this.compressor);
     this.roomInput = roomIn;
 
-    // Warmth: roll off the harsh top end before the output.
+    // Only the very top is rolled off (above ~10 kHz), so strings keep their highs and presence.
     const warmth = ctx.createBiquadFilter();
     warmth.type = "lowpass";
-    warmth.frequency.setValueAtTime(6500, t);
+    warmth.frequency.setValueAtTime(10500, t);
     warmth.Q.setValueAtTime(0.5, t);
 
     this.compressor.connect(warmth);

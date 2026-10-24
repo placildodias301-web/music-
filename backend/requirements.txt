@@ -14,3 +14,18 @@ PyJWT[crypto]>=2.8,<3
 # Stem separation. Install the CPU build of torch first, or pip pulls the ~2 GB CUDA one:
 #   pip install torch --index-url https://download.pytorch.org/whl/cpu
 demucs>=4.1,<5
+# Sheet generation. basic-pitch pins a TensorFlow that has no Python 3.13 build, so install it
+# without its deps (it then runs its bundled ONNX model through onnxruntime):
+#   pip install --no-deps basic-pitch==0.4.0
+onnxruntime>=1.20
+# Sheet scanning: photo of printed music -> MusicXML (AGPL-3.0; downloads its models on first use).
+homr>=0.7
+pretty-midi>=0.2.9
+mir-eval>=0.6
+resampy>=0.2.2,<0.4.3
+scikit-learn
+music21>=9,<11
+# Talking vs singing filter (PANNs: code MIT, weights CC-BY-4.0, credit Kong et al.). The ~312 MB
+# weights download on first use into ~/panns_data.
+panns-inference>=0.1.1
+torchlibrosa

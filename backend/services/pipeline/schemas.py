@@ -3,7 +3,7 @@ The pipeline's JSON contract. All times are seconds from the start of the
 original upload's audio, clamped to [0, audio_duration].
 """
 
-from typing import Literal, Optional
+from typing import Any, Literal, Optional
 
 from pydantic import BaseModel, Field
 
@@ -38,6 +38,25 @@ class Event(BaseModel):
     confidence: Optional[float] = None
 
 
+class KeyAlternative(BaseModel):
+    key: str
+    score: float
+
+
+class DifficultyFactors(BaseModel):
+    chordComplexity: float
+    chordChangeRate: float
+    tempo: float
+    modulation: float
+
+
+class Difficulty(BaseModel):
+    # Same shape (and camelCase) as v2's services/difficulty.py, so the frontend reads one type.
+    difficultyLabel: Literal["Beginner", "Intermediate", "Advanced"]
+    difficultyScore: float
+    factors: DifficultyFactors
+
+
 class PipelineResult(BaseModel):
     status: Literal["completed"] = "completed"
     pipeline_version: int
@@ -51,6 +70,17 @@ class PipelineResult(BaseModel):
     sections: list[Section] = Field(default_factory=list)
     chords: list[ChordSpan] = Field(default_factory=list)
     events: list[Event] = Field(default_factory=list)
+    # Key and difficulty, from the v2 engine's own algorithms (pipeline v6). None when no
+    # chords or pitched sound were found; absent on results cached by older versions.
+    key: Optional[str] = None  # "A Minor"
+    mode: Optional[str] = None  # "major" | "minor"
+    scale: Optional[str] = None
+    key_confidence: Optional[float] = None
+    key_alternatives: list[KeyAlternative] = Field(default_factory=list)
+    difficulty: Optional[Difficulty] = None
+    # Audio checks (pipeline v7): loudness, trimmed silence, clipping, noise, activity regions,
+    # and per-stem quality. See services/pipeline/preprocess.py for every field.
+    preprocessing: Optional[dict[str, Any]] = None
     # Which backend produced each part, e.g. {"rhythm": "allin1"} — so a
     # fallback is visible instead of silent.
     engines: dict[str, str] = Field(default_factory=dict)

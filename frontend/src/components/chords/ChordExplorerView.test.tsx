@@ -1,11 +1,16 @@
 import { render, screen } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { describe, expect, it, vi } from "vitest";
-import { chordInstruments } from "../../lib/instruments/definitions";
+import { chordInstruments, findDefinition } from "../../lib/instruments/definitions";
 import { SettingsProvider } from "../../lib/settings/SettingsProvider";
 import { ChordExplorerView } from "./ChordExplorerView";
 
-vi.mock("../../lib/audio", () => ({ audioEngine: { playNote: vi.fn(), playChord: vi.fn(), playArpeggio: vi.fn(), stop: vi.fn() } }));
+// Real recipes and planners, silent engine: nothing reaches a speaker in tests.
+vi.mock("../../lib/audio", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../lib/audio")>()),
+  audioEngine: { playNote: vi.fn(), playChord: vi.fn(), playArpeggio: vi.fn(), stop: vi.fn(), isSupported: () => true },
+  playSynth: vi.fn(),
+}));
 
 function renderFor(definitionId: string, chord = "Cmaj7") {
   return render(
@@ -45,4 +50,23 @@ describe("ChordExplorerView", () => {
     renderFor("piano", "C");
     expect(screen.getByRole("button", { name: /Play C on Piano/ }).textContent).toContain("Play Chord");
   });
+
+  it("draws violin, viola and cello without frets, and other string instruments with them", () => {
+    for (const id of ["violin", "viola", "cello"]) {
+      expect(findDefinition(id)?.fretless, id).toBe(true);
+      const view = renderFor(id, "G");
+      expect(screen.getByText(/Full Fingerboard Explorer \(no frets\)/), id).toBeTruthy();
+      expect(screen.queryByText(/Fret Fretboard/), id).toBeNull();
+      expect(screen.getByText("Fingerboard Voicing"), id).toBeTruthy();
+      expect(screen.queryByText("Fretboard Voicing"), id).toBeNull();
+      expect(screen.getByText("Finger spot"), id).toBeTruthy(); // the string table talks about finger spots, not frets
+      view.unmount();
+    }
+    for (const id of ["guitar", "mandolin", "ukulele", "bass"]) {
+      expect(findDefinition(id)?.fretless, id).toBeFalsy();
+      const view = renderFor(id, "G");
+      expect(screen.getByText(/Fret Fretboard Explorer/), id).toBeTruthy();
+      view.unmount();
+    }
+  }, 60_000);
 });

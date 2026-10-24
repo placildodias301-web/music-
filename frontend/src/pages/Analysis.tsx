@@ -195,7 +195,8 @@ export function Analysis() {
     try {
       if (kind === "midi") {
         const sounding = transposeAnalysis(analysis!, soundingShift(transpose));
-        await exportMidi(sounding.chordProgression, analysis!.bpm, displayName, sounding.chordTimeline);
+        // Chords keep their detected times; without a tempo the file just needs a nominal one.
+      await exportMidi(sounding.chordProgression, analysis!.bpm > 0 ? analysis!.bpm : 120, displayName, sounding.chordTimeline);
       } else {
         await exportPdf(
           buildLeadSheet({

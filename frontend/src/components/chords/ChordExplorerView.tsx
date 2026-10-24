@@ -3,7 +3,7 @@ import { InstrumentPicker } from "../instruments/InstrumentPicker";
 import { SettingsSelect } from "../settings/SettingsSelect";
 import { chordInstruments, findDefinition } from "../../lib/instruments/definitions";
 import { bassOptions, buildChordModel, chordTunings, tuningChoices, type ChordModel, type ChordSettings } from "../../lib/chords/model";
-import { playModel, playPlayedString, stringVoiceFor } from "../../lib/chords/play";
+import { playModel, playModelArpeggio, playPlayedString, stringVoiceFor } from "../../lib/chords/play";
 import { inversionName } from "../../lib/chords/theory";
 import { ChordDiagram } from "./ChordDiagram";
 import {
@@ -42,7 +42,6 @@ export interface ChordExplorerViewProps {
 
 /** Frets drawn per instrument (real instruments have different neck lengths); violin-family positions are semitones from the nut. */
 const FRETS_FOR: Record<string, number> = { ukulele: 15, cavaquinho: 17, mandolin: 20, banjo: 22, balalaika: 15, violin: 14, viola: 14, cello: 14 };
-const BOWED_IDS = new Set(["violin", "viola", "cello"]);
 
 /** Shapes a fretted or bass model offers, as plain name + frets pairs. */
 function shapesOf(model: ChordModel | null): { name: string; frets: (number | null)[] }[] {
@@ -163,7 +162,7 @@ export function ChordExplorerView({ initialChordSymbol = "C", settings, onSettin
       getPracticeGuidance(
         activeVoicing.frets,
         fingeringResult,
-        voiceName,
+        (voiceName === "bass" || voiceName === "ukulele" ? voiceName : "guitar"),
         currentTuning.stringNames
       ),
     [activeVoicing.frets, fingeringResult, voiceName, currentTuning.stringNames]
@@ -178,7 +177,7 @@ export function ChordExplorerView({ initialChordSymbol = "C", settings, onSettin
   const handleSelectString = (index: number) => {
     setSelectedStringIndex(index);
     const str = playedStrings[index];
-    if (str) void playPlayedString(str, { instrumentId: voiceName, totalStrings: playedStrings.length, courses: courseOffsets }).catch(() => {});
+    if (str) void playPlayedString(str, { instrumentId, totalStrings: playedStrings.length, courses: courseOffsets }).catch(() => {});
   };
 
   const handleFretboardNoteClick = (info: {
@@ -257,9 +256,9 @@ export function ChordExplorerView({ initialChordSymbol = "C", settings, onSettin
             )}
           </div>
         </div>
-        {(tuningNote || definition.caveat) && (
+        {(tuningNote || definition.caveat || definition.chordCaveat) && (
           <p className="mt-3 text-[0.6875rem] leading-relaxed text-[var(--color-ns-muted)]">
-            {tuningNote} {definition.caveat}
+            {[tuningNote, definition.caveat, definition.chordCaveat].filter(Boolean).join(" ")}
           </p>
         )}
 
@@ -456,9 +455,9 @@ export function ChordExplorerView({ initialChordSymbol = "C", settings, onSettin
           tuningMidi={board.midi}
           stringNames={board.names}
           activeShapeFrets={board.midi.map(() => null)}
-          instrument={voiceName}
+          instrument={instrumentId}
           numFrets={FRETS_FOR[instrumentId] ?? 24}
-          boardName={BOWED_IDS.has(instrumentId) ? "Fingerboard" : "Fretboard"}
+          fretless={definition.fretless}
         />
       )}
 
@@ -473,7 +472,7 @@ export function ChordExplorerView({ initialChordSymbol = "C", settings, onSettin
             <div className="flex items-center justify-between border-b border-[var(--color-ns-border)] pb-3">
               <div>
                 <h4 className="text-xs font-bold uppercase tracking-wider text-[var(--color-ns-text)]">
-                  Fretboard Voicing
+                  {definition.fretless ? "Fingerboard Voicing" : "Fretboard Voicing"}
                 </h4>
                 <p className="text-[0.6875rem] text-[var(--color-ns-muted)]">
                   {activeVoicing.name}
@@ -515,7 +514,8 @@ export function ChordExplorerView({ initialChordSymbol = "C", settings, onSettin
                 onSelectString={handleSelectString}
                 fingering={fingeringResult}
                 courses={fretted?.kind === "fretted" && fretted.courses ? fretted.tuning.offsets : undefined}
-                caption={activeVoicing.name}
+                fretless={definition.fretless}
+                caption={definition.fretless ? "Finger placement (no frets)" : activeVoicing.name}
                 dotDisplayMode={dotMode}
               />
             </div>
@@ -524,6 +524,7 @@ export function ChordExplorerView({ initialChordSymbol = "C", settings, onSettin
             <div className="border-t border-[var(--color-ns-border)]/60 pt-3 text-center text-[0.6875rem] text-[var(--color-ns-muted)]">
               <span className="font-semibold text-[var(--color-ns-text)]">Fingering: </span>
               1 = Index · 2 = Middle · 3 = Ring · 4 = Pinky
+              {definition.fretless && <span className="mt-1 block text-[var(--color-ns-dim)]">No frets: dots show roughly where each finger lands; the exact spot is found by ear.</span>}
             </div>
           </div>
 
@@ -531,8 +532,9 @@ export function ChordExplorerView({ initialChordSymbol = "C", settings, onSettin
           <NoteInspectorCard
             selectedNote={selectedNoteInfo}
             onClearSelection={() => setSelectedStringIndex(null)}
-            instrument={voiceName}
+            instrument={instrumentId}
             courses={courseOffsets}
+            fretless={definition.fretless}
             totalStrings={playedStrings.length}
           />
         </div>
@@ -545,8 +547,9 @@ export function ChordExplorerView({ initialChordSymbol = "C", settings, onSettin
             selectedStringIndex={selectedStringIndex}
             onSelectString={handleSelectString}
             fingering={fingeringResult}
-            instrumentName={voiceName}
+            instrumentName={instrumentId}
             courses={courseOffsets}
+            fretless={definition.fretless}
           />
 
           {/* Music Theory & Construction */}
@@ -561,9 +564,9 @@ export function ChordExplorerView({ initialChordSymbol = "C", settings, onSettin
         stringNames={board.names}
         activeShapeFrets={board.expand(activeVoicing.frets)}
         onNoteClick={handleFretboardNoteClick}
-        instrument={voiceName}
+        instrument={instrumentId}
         numFrets={FRETS_FOR[instrumentId] ?? 24}
-        boardName={BOWED_IDS.has(instrumentId) ? "Fingerboard" : "Fretboard"}
+        fretless={definition.fretless}
       />
 
       {/* ─── PRACTICE & AUDIO PLAYBACK PANEL ─── */}
@@ -574,7 +577,7 @@ export function ChordExplorerView({ initialChordSymbol = "C", settings, onSettin
         courses={courseOffsets}
         fingering={fingeringResult}
         guidance={practiceGuidance}
-        instrument={voiceName}
+        instrument={instrumentId}
       />
         </>
       ) : model && model.kind !== "fretted" && model.kind !== "bass" ? (
@@ -667,6 +670,7 @@ function OtherInstrumentWorkbench({ model, analysis }: { model: OtherModel; anal
   const playback = usePlayback();
   const playing = playback.playing;
   const play = () => playback.run(() => playModel(model, 0));
+  const playOneByOne = () => playback.run(() => playModelArpeggio(model, 0));
   return (
     <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
       <div className="space-y-6 lg:col-span-5">
@@ -699,6 +703,14 @@ function OtherInstrumentWorkbench({ model, analysis }: { model: OtherModel; anal
             </button>
             <button
               type="button"
+              onClick={playOneByOne}
+              aria-label={`Play the notes of ${model.chord.label} one by one on ${model.definition.name}`}
+              className="ml-2 flex h-10 items-center justify-center rounded-xl border border-[var(--color-ns-border)] bg-[var(--color-ns-bg)] px-4 text-xs font-bold text-[var(--color-ns-text)] transition-shadow hover:shadow-[0_0_14px_rgba(255,176,32,0.45)]"
+            >
+              One by one
+            </button>
+            <button
+              type="button"
               onClick={playback.stop}
               disabled={!playing}
               aria-label="Stop audio"
@@ -714,7 +726,7 @@ function OtherInstrumentWorkbench({ model, analysis }: { model: OtherModel; anal
             {playback.status === "error" ? playback.error : ""}
           </p>
           <p className="mt-3 text-center text-[0.6875rem] text-[var(--color-ns-muted)]">
-            A reference sound for the chord's notes — not a recording of a real {model.definition.name.toLowerCase()}.
+            A sound model of the {model.definition.name.toLowerCase()} playing these notes — not a recording.
           </p>
         </div>
       </div>

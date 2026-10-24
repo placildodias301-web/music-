@@ -13,6 +13,8 @@ export interface InteractiveChordDiagramProps {
   caption?: string;
   /** Per course, the strings it holds (semitone offsets). Courses with 2+ strings are drawn as pairs. */
   courses?: number[][];
+  /** No frets (violin family): a plain fingerboard, finger dots placed by pitch, no fret lines or barres. */
+  fretless?: boolean;
   dotDisplayMode?: "fingers" | "notes" | "intervals";
 }
 
@@ -25,6 +27,7 @@ export function InteractiveChordDiagram({
   fingering,
   caption,
   courses,
+  fretless = false,
   dotDisplayMode = "fingers",
 }: InteractiveChordDiagramProps) {
   const { settings } = useSettings();
@@ -34,8 +37,8 @@ export function InteractiveChordDiagram({
   const frettedVals = frets.filter((f): f is number => f !== null && f > 0);
   const minFret = frettedVals.length ? Math.min(...frettedVals) : 0;
   const maxFret = frettedVals.length ? Math.max(...frettedVals) : 0;
-  const startFret = maxFret > 4 ? minFret - 1 : 0;
-  const fretCount = Math.min(8, Math.max(4, maxFret - startFret));
+  const startFret = !fretless && maxFret > 4 ? minFret - 1 : 0;
+  const fretCount = fretless ? 5 : Math.min(8, Math.max(4, maxFret - startFret));
 
   const spacing = n <= 4 ? 32 : n <= 6 ? 26 : 22;
   const fretSpacing = 32;
@@ -47,6 +50,9 @@ export function InteractiveChordDiagram({
   // Left-handed support
   const isLeftHanded = settings.display.leftHanded;
   const xOf = (s: number) => left + (isLeftHanded ? n - 1 - s : s) * spacing;
+  // Fretless: semitone n sits at 1 − 2^(−n/12) of the way along the string, so spacing narrows toward the bridge.
+  const reach = Math.max(6, maxFret + 2);
+  const fingerboardY = (n: number) => top + fretSpacing * fretCount * ((1 - Math.pow(2, -n / 12)) / (1 - Math.pow(2, -reach / 12)));
   const strandX = (s: number) => {
     const k = courses?.[s]?.length ?? 1;
     return Array.from({ length: k }, (_, j) => xOf(s) + (j - (k - 1) / 2) * 7);
@@ -85,8 +91,13 @@ export function InteractiveChordDiagram({
           />
         )}
 
+        {/* Fingerboard: a plain board, no fret lines */}
+        {fretless && (
+          <rect x={left - 8} y={top} width={spacing * (n - 1) + 16} height={fretSpacing * fretCount} rx={3} fill="var(--color-ns-border)" opacity={0.25} />
+        )}
+
         {/* Frets (horizontal lines) */}
-        {Array.from({ length: fretCount + 1 }).map((_, i) => (
+        {!fretless && Array.from({ length: fretCount + 1 }).map((_, i) => (
           <line
             key={`fret-${i}`}
             x1={left}
@@ -129,7 +140,7 @@ export function InteractiveChordDiagram({
         })}
 
         {/* Barre bridges */}
-        {fResult.barres.map((barre, bIdx) => {
+        {!fretless && fResult.barres.map((barre, bIdx) => {
           const relFret = barre.fret - startFret;
           if (relFret < 1 || relFret > fretCount) return null;
           const cy = top + (relFret - 0.5) * fretSpacing;
@@ -229,10 +240,10 @@ export function InteractiveChordDiagram({
         {frets.map((fret, s) => {
           if (fret === null || fret <= 0) return null;
           const rel = fret - startFret;
-          if (rel < 1 || rel > fretCount) return null;
+          if (!fretless && (rel < 1 || rel > fretCount)) return null;
 
           const cx = xOf(s);
-          const cy = top + (rel - 0.5) * fretSpacing;
+          const cy = fretless ? fingerboardY(fret) : top + (rel - 0.5) * fretSpacing;
           const isSelected = selectedStringIndex === s;
           const stringInfo = playedStrings[s];
           const isRoot = stringInfo?.isRoot;
@@ -262,7 +273,7 @@ export function InteractiveChordDiagram({
               }}
               className="cursor-pointer outline-none transition-[filter] hover:[filter:drop-shadow(0_0_5px_var(--color-ns-amber))] focus-visible:[filter:drop-shadow(0_0_5px_var(--color-ns-amber))]"
             >
-              <title>{`String ${n - s}: Fret ${fret}, Note ${stringInfo?.noteName || ""} (Click to play)`}</title>
+              <title>{`String ${n - s}: ${fretless ? `${fret} semitones above the open string` : `Fret ${fret}`}, Note ${stringInfo?.noteName || ""} (Click to play)`}</title>
               {/* Highlight halo when selected */}
               {isSelected && (
                 <circle

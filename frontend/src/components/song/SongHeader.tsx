@@ -2,7 +2,7 @@ import { useState } from "react";
 import type { AnalysisResult } from "../../lib/api";
 import { displayKey } from "../../lib/chordSync";
 import { explainDifficulty } from "../../lib/song/difficulty";
-import { DIFFICULTY_BADGES, DEFAULT_DIFFICULTY_BADGE, describeKeyConfidence, tempoNote, timeSignatureNote } from "../../lib/analysisDisplay";
+import { DIFFICULTY_BADGES, DEFAULT_DIFFICULTY_BADGE, describeKeyConfidence, formatBpm, tempoNote, timeSignatureNote, timeSignatureValue } from "../../lib/analysisDisplay";
 
 interface Props {
   title: string;
@@ -32,12 +32,12 @@ export function SongHeader({ title, artist, analysis, key_, capo, transpose }: P
         </div>
         <div className={stat}>
           <p className="text-[11px] text-[var(--color-ns-dim)]">BPM</p>
-          <p className="font-heading text-lg font-bold text-[var(--color-ns-text)]">{Math.round(analysis.bpm)}</p>
+          <p className="font-heading text-lg font-bold text-[var(--color-ns-text)]">{formatBpm(analysis)}</p>
           <p className="text-[11px] text-[var(--color-ns-muted)]">{tempoNote(analysis)}</p>
         </div>
         <div className={stat}>
           <p className="text-[11px] text-[var(--color-ns-dim)]">Time</p>
-          <p className="font-heading text-lg font-bold text-[var(--color-ns-text)]">{analysis.timeSignature || "4/4"}</p>
+          <p className="font-heading text-lg font-bold text-[var(--color-ns-text)]">{timeSignatureValue(analysis)}</p>
           <p className="text-[11px] text-[var(--color-ns-muted)]">{timeSignatureNote(analysis)}</p>
         </div>
         <div className={stat}>

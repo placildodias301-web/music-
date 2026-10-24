@@ -51,3 +51,22 @@ def fake_events(monkeypatch):
         return EventsResult(chords=chords, events=[])
 
     monkeypatch.setattr(jobs, "analyze_events", analyze_events)
+
+
+@pytest.fixture(autouse=True)
+def fake_key(monkeypatch):
+    """
+    Every pipeline job gets a fixed key instead of running the chroma analysis.
+    test_pipeline_key.py overrides this fixture to test the real step.
+    """
+    from services.pipeline import jobs
+    from services.pipeline.key_stage import KeyResult
+
+    def estimate(stem_path, *, chords, bpm, duration):
+        return KeyResult(key="C Major", mode="major", scale="C Ionian (Major)", key_confidence=0.9,
+                         key_alternatives=[{"key": "A Minor", "score": 0.7}],
+                         difficulty={"difficultyLabel": "Beginner", "difficultyScore": 10,
+                                     "factors": {"chordComplexity": 0, "chordChangeRate": 0, "tempo": 50,
+                                                 "modulation": 0}})
+
+    monkeypatch.setattr(jobs, "estimate_key_and_difficulty", estimate)

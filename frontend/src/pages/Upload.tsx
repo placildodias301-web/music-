@@ -6,7 +6,9 @@ import {
   ALLOWED_UPLOAD_EXTENSIONS,
   AnalysisError,
   analyzeFile,
+  analyzeWithPipeline,
   fetchMediaFromLink,
+  getAnalysisEngine,
   logRightsAttestation,
   validateUploadFile,
   validateMediaLink,
@@ -261,9 +263,14 @@ export function Upload() {
 
       setPhase("uploading");
       setUpload({ loaded: 0, total: file.size, etaSeconds: null });
+      // ANALYSIS_ENGINE on the server picks the flow: the job pipeline (upload, then poll for
+      // stage/progress) or the v2 stream. Both resolve to the same AnalysisResult.
+      const engine = await getAnalysisEngine(controller.signal);
+      if (cancelled()) return;
+      const analyze = engine === "pipeline" ? analyzeWithPipeline : analyzeFile;
       const started = performance.now();
       const sourceType = usingSample ? "sample" : source === "social" ? "youtube" : source === "link" ? "link" : source === "mic" ? "mic" : "file";
-      const analysis = await analyzeFile(file, {
+      const analysis = await analyze(file, {
         signal: controller.signal,
         sourceType,
         onUpload: (loaded, total) => {

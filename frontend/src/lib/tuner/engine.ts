@@ -170,7 +170,12 @@ export class TunerEngine {
     const muted = nowMs < this.muteUntil;
     let fresh = false;
     if (!muted && !attack && rmsValue >= this.floor.threshold()) {
-      const r = yinPitch(buffer, sampleRate, fmin, fmax, { rmsGate: TUNER_CONFIG.minRms, threshold: TUNER_CONFIG.yinThreshold, maxAperiodicity: TUNER_CONFIG.yinMaxAperiodicity });
+      const r = yinPitch(buffer, sampleRate, fmin, fmax, {
+        rmsGate: TUNER_CONFIG.minRms,
+        threshold: this.profile.yinThreshold ?? TUNER_CONFIG.yinThreshold,
+        maxAperiodicity: this.profile.yinMaxAperiodicity ?? TUNER_CONFIG.yinMaxAperiodicity,
+        octaveGuard: this.profile.octaveGuard,
+      });
       this.lastRaw = r ? r.frequency : null;
       if (r && r.confidence >= this.profile.minConfidence) {
         const s = this.smoother.push(r.frequency);

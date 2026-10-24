@@ -36,8 +36,8 @@ function preset(id: string, name: string, category: TuningCategory, notes: strin
   return { id, name, category, ...(note ? { note } : {}), strings: stringsFromNotes(id, notes.split(" ")) };
 }
 
-/** Paired courses: each entry is [note, note] for one course. */
-function coursePreset(id: string, name: string, category: TuningCategory, courses: [string, string][], relations: PairRelation[]): TuningPreset {
+/** Courses: each entry is the note(s) of one course (one string, or a pair). */
+function coursePreset(id: string, name: string, category: TuningCategory, courses: string[][], relations: PairRelation[], note?: string): TuningPreset {
   const notes: string[] = [];
   const pairs: { pairId: string; relation: PairRelation; course: number }[] = [];
   courses.forEach((c, ci) => {
@@ -46,8 +46,21 @@ function coursePreset(id: string, name: string, category: TuningCategory, course
       pairs.push({ pairId: `${id}-c${ci + 1}`, relation: relations[ci], course: ci + 1 });
     });
   });
-  return { id, name, category, strings: stringsFromNotes(id, notes, pairs) };
+  return { id, name, category, ...(note ? { note } : {}), strings: stringsFromNotes(id, notes, pairs) };
 }
+
+const SHARP_NAMES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
+/** "C#3" for MIDI 49 — the note spelling `noteToMidi` reads back. */
+const noteName = (midi: number) => `${SHARP_NAMES[((midi % 12) + 12) % 12]}${Math.floor(midi / 12) - 1}`;
+/** Sa (the tonic) in each key. Indian instruments are tuned to the player's Sa, so every key is its own preset. Sa is placed in C3–B3. */
+const SA_KEYS = SHARP_NAMES.map((name, pc) => ({ name, sa: 48 + pc }));
+/** Common starting keys first (C♯ is the usual concert Sa for sitar), then the rest. */
+const SA_ORDER = [1, 0, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11];
+const saPresets = (prefix: string, label: string, intervals: number[], note: string, category: TuningCategory = "standard"): TuningPreset[] =>
+  SA_ORDER.map((pc) => {
+    const k = SA_KEYS[pc];
+    return preset(`${prefix}-${k.name.replace("#", "s")}`, `${label} (Sa = ${k.name})`, category, intervals.map((i) => noteName(k.sa + i)).join(" "), note);
+  });
 
 function variant(id: string, name: string, stringCount: number, head: HeadKind, tunings: TuningPreset[], layout: TunerLayout = "headstock", courseCount = stringCount): TunerVariant {
   return { id, name, stringCount, courseCount, layout, head, tunings };
@@ -124,6 +137,12 @@ const UKULELE: TuningPreset[] = [
   preset("baritone", "Baritone", "alternate", "D3 G3 B3 E4"),
 ];
 
+/* Baritone ukulele is tuned like the top four strings of a guitar (D G B E). Soprano, concert and tenor all share G C E A. */
+const UKULELE_BARITONE: TuningPreset[] = [
+  preset("standard", "Standard (D G B E)", "standard", "D3 G3 B3 E4"),
+  preset("half-step-down", "Half Step Down", "down", "Db3 Gb3 Bb3 Eb4"),
+];
+
 const VIOLIN: TuningPreset[] = [preset("standard", "Standard", "standard", "G3 D4 A4 E5")];
 const VIOLA: TuningPreset[] = [preset("standard", "Standard", "standard", "C3 G3 D4 A4")];
 const CELLO: TuningPreset[] = [preset("standard", "Standard", "standard", "C2 G2 D3 A3")];
@@ -188,6 +207,58 @@ const CAVAQUINHO: TuningPreset[] = [
   preset("portuguese-old", "Portuguese old (D A B E)", "alternate", "D5 A4 B4 E5", "Re-entrant: A is the lowest string. Octaves assumed."),
 ];
 
+/* ─── 8-string guitar (extended range). Source: the common F♯–B–E–A–D–G–B–E tuning. ─── */
+const GUITAR8: TuningPreset[] = [
+  preset("standard", "Standard (F♯ B E A D G B E)", "standard", "F#1 B1 E2 A2 D3 G3 B3 E4"),
+  preset("drop-e", "Drop E (E B E A D G B E)", "drop", "E1 B1 E2 A2 D3 G3 B3 E4"),
+  preset("whole-step-down", "Whole step down", "down", "E1 A1 D2 G2 C3 F3 A3 D4"),
+];
+
+/* ─── Double bass: tuned in fourths like a bass guitar. "Solo" is a whole step up. ─── */
+const DOUBLE_BASS_4: TuningPreset[] = [
+  preset("orchestral", "Orchestral (E A D G)", "standard", "E1 A1 D2 G2"),
+  preset("solo", "Solo (F♯ B E A)", "alternate", "F#1 B1 E2 A2", "A whole step above orchestral tuning, used for solo repertoire with solo strings."),
+];
+const DOUBLE_BASS_5: TuningPreset[] = [
+  preset("low-b", "Low B (B E A D G)", "standard", "B0 E1 A1 D2 G2"),
+  preset("high-c", "High C (E A D G C)", "alternate", "E1 A1 D2 G2 C3"),
+];
+
+/* ─── Bouzouki. Source: Wikipedia "Bouzouki". Octave pairing of the lower courses is the usual arrangement; it varies by maker/player. ─── */
+const BOUZOUKI_8: TuningPreset[] = [
+  coursePreset("tetrachordo", "Greek 4-course (C F A D)", "standard", [["C3", "C4"], ["F3", "F4"], ["A3", "A3"], ["D4", "D4"]], ["octave", "octave", "unison", "unison"], "The two lowest courses are doubled at the octave, the two highest in unison."),
+  coursePreset("irish-gdad", "Irish (G D A D)", "alternate", [["G2", "G3"], ["D3", "D4"], ["A3", "A3"], ["D4", "D4"]], ["octave", "octave", "unison", "unison"], "Octave strings on the two lowest courses; some players use unisons."),
+];
+const BOUZOUKI_6: TuningPreset[] = [
+  coursePreset("trichordo", "Greek 3-course (D A D)", "standard", [["D3", "D4"], ["A3", "A3"], ["D4", "D4"]], ["octave", "unison", "unison"], "Octave pairing of the lowest course varies."),
+];
+
+/* ─── Andean and Latin American folk instruments. Where sources give note names but not octaves the octaves are assumed (noted). ─── */
+const CHARANGO: TuningPreset[] = [
+  coursePreset("standard", "Standard (G C E A E)", "standard", [["G4", "G4"], ["C5", "C5"], ["E5", "E5"], ["A4", "A4"], ["E5", "E5"]], ["unison", "unison", "unison", "unison", "unison"], "Re-entrant: the 4th course (A) is lower than the 3rd. Some traditions double the 3rd course at the octave; octaves assumed."),
+];
+const CUATRO_VENEZUELAN: TuningPreset[] = [preset("venezuelan", "Venezuelan (A D F♯ B)", "standard", "A3 D4 F#4 B3", "Re-entrant: the B is the lowest-sounding string of the top course set (B3). Octaves assumed.")];
+const TRES: TuningPreset[] = [
+  coursePreset("cubano", "Cuban tres (G C E)", "standard", [["G3", "G4"], ["C4", "C5"], ["E4", "E4"]], ["octave", "octave", "unison"], "Octave pairs on the two lower courses, unison on the highest."),
+];
+
+/* ─── Oud (Arabic): one single low string and five double courses. Players often tune the whole instrument up or down to suit the singer. ─── */
+const OUD_11: TuningPreset[] = [
+  coursePreset("arabic", "Arabic (C F A D G C)", "standard", [["C2"], ["F2", "F2"], ["A2", "A2"], ["D3", "D3"], ["G3", "G3"], ["C4", "C4"]], ["unison", "unison", "unison", "unison", "unison", "unison"], "Fretless. Pitch is relative: tune the set to your singer or ensemble."),
+];
+
+/* ─── Erhu: two strings a fifth apart (inner D4, outer A4). ─── */
+const ERHU: TuningPreset[] = [preset("standard", "Standard (D A)", "standard", "D4 A4")];
+
+/* ─── Indian instruments are tuned to the player's tonic (Sa), so there is one preset per key. These are Western equal-temperament
+   approximations of a Sa-based layout with octaves assumed; actual tuning is adjusted by ear and by raga. ─── */
+const TANPURA_PA = saPresets("pa", "Pa Sa Sa Sa", [-5, 0, 0, -12], "Pa (the fifth) is tuned below Sa; the last string is Sa an octave lower. For ragas that omit Pa, use the Ma tuning.");
+const TANPURA_MA = saPresets("ma", "Ma Sa Sa Sa", [-7, 0, 0, -12], "Ma (the fourth) replaces Pa, for ragas without a perfect fifth.");
+const SITAR_7 = saPresets("sitar", "Sitar", [-12, -5, 0, 0, 12, 12, 7], "A common Sa-based layout: kharaj Sa, Pa, main and jod Sa, then chikari Sa, Sa, Pa. Octaves assumed; the sympathetic strings are not included.");
+const TABLA_DAYAN = saPresets("dayan", "Dayan", [0], "Tune the dayan (the right, higher drum) to the tonic Sa of the piece. The bayan is not tuned to a fixed note.");
+const MRIDANGAM_RIGHT = saPresets("mridangam", "Right head", [0], "The right head (valanthalai) is tuned to the tonic (Sa) of the concert. The left head is not tuned to a fixed note.");
+const PAKHAWAJ_RIGHT = saPresets("pakhawaj", "Right head", [0], "The right head is tuned to the tonic (Sa); the left head is lower and adjusted to suit. Pitch of Sa is chosen by the player."); 
+
 export const INSTRUMENTS: TunerInstrument[] = [
   {
     id: "guitar",
@@ -198,6 +269,8 @@ export const INSTRUMENTS: TunerInstrument[] = [
       variant("electric-6", "Electric · 6 string", 6, "electric", GUITAR6),
       variant("guitar-7", "7 string", 7, "inline", GUITAR7),
       variant("guitar-12", "12 string", 12, "acoustic", GUITAR12, "courses", 6),
+      variant("classical-6", "Classical · 6 string", 6, "acoustic", GUITAR6),
+      variant("guitar-8", "8 string", 8, "inline", GUITAR8),
     ],
   },
   {
@@ -210,7 +283,13 @@ export const INSTRUMENTS: TunerInstrument[] = [
       variant("bass-6", "6 string", 6, "inline", BASS6),
     ],
   },
-  { id: "ukulele", family: "Ukulele", blurb: "G C E A", variants: [variant("ukulele-4", "4 string", 4, "split", UKULELE)] },
+  {
+    id: "ukulele",
+    family: "Ukulele",
+    blurb: "G C E A · soprano, concert, tenor, baritone",
+    variantLabel: "Size",
+    variants: [variant("ukulele-4", "Soprano / concert / tenor", 4, "split", UKULELE), variant("ukulele-baritone", "Baritone", 4, "split", UKULELE_BARITONE)],
+  },
   { id: "violin", family: "Violin", blurb: "G D A E", variants: [variant("violin-4", "4 string", 4, "violin", VIOLIN)] },
   { id: "viola", family: "Viola", blurb: "C G D A", variants: [variant("viola-4", "4 string", 4, "violin", VIOLA)] },
   { id: "cello", family: "Cello", blurb: "C G D A", variants: [variant("cello-4", "4 string", 4, "violin", CELLO)] },
@@ -236,6 +315,35 @@ export const INSTRUMENTS: TunerInstrument[] = [
     ],
   },
   { id: "cavaquinho", family: "Cavaquinho", blurb: "D G B D", variants: [variant("cavaquinho-4", "4 string", 4, "split", CAVAQUINHO)] },
+  {
+    id: "double-bass",
+    family: "Double Bass",
+    blurb: "E A D G",
+    variants: [variant("db-4", "4 string", 4, "bass", DOUBLE_BASS_4), variant("db-5", "5 string", 5, "inline", DOUBLE_BASS_5)],
+  },
+  {
+    id: "bouzouki",
+    family: "Bouzouki",
+    blurb: "Greek and Irish · courses",
+    variantLabel: "Size",
+    variants: [variant("bouzouki-8", "4 courses (8 strings)", 8, "mandolin", BOUZOUKI_8, "courses", 4), variant("bouzouki-6", "3 courses (6 strings)", 6, "mandolin", BOUZOUKI_6, "courses", 3)],
+  },
+  { id: "charango", family: "Charango", blurb: "5 courses · Andean", variants: [variant("charango-10", "10 string (5 courses)", 10, "mandolin", CHARANGO, "courses", 5)] },
+  { id: "cuatro", family: "Cuatro", blurb: "Venezuelan, re-entrant", variants: [variant("cuatro-4", "4 string", 4, "split", CUATRO_VENEZUELAN)] },
+  { id: "tres", family: "Tres", blurb: "Cuban · 3 courses", variants: [variant("tres-6", "6 string (3 courses)", 6, "mandolin", TRES, "courses", 3)] },
+  { id: "oud", family: "Oud", blurb: "Arabic · 11 strings", variants: [variant("oud-11", "11 string (6 courses)", 11, "mandolin", OUD_11, "courses", 6)] },
+  { id: "erhu", family: "Erhu", blurb: "D A · bowed, 2 strings", variants: [variant("erhu-2", "2 string", 2, "violin", ERHU)] },
+  {
+    id: "tanpura",
+    family: "Tanpura",
+    blurb: "Drone · tuned to Sa",
+    variantLabel: "Tuning style",
+    variants: [variant("tanpura-pa", "Pa Sa Sa Sa", 4, "inline", TANPURA_PA), variant("tanpura-ma", "Ma Sa Sa Sa", 4, "inline", TANPURA_MA)],
+  },
+  { id: "sitar", family: "Sitar", blurb: "Sa-based · playing strings", variants: [variant("sitar-7", "7 playing strings", 7, "inline", SITAR_7)] },
+  { id: "tabla", family: "Tabla", blurb: "Dayan tuned to Sa", variants: [variant("dayan", "Dayan (treble drum)", 1, "inline", TABLA_DAYAN, "linear")] },
+  { id: "mridangam", family: "Mridangam", blurb: "Right head tuned to Sa", variants: [variant("right-head", "Right head (valanthalai)", 1, "inline", MRIDANGAM_RIGHT, "linear")] },
+  { id: "pakhawaj", family: "Pakhawaj", blurb: "Right head tuned to Sa", variants: [variant("right-head", "Right head", 1, "inline", PAKHAWAJ_RIGHT, "linear")] },
   {
     id: "harp",
     family: "Harp",

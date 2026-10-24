@@ -1,0 +1,522 @@
+{
+  "schema_version": 1,
+  "description": "Reference clips for backend/evaluation. Audio is NOT in git; point --clips-dir at the folder holding the files named in \"audio\". A truth field that is null is \"no ground truth\": the metric is skipped for that clip, never scored as wrong.",
+  "sources": {
+    "key": "docs/benchmark/Wilsify_demo_truth.xlsx, SONG_LEVEL_TRUTH \"Key - Ground Truth / Played\"",
+    "workflow": "Fill evaluation/ground_truth.csv by ear and import it with python -m evaluation.import_ground_truth. docs/benchmark and Analysis_demo \"Wilsify_Analysis_Truth_Table.xlsx\" are automatic estimates (Verified columns empty) and are NOT ground truth."
+  },
+  "truth_format": {
+    "bpm": "number",
+    "time_signature": "\"4/4\" | \"3/4\"",
+    "key": "\"A minor\" | [\"G major\", \"E major\"] (any listed key counts)",
+    "beats": "seconds, ascending",
+    "downbeats": "seconds, ascending",
+    "chords": "[{\"start\": s, \"end\": s, \"chord\": \"Am7\" | \"G/B\" | \"N\"}] - app symbols",
+    "main_chord_progression": "the repeating loop, untimed: [\"Am\",\"F\",\"C\",\"G\"]",
+    "sections": "[{\"start\": s, \"end\": s, \"label\": \"verse\"}]",
+    "passing_chords": "start time of each passing chord, seconds; [] = verified none",
+    "fills": "[seconds | {\"start\": s, \"end\": s}] drum fills; [] = verified none",
+    "expected_warnings": "preprocessing warning categories that SHOULD fire: clipping, low_volume, noise, speech, no_instruments, not_musical, quiet_instruments, stem_clipping; [] = none should fire"
+  },
+  "clips": [
+    {
+      "id": "TEST_001",
+      "audio": "TEST_001.mp4",
+      "description": "Boy playing acoustic guitar in a classroom",
+      "duration_sec": 30.77,
+      "capo": 4,
+      "truth": {
+        "bpm": null,
+        "time_signature": null,
+        "key": "B major",
+        "beats": null,
+        "downbeats": null,
+        "chords": null,
+        "main_chord_progression": null,
+        "sections": null,
+        "passing_chords": null,
+        "fills": null,
+        "expected_warnings": null
+      },
+      "notes": "Capo 4; truth is the sounding key (workbook: 'B (4th fret G)').",
+      "verified": {
+        "by": "Wilsify_demo_truth.xlsx (played key)",
+        "at": null
+      }
+    },
+    {
+      "id": "TEST_002",
+      "audio": "TEST_002.mp4",
+      "description": "Man in yellow tee playing keyboard, 'Goan music' brunch",
+      "duration_sec": 137.37,
+      "capo": 0,
+      "truth": {
+        "bpm": null,
+        "time_signature": null,
+        "key": "D major",
+        "beats": null,
+        "downbeats": null,
+        "chords": null,
+        "main_chord_progression": null,
+        "sections": null,
+        "passing_chords": null,
+        "fills": null,
+        "expected_warnings": null
+      },
+      "notes": null,
+      "verified": {
+        "by": "Wilsify_demo_truth.xlsx (played key)",
+        "at": null
+      }
+    },
+    {
+      "id": "TEST_003",
+      "audio": "TEST_003.mp4",
+      "description": "Group sitting in a living room, 'A generation that loves Jesus'",
+      "duration_sec": 25.93,
+      "capo": 0,
+      "truth": {
+        "bpm": null,
+        "time_signature": null,
+        "key": "A# major",
+        "beats": null,
+        "downbeats": null,
+        "chords": null,
+        "main_chord_progression": null,
+        "sections": null,
+        "passing_chords": null,
+        "fills": null,
+        "expected_warnings": null
+      },
+      "notes": null,
+      "verified": {
+        "by": "Wilsify_demo_truth.xlsx (played key)",
+        "at": null
+      }
+    },
+    {
+      "id": "TEST_004",
+      "audio": "TEST_004.mp4",
+      "description": "Curly-haired guy, acoustic guitar, dark room",
+      "duration_sec": 96.57,
+      "capo": 0,
+      "truth": {
+        "bpm": null,
+        "time_signature": null,
+        "key": "E major",
+        "beats": null,
+        "downbeats": null,
+        "chords": null,
+        "main_chord_progression": null,
+        "sections": null,
+        "passing_chords": null,
+        "fills": null,
+        "expected_warnings": null
+      },
+      "notes": null,
+      "verified": {
+        "by": "Wilsify_demo_truth.xlsx (played key)",
+        "at": null
+      }
+    },
+    {
+      "id": "TEST_005",
+      "audio": "TEST_005.mp4",
+      "description": "Curly hair + glasses, singing 'bless the Lord oh my soul'",
+      "duration_sec": 31.3,
+      "capo": 0,
+      "truth": {
+        "bpm": null,
+        "time_signature": null,
+        "key": "D# major",
+        "beats": null,
+        "downbeats": null,
+        "chords": null,
+        "main_chord_progression": null,
+        "sections": null,
+        "passing_chords": null,
+        "fills": null,
+        "expected_warnings": null
+      },
+      "notes": null,
+      "verified": {
+        "by": "Wilsify_demo_truth.xlsx (played key)",
+        "at": null
+      }
+    },
+    {
+      "id": "TEST_006",
+      "audio": "TEST_006.mp4",
+      "description": "Two guys with acoustic guitars, teal room",
+      "duration_sec": 73.74,
+      "capo": 0,
+      "truth": {
+        "bpm": null,
+        "time_signature": null,
+        "key": "G major",
+        "beats": null,
+        "downbeats": null,
+        "chords": null,
+        "main_chord_progression": null,
+        "sections": null,
+        "passing_chords": null,
+        "fills": null,
+        "expected_warnings": null
+      },
+      "notes": null,
+      "verified": {
+        "by": "Wilsify_demo_truth.xlsx (played key)",
+        "at": null
+      }
+    },
+    {
+      "id": "TEST_007",
+      "audio": "TEST_007.mp4",
+      "description": "Fingerstyle guitar with a tab shown on screen",
+      "duration_sec": 32.46,
+      "capo": 0,
+      "truth": {
+        "bpm": null,
+        "time_signature": null,
+        "key": "E minor",
+        "beats": null,
+        "downbeats": null,
+        "chords": null,
+        "main_chord_progression": null,
+        "sections": null,
+        "passing_chords": null,
+        "fills": null,
+        "expected_warnings": null
+      },
+      "notes": null,
+      "verified": {
+        "by": "Wilsify_demo_truth.xlsx (played key)",
+        "at": null
+      }
+    },
+    {
+      "id": "TEST_008",
+      "audio": "TEST_008.mp4",
+      "description": "Man by a lake, 'I'm Not the Only One', Amaj7",
+      "duration_sec": 30.42,
+      "capo": 0,
+      "truth": {
+        "bpm": null,
+        "time_signature": null,
+        "key": "E major",
+        "beats": null,
+        "downbeats": null,
+        "chords": null,
+        "main_chord_progression": null,
+        "sections": null,
+        "passing_chords": null,
+        "fills": null,
+        "expected_warnings": null
+      },
+      "notes": null,
+      "verified": {
+        "by": "Wilsify_demo_truth.xlsx (played key)",
+        "at": null
+      }
+    },
+    {
+      "id": "TEST_009",
+      "audio": "TEST_009.mp4",
+      "description": "Band jam with saxophone, 'Hips Don't Lie'",
+      "duration_sec": 68.73,
+      "capo": 0,
+      "truth": {
+        "bpm": null,
+        "time_signature": null,
+        "key": "D minor",
+        "beats": null,
+        "downbeats": null,
+        "chords": null,
+        "main_chord_progression": null,
+        "sections": null,
+        "passing_chords": null,
+        "fills": null,
+        "expected_warnings": null
+      },
+      "notes": null,
+      "verified": {
+        "by": "Wilsify_demo_truth.xlsx (played key)",
+        "at": null
+      }
+    },
+    {
+      "id": "TEST_010",
+      "audio": "TEST_010.mp4",
+      "description": "Guy on guitar + girl singing, @thestringprojectmusic",
+      "duration_sec": 76.66,
+      "capo": 0,
+      "truth": {
+        "bpm": null,
+        "time_signature": null,
+        "key": null,
+        "beats": null,
+        "downbeats": null,
+        "chords": null,
+        "main_chord_progression": null,
+        "sections": null,
+        "passing_chords": null,
+        "fills": null,
+        "expected_warnings": null
+      },
+      "notes": "Key ground truth unclear in the benchmark workbook (VALIDATION sheet excludes it); left unscored."
+    },
+    {
+      "id": "TEST_011",
+      "audio": "TEST_011.mp4",
+      "description": "Band, 'Novro mho'zo Portugala thavn Bombaim yetolo', @thesecretsauce_band",
+      "duration_sec": 97.24,
+      "capo": 0,
+      "truth": {
+        "bpm": null,
+        "time_signature": null,
+        "key": [
+          "G major",
+          "E major"
+        ],
+        "beats": null,
+        "downbeats": null,
+        "chords": null,
+        "main_chord_progression": null,
+        "sections": null,
+        "passing_chords": null,
+        "fills": null,
+        "expected_warnings": null
+      },
+      "notes": "Workbook lists two keys ('G Major, E Major'); either counts.",
+      "verified": {
+        "by": "Wilsify_demo_truth.xlsx (played key)",
+        "at": null
+      }
+    },
+    {
+      "id": "TEST_012",
+      "audio": "TEST_012.mp4",
+      "description": "Girl singing with acoustic guitar, Portuguese song",
+      "duration_sec": 41.1,
+      "capo": 0,
+      "truth": {
+        "bpm": null,
+        "time_signature": null,
+        "key": "G# minor",
+        "beats": null,
+        "downbeats": null,
+        "chords": null,
+        "main_chord_progression": null,
+        "sections": null,
+        "passing_chords": null,
+        "fills": null,
+        "expected_warnings": null
+      },
+      "notes": null,
+      "verified": {
+        "by": "Wilsify_demo_truth.xlsx (played key)",
+        "at": null
+      }
+    },
+    {
+      "id": "TEST_013",
+      "audio": "TEST_013.mp4",
+      "description": null,
+      "duration_sec": 78.03,
+      "capo": 0,
+      "truth": {
+        "bpm": null,
+        "time_signature": null,
+        "key": "C major",
+        "beats": null,
+        "downbeats": null,
+        "chords": null,
+        "main_chord_progression": null,
+        "sections": null,
+        "passing_chords": null,
+        "fills": null,
+        "expected_warnings": null
+      },
+      "notes": null,
+      "verified": {
+        "by": "Wilsify_demo_truth.xlsx (played key)",
+        "at": null
+      }
+    },
+    {
+      "id": "TEST_014",
+      "audio": "TEST_014.mp4",
+      "description": null,
+      "duration_sec": 43.58,
+      "capo": 0,
+      "truth": {
+        "bpm": null,
+        "time_signature": null,
+        "key": "C minor",
+        "beats": null,
+        "downbeats": null,
+        "chords": null,
+        "main_chord_progression": null,
+        "sections": null,
+        "passing_chords": null,
+        "fills": null,
+        "expected_warnings": null
+      },
+      "notes": null,
+      "verified": {
+        "by": "Wilsify_demo_truth.xlsx (played key)",
+        "at": null
+      }
+    },
+    {
+      "id": "TEST_015",
+      "audio": "TEST_015.mp4",
+      "description": null,
+      "duration_sec": 29.04,
+      "capo": 0,
+      "truth": {
+        "bpm": null,
+        "time_signature": null,
+        "key": "C major",
+        "beats": null,
+        "downbeats": null,
+        "chords": null,
+        "main_chord_progression": null,
+        "sections": null,
+        "passing_chords": null,
+        "fills": null,
+        "expected_warnings": null
+      },
+      "notes": null,
+      "verified": {
+        "by": "Wilsify_demo_truth.xlsx (played key)",
+        "at": null
+      }
+    },
+    {
+      "id": "TEST_016",
+      "audio": "TEST_016.mp4",
+      "description": null,
+      "duration_sec": 72.45,
+      "capo": 0,
+      "truth": {
+        "bpm": null,
+        "time_signature": null,
+        "key": "A minor",
+        "beats": null,
+        "downbeats": null,
+        "chords": null,
+        "main_chord_progression": null,
+        "sections": null,
+        "passing_chords": null,
+        "fills": null,
+        "expected_warnings": null
+      },
+      "notes": null,
+      "verified": {
+        "by": "Wilsify_demo_truth.xlsx (played key)",
+        "at": null
+      }
+    },
+    {
+      "id": "TEST_017",
+      "audio": "TEST_017.mp4",
+      "description": null,
+      "duration_sec": 133.68,
+      "capo": 0,
+      "truth": {
+        "bpm": null,
+        "time_signature": null,
+        "key": "D major",
+        "beats": null,
+        "downbeats": null,
+        "chords": null,
+        "main_chord_progression": null,
+        "sections": null,
+        "passing_chords": null,
+        "fills": null,
+        "expected_warnings": null
+      },
+      "notes": null,
+      "verified": {
+        "by": "Wilsify_demo_truth.xlsx (played key)",
+        "at": null
+      }
+    },
+    {
+      "id": "TEST_018",
+      "audio": "TEST_018.mp4",
+      "description": null,
+      "duration_sec": 74.0,
+      "capo": 0,
+      "truth": {
+        "bpm": null,
+        "time_signature": null,
+        "key": "G major",
+        "beats": null,
+        "downbeats": null,
+        "chords": null,
+        "main_chord_progression": null,
+        "sections": null,
+        "passing_chords": null,
+        "fills": null,
+        "expected_warnings": null
+      },
+      "notes": null,
+      "verified": {
+        "by": "Wilsify_demo_truth.xlsx (played key)",
+        "at": null
+      }
+    },
+    {
+      "id": "TEST_019",
+      "audio": "TEST_019.mp4",
+      "description": null,
+      "duration_sec": 83.0,
+      "capo": 0,
+      "truth": {
+        "bpm": null,
+        "time_signature": null,
+        "key": "F major",
+        "beats": null,
+        "downbeats": null,
+        "chords": null,
+        "main_chord_progression": null,
+        "sections": null,
+        "passing_chords": null,
+        "fills": null,
+        "expected_warnings": null
+      },
+      "notes": null,
+      "verified": {
+        "by": "Wilsify_demo_truth.xlsx (played key)",
+        "at": null
+      }
+    },
+    {
+      "id": "TEST_020",
+      "audio": "TEST_020.mp4",
+      "description": null,
+      "duration_sec": 100.65,
+      "capo": 0,
+      "truth": {
+        "bpm": null,
+        "time_signature": null,
+        "key": "E major",
+        "beats": null,
+        "downbeats": null,
+        "chords": null,
+        "main_chord_progression": null,
+        "sections": null,
+        "passing_chords": null,
+        "fills": null,
+        "expected_warnings": null
+      },
+      "notes": null,
+      "verified": {
+        "by": "Wilsify_demo_truth.xlsx (played key)",
+        "at": null
+      }
+    }
+  ]
+}

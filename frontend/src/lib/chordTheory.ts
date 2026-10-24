@@ -432,7 +432,16 @@ export function pickSpread(cands: Candidate[], count: number): Candidate[] {
     if (picked.every((p) => Math.abs(p.minFret - c.minFret) >= 3)) picked.push(c);
     if (picked.length === count) break;
   }
-  return picked;
+  // Show them neck order: open position first, then up the neck (1st, 3rd, 5th… not open, 6th, 3rd).
+  return picked.sort((a, b) => a.minFret - b.minFret);
+}
+
+/** Where on the neck a shape sits: 0 for an open-position shape, otherwise its lowest fretted fret. */
+export function shapePosition(frets: (number | null)[]): number {
+  const fretted = frets.filter((f): f is number => f !== null && f > 0);
+  if (!fretted.length) return 0;
+  const max = Math.max(...fretted);
+  return frets.includes(0) && max <= WINDOW ? 0 : Math.min(...fretted);
 }
 
 export function voicingName(frets: (number | null)[]): string {
@@ -480,6 +489,8 @@ export function getGuitarVoicings(chord: ParsedChord): GuitarVoicing[] {
     seen.add(key);
     return true;
   });
+  // Neck order: open position first, then ascending (stable, so equal positions keep their quality order).
+  unique.sort((a, b) => shapePosition(a.frets) - shapePosition(b.frets));
   guitarCache.set(cacheKey, unique);
   return unique;
 }
