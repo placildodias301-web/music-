@@ -2,8 +2,7 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import { type FingeringResult } from "../../lib/chords/fingering";
 import { type PracticeGuidance } from "../../lib/chords/instructions";
-import { audioEngine } from "../../lib/audio";
-import { stringVoiceFor } from "../../lib/chords/play";
+import { playShape, usesSynthVoice } from "../../lib/chords/play";
 import { usePlayback } from "./usePlayback";
 import { type ParsedChord } from "../../lib/chordTheory";
 
@@ -32,16 +31,16 @@ export function ChordPracticePanel({
   const playback = usePlayback();
   const isPlayingStrum = playback.playing && mode === "strum";
   const isPlayingArpeggio = playback.playing && mode === "arpeggio";
-  const voice = stringVoiceFor(instrument);
 
+  // The shape on screen, played with the instrument's own sound (strummed strings, or a bowed/blown/struck model).
   const handlePlayChord = () => {
     setMode("strum");
-    playback.run(() => audioEngine.playChord({ frets, tuningMidi, courses, instrument: voice, direction: "down" }));
+    playback.run(() => playShape({ instrumentId: instrument, frets, tuningMidi, courses, mode: "chord" }));
   };
 
   const handlePlayArpeggio = () => {
     setMode("arpeggio");
-    playback.run(() => audioEngine.playArpeggio({ frets, tuningMidi, courses, instrument: voice, speed: arpeggioSpeed }));
+    playback.run(() => playShape({ instrumentId: instrument, frets, tuningMidi, courses, mode: "arpeggio", speed: arpeggioSpeed }));
   };
 
   const difficultyColor =
@@ -61,7 +60,7 @@ export function ChordPracticePanel({
               Interactive Audio Reference
             </h4>
             <p className="text-[0.6875rem] text-[var(--color-ns-muted)]">
-              Accurate Karplus-Strong string synthesis showing how the voicing sounds.
+              A sound model of the instrument playing exactly the notes in this voicing — not a recording.
             </p>
           </div>
 
@@ -100,7 +99,7 @@ export function ChordPracticePanel({
                 <polygon points="5 3 19 12 5 21 5 3" />
               </svg>
             )}
-            Play Strummed Chord
+            {usesSynthVoice(instrument) ? "Play Chord" : "Play Strummed Chord"}
           </button>
 
           <button

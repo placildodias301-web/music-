@@ -361,7 +361,7 @@ describe("engine on synthetic signals", () => {
         });
       }
     }
-  }, 60000);
+  }, 240000); // one detection run per open string of every instrument: grows with the instrument list
   it("alternate A4 recalculates the targets", () => {
     const preset = findVariant("guitar", "acoustic-6")!.tunings[0];
     const { fmin, fmax } = detectionRange(preset, 432);

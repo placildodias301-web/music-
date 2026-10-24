@@ -4,16 +4,18 @@
  * and scientific pitch notation.
  */
 
+import { getReferencePitch } from "../audio/pitch";
+
 export const SHARP_NAMES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"] as const;
 export const FLAT_NAMES = ["C", "D♭", "D", "E♭", "E", "F", "G♭", "G", "A♭", "A", "B♭", "B"] as const;
 
-/** Maps standard MIDI note number (e.g. 60 = C4) to frequency in Hz (A4 = 440Hz standard) */
-export function midiToFrequency(midi: number, a4 = 440): number {
+/** Maps a MIDI note number (e.g. 60 = C4) to Hz, relative to the app's reference pitch (A4 = 440 Hz unless the player changed it). */
+export function midiToFrequency(midi: number, a4 = getReferencePitch()): number {
   return a4 * Math.pow(2, (midi - 69) / 12);
 }
 
 /** Pitch class 0-11 to frequency in a given octave (default octave 4) */
-export function pitchClassToFrequency(pitchClass: number, octave = 4, a4 = 440): number {
+export function pitchClassToFrequency(pitchClass: number, octave = 4, a4 = getReferencePitch()): number {
   const midi = (octave + 1) * 12 + (((pitchClass % 12) + 12) % 12);
   return midiToFrequency(midi, a4);
 }
@@ -27,7 +29,7 @@ export function formatMidiWithOctave(midi: number, preferFlats = false): string 
 }
 
 /** Given a frequency in Hz, returns nearest note info with cents offset */
-export function frequencyToPitchInfo(freq: number, a4 = 440): { midi: number; noteName: string; cents: number; octave: number } {
+export function frequencyToPitchInfo(freq: number, a4 = getReferencePitch()): { midi: number; noteName: string; cents: number; octave: number } {
   const midiExact = 69 + 12 * Math.log2(freq / a4);
   const midi = Math.round(midiExact);
   const cents = Math.round((midiExact - midi) * 100);

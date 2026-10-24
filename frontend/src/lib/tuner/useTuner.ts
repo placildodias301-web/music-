@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createReferenceTone, type ReferenceTone } from "./referenceTone";
+import type { ReferenceToneKind } from "./instrumentProfile";
 import { TunerEngine, type EngineConfig, type TunerMode, type TunerSnapshot } from "./engine";
 import { TUNER_CONFIG } from "./config";
 import { MicController } from "./microphone";
@@ -31,8 +32,10 @@ export interface UseTuner {
   start(): Promise<void>;
   stop(): void;
   resetTuned(): void;
-  /** Play a reference tone (and ignore the mic while it sounds). */
-  playTone(frequency: number): void;
+  /** Play a reference tone (and ignore the mic while it sounds). `kind` colours it like the instrument being tuned. */
+  playTone(frequency: number, kind?: ReferenceToneKind): void;
+  /** Stop a reference tone that is still sounding. */
+  stopTone(): void;
 }
 
 const IDLE: TunerSnapshot = {
@@ -112,18 +115,22 @@ export function useTuner(input: UseTunerInput): UseTuner {
   );
 
   const playTone = useCallback(
-    (frequency: number) => {
+    (frequency: number, kind?: ReferenceToneKind) => {
       if (!toneRef.current) toneRef.current = createReferenceTone();
-      const ms = toneRef.current.play(frequency);
+      const ms = toneRef.current.play(frequency, kind);
       engine.mute(ms, performance.now());
     },
     [engine],
   );
+
+  const stopTone = useCallback(() => {
+    toneRef.current?.stop();
+  }, []);
 
   const resetTuned = useCallback(() => {
     engine.resetTuned();
     setSnapshot((s) => ({ ...s, tunedIndexes: [] }));
   }, [engine]);
 
-  return { snapshot, listening: snapshot.listening, error, micInfo, start, stop, resetTuned, playTone };
+  return { snapshot, listening: snapshot.listening, error, micInfo, start, stop, resetTuned, playTone, stopTone };
 }

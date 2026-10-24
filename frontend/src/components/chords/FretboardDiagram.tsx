@@ -19,6 +19,7 @@ export function FretboardDiagram({
   caption,
   ariaLabel,
   courses,
+  fretless = false,
 }: {
   stringNames: string[];
   /** Chord-shape mode: one entry per string. */
@@ -31,6 +32,8 @@ export function FretboardDiagram({
   ariaLabel?: string;
   /** Per course, the strings it holds (semitone offsets): paired courses (mandolin, 12-string) are drawn as two strings. */
   courses?: number[][];
+  /** No frets (violin family): plain fingerboard, notes spaced by pitch. */
+  fretless?: boolean;
 }) {
   const { settings } = useSettings();
   const n = stringNames.length;
@@ -40,7 +43,7 @@ export function FretboardDiagram({
   const fretted = dots.map((d) => d.fret).filter((f) => f > 0);
   const minFret = fretted.length ? Math.min(...fretted) : 0;
   const maxFret = fretted.length ? Math.max(...fretted) : 0;
-  const startFret = maxFret > 4 ? minFret - 1 : 0;
+  const startFret = !fretless && maxFret > 4 ? minFret - 1 : 0;
   const fretCount = Math.min(8, Math.max(4, maxFret - startFret));
 
   const spacing = n <= 4 ? 24 : n <= 6 ? 20 : 17;
@@ -50,6 +53,8 @@ export function FretboardDiagram({
   const width = left * 2 + spacing * (n - 1);
   const height = top + fretSpacing * fretCount + 18;
   // Left-handed: mirror so the lowest string is on the right.
+  const reach = Math.max(6, maxFret + 2);
+  const fingerboardY = (n: number) => top + fretSpacing * fretCount * ((1 - Math.pow(2, -n / 12)) / (1 - Math.pow(2, -reach / 12)));
   const xOf = (s: number) => left + (settings.display.leftHanded ? n - 1 - s : s) * spacing;
   const strandX = (s: number) => {
     const k = courses?.[s]?.length ?? 1;
@@ -65,7 +70,7 @@ export function FretboardDiagram({
           </text>
         )}
         <rect x={left} y={top} width={spacing * (n - 1)} height={startFret === 0 ? 3 : 1} fill="var(--color-content-muted)" />
-        {Array.from({ length: fretCount + 1 }).map((_, i) => (
+        {!fretless && Array.from({ length: fretCount + 1 }).map((_, i) => (
           <line key={i} x1={left} x2={left + spacing * (n - 1)} y1={top + i * fretSpacing} y2={top + i * fretSpacing} stroke="var(--color-content-dim)" strokeWidth={1} />
         ))}
         {stringNames.map((name, s) => (
@@ -91,8 +96,8 @@ export function FretboardDiagram({
         {dots.map((d, i) => {
           const rel = d.fret - startFret;
           if (d.fret === 0) return <circle key={i} cx={xOf(d.string)} cy={top - 13} r={4} fill="none" stroke="var(--color-green)" strokeWidth={1.5} />;
-          if (rel < 1 || rel > fretCount) return null;
-          const cy = top + (rel - 0.5) * fretSpacing;
+          if (!fretless && (rel < 1 || rel > fretCount)) return null;
+          const cy = fretless ? fingerboardY(d.fret) : top + (rel - 0.5) * fretSpacing;
           return (
             <g key={i}>
               <circle cx={xOf(d.string)} cy={cy} r={dotsProp ? 8 : 7} fill="var(--color-primary-light)" />

@@ -53,9 +53,10 @@ export const INSTRUMENT_PRESETS: Record<InstrumentType, InstrumentPreset> = {
     name: "Acoustic Guitar",
     defaultPluckStyle: "pick",
     bodyResonanceFreqs: [
-      { freq: 102, Q: 2.5, gainDb: 2.5 }, // Helmholtz air cavity
-      { freq: 215, Q: 2.0, gainDb: 3.2 }, // Main top wood plate
+      { freq: 98, Q: 2.2, gainDb: 4.5 }, // Helmholtz air cavity: the low "boom"
+      { freq: 215, Q: 2.0, gainDb: 3.5 }, // Main top wood plate
       { freq: 440, Q: 3.0, gainDb: 1.4 }, // Upper body harmonic
+      { freq: 3300, Q: 1.2, gainDb: 3.0 }, // Pick presence and string sparkle
     ],
     roomReverbAmount: 0.08,
     strings: GUITAR_STRINGS,
@@ -67,9 +68,10 @@ export const INSTRUMENT_PRESETS: Record<InstrumentType, InstrumentPreset> = {
     name: "Acoustic Guitar",
     defaultPluckStyle: "pick",
     bodyResonanceFreqs: [
-      { freq: 102, Q: 2.5, gainDb: 2.5 },
-      { freq: 215, Q: 2.0, gainDb: 3.2 },
+      { freq: 98, Q: 2.2, gainDb: 4.5 },
+      { freq: 215, Q: 2.0, gainDb: 3.5 },
       { freq: 440, Q: 3.0, gainDb: 1.4 },
+      { freq: 3300, Q: 1.2, gainDb: 3.0 },
     ],
     roomReverbAmount: 0.08,
     strings: GUITAR_STRINGS,
@@ -118,6 +120,47 @@ export const INSTRUMENT_PRESETS: Record<InstrumentType, InstrumentPreset> = {
     strings: UKULELE_STRINGS,
     defaultString: UKULELE_STRINGS[1],
   },
+  mandolin: {
+    id: "mandolin",
+    name: "Mandolin",
+    defaultPluckStyle: "pick",
+    pitchRange: [55, 76],
+    // Courses by pitch: G3 D4 A4 E5 — bright, quick to fade (a plectrum on steel pairs).
+    bodyResonanceFreqs: [
+      { freq: 300, Q: 2.5, gainDb: 3.0 },
+      { freq: 700, Q: 2.0, gainDb: 2.5 },
+      { freq: 2200, Q: 2.0, gainDb: 2.0 },
+    ],
+    roomReverbAmount: 0.06,
+    strings: [
+      { brightness: 0.72, decay: 0.992, maxSeconds: 1.7, pluckPosition: 0.16, transientSharpness: 0.9, stringMass: 0.8 },
+      { brightness: 0.78, decay: 0.99, maxSeconds: 1.5, pluckPosition: 0.17, transientSharpness: 0.92, stringMass: 0.7 },
+      { brightness: 0.84, decay: 0.988, maxSeconds: 1.3, pluckPosition: 0.18, transientSharpness: 0.94, stringMass: 0.6 },
+      { brightness: 0.9, decay: 0.985, maxSeconds: 1.1, pluckPosition: 0.19, transientSharpness: 0.95, stringMass: 0.5 },
+    ],
+    defaultString: { brightness: 0.8, decay: 0.989, maxSeconds: 1.4, pluckPosition: 0.17, transientSharpness: 0.93, stringMass: 0.65 },
+  },
+  banjo: {
+    id: "banjo",
+    name: "Banjo",
+    defaultPluckStyle: "pick",
+    pitchRange: [50, 67],
+    // Open-back banjo: a drum head instead of a wooden body — sharp attack, twang, very short sustain, little bass.
+    bodyResonanceFreqs: [
+      { freq: 130, Q: 1.0, gainDb: -4.0 },
+      { freq: 600, Q: 3.0, gainDb: 3.0 },
+      { freq: 1100, Q: 2.5, gainDb: 4.0 },
+      { freq: 2800, Q: 2.0, gainDb: 3.0 },
+    ],
+    roomReverbAmount: 0.05,
+    strings: [
+      { brightness: 0.88, decay: 0.984, maxSeconds: 1.0, pluckPosition: 0.14, transientSharpness: 0.97, stringMass: 0.9 },
+      { brightness: 0.91, decay: 0.982, maxSeconds: 0.9, pluckPosition: 0.15, transientSharpness: 0.97, stringMass: 0.8 },
+      { brightness: 0.93, decay: 0.98, maxSeconds: 0.8, pluckPosition: 0.16, transientSharpness: 0.98, stringMass: 0.7 },
+      { brightness: 0.95, decay: 0.978, maxSeconds: 0.7, pluckPosition: 0.17, transientSharpness: 0.98, stringMass: 0.6 },
+    ],
+    defaultString: { brightness: 0.91, decay: 0.981, maxSeconds: 0.85, pluckPosition: 0.15, transientSharpness: 0.97, stringMass: 0.75 },
+  },
   piano: {
     id: "piano",
     name: "Acoustic Piano",
@@ -135,6 +178,8 @@ export const INSTRUMENT_PRESETS: Record<InstrumentType, InstrumentPreset> = {
 export function getPresetForInstrument(instrument: string = "guitar"): InstrumentPreset {
   if (instrument.includes("bass")) return INSTRUMENT_PRESETS.bass;
   if (instrument.includes("ukulele") || instrument.includes("cavaquinho")) return INSTRUMENT_PRESETS.ukulele;
+  if (instrument.includes("mandolin") || instrument.includes("balalaika")) return INSTRUMENT_PRESETS.mandolin;
+  if (instrument.includes("banjo")) return INSTRUMENT_PRESETS.banjo;
   if (instrument.includes("piano") || instrument.includes("keyboard")) return INSTRUMENT_PRESETS.piano;
   if (instrument.includes("electric")) return INSTRUMENT_PRESETS["electric-guitar"];
   return INSTRUMENT_PRESETS.guitar;

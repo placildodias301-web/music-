@@ -8,7 +8,8 @@ import { chordIntervals, NOTE_NAMES, slashToneIndex, spellChord, type ParsedChor
 import { findDefinition, rendererFor, type ChordRenderer, type InstrumentDefinition } from "../instruments/definitions";
 import { harpNeedsForNotes, harpStrings, LEVER_HARP_RANGE, NATURAL_STATE, PEDAL_HARP_RANGE, type HarpAccidentals, type HarpLetter, type HarpNeed } from "../tuner/harp";
 import { noteToMidi } from "../tuner/notes";
-import { findInstrument, tuningUnits } from "../tuner/tunings";
+import { findInstrument, tuningUnits, tuningsFor } from "../tuner/tunings";
+import { localStorageStore } from "../tuner/customTunings";
 import type { TunerString } from "../tuner/types";
 import { clampInversion, formulaText, inversionCount, inversionName, invertedNotes } from "./theory";
 import {
@@ -16,6 +17,7 @@ import {
   bassChordShapes,
   bassDyads,
   guitar7Shapes,
+  guitar8Shapes,
   guitarShapesFor,
   stringShapes,
   ukuleleShapesFor,
@@ -43,7 +45,7 @@ export interface ChordTuning {
 }
 
 /** Instruments whose chord page offers every size/string-count of the tuner's instrument, not just one. */
-const ALL_VARIANT_INSTRUMENTS = new Set(["bass", "banjo", "balalaika"]);
+const ALL_VARIANT_INSTRUMENTS = new Set(["bass", "banjo", "balalaika", "double-bass", "bouzouki"]);
 
 const noteNameOf = (s: TunerString) => s.note.replace(/-?\d+$/, "");
 
@@ -53,8 +55,10 @@ export function chordTunings(def: InstrumentDefinition): ChordTuning[] {
   if (!inst || inst.variants[0]?.layout === "harp") return [];
   const variants = ALL_VARIANT_INSTRUMENTS.has(def.id) ? inst.variants : inst.variants.filter((v) => v.id === (def.tuner!.variantId ?? inst.variants[0].id));
   const multi = variants.length > 1;
+  // Tunings the player saved on the Tuner page are chord tunings too: the same preset list, built-in and custom.
+  const customs = localStorageStore.load();
   return variants.flatMap((variant) =>
-    variant.tunings.map((preset) => {
+    tuningsFor(variant, customs).map((preset) => {
       const units = tuningUnits(preset);
       // A course's fundamental is its lowest string; the other string (octave or unison) only doubles it.
       const midi = units.map((u) => Math.min(...u.stringIndexes.map((i) => preset.strings[i].midi)));
@@ -88,7 +92,8 @@ export function findChordTuning(def: InstrumentDefinition, tuningId: string | un
 export function tuningNoteNames(def: InstrumentDefinition, tuning: ChordTuning): string[] {
   const inst = findInstrument(def.tuner!.instrumentId)!;
   const [variantId, presetId] = tuning.id.split(":");
-  const preset = inst.variants.find((v) => v.id === variantId)?.tunings.find((p) => p.id === presetId);
+  const variantOf = inst.variants.find((v) => v.id === variantId);
+  const preset = variantOf ? tuningsFor(variantOf, localStorageStore.load()).find((p) => p.id === presetId) : undefined;
   if (!preset) return [];
   return tuningUnits(preset).map((u) => noteNameOf(preset.strings[u.stringIndexes[0]]));
 }
@@ -337,12 +342,17 @@ function frettedFor(renderer: ChordRenderer, chord: ParsedChord, tuning: ChordTu
       return guitarShapesFor(chord, tuning.midi);
     case "guitar7":
       return guitar7Shapes(chord, tuning.midi);
+    case "guitar8":
+      return guitar8Shapes(chord, tuning.midi);
     case "ukulele":
       return ukuleleShapesFor(chord, tuning.midi);
     default:
       return stringShapes(chord, tuning.midi, { drone: tuning.drone, count: 3 });
   }
 }
+
+/** Renderers whose strings come in pairs (12-string, mandolin, bouzouki, charango, tres). */
+const COURSE_RENDERERS = new Set<ChordRenderer>(["guitar12", "mandolin", "bouzouki", "charango", "tres"]);
 
 export function buildChordModel(chord: ParsedChord, definition: InstrumentDefinition, settings: Pick<ChordSettings, "tuningId" | "inversion">): ChordModel | null {
   const renderer = rendererFor(definition);
@@ -375,7 +385,7 @@ export function buildChordModel(chord: ParsedChord, definition: InstrumentDefini
       if (renderer === "bass") {
         return { ...b, kind: "bass", tuning, stringNames, dyads: bassDyads(chord, tuning.midi), shapes: bassChordShapes(chord, tuning.midi), arpeggio: bassArpeggio(chord, tuning.midi) };
       }
-      return { ...b, kind: "fretted", tuning, stringNames, shapes: frettedFor(renderer, chord, tuning), courses: renderer === "guitar12" || renderer === "mandolin" };
+      return { ...b, kind: "fretted", tuning, stringNames, shapes: frettedFor(renderer, chord, tuning), courses: COURSE_RENDERERS.has(renderer) };
     }
   }
 }

@@ -7,7 +7,7 @@ BACKEND_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__
 
 # Bump when a stage's output changes, so cached results from older code are
 # not served as if they were current.
-PIPELINE_VERSION = 5  # 2: Demucs stage, 3: rhythm stage, 4: chord stage, 5: events stage
+PIPELINE_VERSION = 7  # 2: Demucs, 3: rhythm, 4: chords, 5: events, 6: key + difficulty, 7: preprocessing
 
 ENGINES = ("v2", "pipeline")
 RHYTHM_ENGINES = ("auto", "allin1", "beat_this")

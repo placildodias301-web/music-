@@ -11,6 +11,8 @@ export interface YinOptions {
   threshold?: number;
   /** Above this aperiodicity there is no usable pitch (noise, chords). */
   maxAperiodicity?: number;
+  /** For weak-fundamental sounds: prefer the lower octave when the signal clearly repeats at twice the chosen period. */
+  octaveGuard?: "lower";
 }
 
 export interface YinResult {
@@ -77,6 +79,26 @@ export function yinPitch(buffer: Float32Array<ArrayBufferLike>, sampleRate: numb
     }
   }
   if (bestLag < 0 || cmnd[bestLag] > maxAperiodicity) return null;
+  // Weak fundamental: the upper partials repeat at `bestLag`, but the real period is twice that. A truly periodic signal at
+  // `bestLag` dips to ~0 at BOTH lags, so only switch when the longer lag is clearly the better match.
+  if (opts.octaveGuard === "lower") {
+    const longer = bestLag * 2;
+    if (longer <= maxLag && cmnd[bestLag] > 0.04 && cmnd[longer] < cmnd[bestLag] * 0.5 && cmnd[longer] < threshold) {
+      let refined = longer;
+      for (let l = Math.max(minLag, longer - 2); l <= Math.min(maxLag, longer + 2); l++) if (cmnd[l] < cmnd[refined]) refined = l;
+      bestLag = refined;
+    }
+  }
+  // Out-of-range guard: a pure tone ABOVE the search range repeats at every multiple of its period, so the first in-range dip
+  // would be a subharmonic of it (a 3 kHz whistle read as 400 Hz). If the signal is clearly periodic at a SHORTER lag than the
+  // range allows, and the chosen lag is a whole multiple of that, the real pitch is above range: report nothing.
+  for (let lag = 3; lag < minLag; lag++) {
+    if (cmnd[lag] < 0.1 && cmnd[lag] <= cmnd[lag - 1] && cmnd[lag] <= cmnd[lag + 1]) {
+      const ratio = bestLag / lag;
+      const nearest = Math.round(ratio);
+      if (nearest >= 2 && Math.abs(ratio - nearest) < 0.03 * nearest) return null;
+    }
+  }
   const clarity = 1 - cmnd[bestLag];
 
   // Harmonic consistency: a true period repeats, so the signal should dip again at twice the lag.

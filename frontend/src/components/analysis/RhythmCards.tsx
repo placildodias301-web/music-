@@ -1,6 +1,6 @@
 import { Link } from "react-router-dom";
 import type { AnalysisResult } from "../../lib/api";
-import { tempoNote, timeSignatureNote, timeSignatureValue } from "../../lib/analysisDisplay";
+import { formatBpm, hasTempo, tempoNote, timeSignatureNote, timeSignatureValue } from "../../lib/analysisDisplay";
 import { resetRhythm, withTempo } from "../../lib/rhythm";
 import { HalfDoubleButtons } from "../TapTempo";
 
@@ -36,14 +36,15 @@ export function TempoCard({ analysis, onChange }: CardProps) {
     <div className={CARD}>
       <p className={LABEL}>Tempo</p>
       <p className="mt-2 font-heading text-2xl font-extrabold text-[var(--color-ns-blue)] sm:text-3xl">
-        {Math.round(analysis.bpm)} <span className="text-base font-medium text-[var(--color-ns-muted)]">BPM</span>
+        {formatBpm(analysis)} <span className="text-base font-medium text-[var(--color-ns-muted)]">BPM</span>
       </p>
       <p className="mt-1 flex flex-wrap items-center gap-x-2 text-xs text-[var(--color-ns-muted)]">
         {tempoNote(analysis)}
         {analysis.bpmStatus === "confirmed" && <ResetLink analysis={analysis} onChange={onChange} />}
       </p>
       <div className="mt-3 flex flex-wrap items-center gap-1.5">
-        <HalfDoubleButtons bpm={analysis.bpm} onSet={(bpm) => onChange(withTempo(analysis, bpm))} />
+        {/* Halving or doubling "no tempo" means nothing; setting one by tapping still works. */}
+        {hasTempo(analysis) && <HalfDoubleButtons bpm={analysis.bpm} onSet={(bpm) => onChange(withTempo(analysis, bpm))} />}
         <Link
           to="/practice"
           className="text-[0.75rem] font-semibold text-[var(--color-ns-purple-light)] underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ns-purple-light)]"

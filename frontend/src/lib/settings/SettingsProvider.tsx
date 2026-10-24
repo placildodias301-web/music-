@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import { settingsService } from "./settingsService";
 import type { Settings } from "./model";
 import { SettingsContext, type SettingsContextValue } from "./settingsContext";
+import { setReferencePitch } from "../audio/pitch";
 
 function useMediaQuery(query: string): boolean {
   const [matches, setMatches] = useState(() => typeof window !== "undefined" && window.matchMedia(query).matches);
@@ -41,6 +42,9 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     },
     [settings, replace]
   );
+
+  // The A4 reference pitch (Settings / Tuner calibration) reaches every note the app plays or shows, not just the Tuner.
+  setReferencePitch(settings.audio.a4);
 
   const { appearance, accent, textSize } = settings.app;
   const resolvedTheme = appearance === "system" ? (prefersLight ? "light" : "dark") : appearance;

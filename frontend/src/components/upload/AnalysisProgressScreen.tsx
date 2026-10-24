@@ -12,6 +12,14 @@ const SERVER_DETAIL: Record<AnalysisStage, string> = {
   chords: "Recognising chords",
   key: "Estimating the key",
   meter: "Estimating the time signature",
+  // Pipeline job stages (GET /api/pipeline/jobs/{id}).
+  queued: "Waiting for the analysis server",
+  extracting: "Extracting the audio",
+  preprocessing: "Checking loudness, silence and clipping",
+  rhythm: "Tracking beats, bars and song sections",
+  events: "Finding passing chords and drum fills",
+  merging: "Putting the results together",
+  completed: "Analysis finished",
 };
 
 type StepId = "link" | "sample" | "upload" | "tempo" | "chords" | "key" | "voicings";
@@ -36,6 +44,13 @@ const STAGE_STEP: Record<AnalysisStage, StepId> = {
   chords: "chords",
   key: "key",
   meter: "key",
+  queued: "tempo",
+  extracting: "tempo",
+  preprocessing: "tempo",
+  rhythm: "tempo",
+  events: "key",
+  merging: "key",
+  completed: "key",
 };
 
 const ERROR_TITLE: Record<AnalysisErrorKind, string> = {
@@ -107,9 +122,10 @@ function formatSeconds(s: number): string {
 
 /**
  * "Analysing your track": real progress only. Upload progress comes from
- * the browser, analysis stages from the server's stream; nothing advances
- * on a timer. Stems aren't separated during analysis (that's an optional
- * step on the analysis page), so there's no stems step here.
+ * the browser, analysis stages from the server (v2's stream, or the
+ * pipeline job's polled stage and progress); nothing advances on a timer.
+ * The pipeline's stem separation is shown under the tempo step, so there's
+ * no separate stems step here.
  */
 export function AnalysisProgressScreen({ fileName, origin, phase, upload, server, error, onCancel, onRetry, onChooseAnother, onUploadFallback }: Props) {
   const steps: StepId[] = [...(origin === "link" ? (["link"] as StepId[]) : origin === "sample" ? (["sample"] as StepId[]) : []), "upload", "tempo", "chords", "key", "voicings"];
@@ -123,7 +139,7 @@ export function AnalysisProgressScreen({ fileName, origin, phase, upload, server
           ? "upload"
           : phase === "analyzing"
             ? server
-              ? STAGE_STEP[server.stage]
+              ? (STAGE_STEP[server.stage] ?? "tempo")
               : "tempo"
             : phase === "voicings"
               ? "voicings"
@@ -151,9 +167,11 @@ export function AnalysisProgressScreen({ fileName, origin, phase, upload, server
           ? `${(upload.loaded / 1048576).toFixed(1)} of ${(upload.total / 1048576).toFixed(1)} MB`
           : "Starting upload"
       : phase === "analyzing"
-        ? server
-          ? SERVER_DETAIL[server.stage]
-          : "Upload received"
+        ? server?.cached
+          ? "Already analysed — loading the saved result"
+          : server
+            ? (SERVER_DETAIL[server.stage] ?? "Analysing")
+            : "Upload received"
         : phase === "voicings"
           ? "Working out guitar, ukulele and piano shapes"
           : phase === "downloading"

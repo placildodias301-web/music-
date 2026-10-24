@@ -7,9 +7,10 @@ export interface NoteInspectorCardProps {
   instrument?: string;
   courses?: number[][];
   totalStrings?: number;
+  fretless?: boolean;
 }
 
-export function NoteInspectorCard({ selectedNote, onClearSelection, instrument = "guitar", courses, totalStrings }: NoteInspectorCardProps) {
+export function NoteInspectorCard({ selectedNote, onClearSelection, instrument = "guitar", courses, totalStrings, fretless = false }: NoteInspectorCardProps) {
   if (!selectedNote) {
     return (
       <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-[var(--color-ns-border)] bg-[var(--color-ns-card)]/40 p-6 text-center">
@@ -48,8 +49,8 @@ export function NoteInspectorCard({ selectedNote, onClearSelection, instrument =
               {isMuted
                 ? "This string is muted and not played"
                 : isOpen
-                ? "Open string (Fret 0)"
-                : `Fret ${selectedNote.fret}`}
+                ? fretless ? "Open string" : "Open string (Fret 0)"
+                : fretless ? `${selectedNote.fret} semitones above the open string` : `Fret ${selectedNote.fret}`}
             </p>
           </div>
         </div>

@@ -26,6 +26,8 @@ from .demucs_stage import SeparatedStems, separate_stems
 from .errors import PipelineError
 from .events_stage import EventsResult, analyze_events
 from .ffmpeg_stage import ExtractedAudio, extract_wav
+from .key_stage import estimate_key_and_difficulty
+from .preprocess import Preprocessed, check_stems, preprocess_audio, shift_times
 from .merge import build_result
 from .rhythm_stage import RhythmResult, analyze_rhythm
 from .schemas import JobView, PipelineResult
@@ -34,15 +36,18 @@ from .store import Store
 logger = logging.getLogger(__name__)
 
 JOB_ID_RE = re.compile(r"^[0-9a-f]{32}$")
+KEY_FIELDS = ("key", "mode", "scale", "key_confidence", "key_alternatives", "difficulty")
 
 # Where each stage starts on the 0–100 progress bar. Steps 3–9 fill in the gaps.
 STAGE_PROGRESS = {
     "queued": 0,
     "extracting": 5,
+    "preprocessing": 10,
     "separating": 15,
     "rhythm": 45,
     "chords": 65,
     "events": 85,
+    "key": 90,
     "merging": 95,
     "completed": 100,
 }
@@ -65,6 +70,7 @@ class JobContext:
     deadline: float
     report: Callable[[str, Optional[float]], None]
     audio: Optional[ExtractedAudio] = None
+    prep: Optional[Preprocessed] = None
     stems: Optional[SeparatedStems] = None
     rhythm: Optional[RhythmResult] = None
     chords: Optional[ChordResult] = None
@@ -83,7 +89,7 @@ def _stage_span(stage: str, next_stage: str) -> Callable[[float], float]:
 
 
 def run_pipeline(ctx: JobContext) -> PipelineResult:
-    """The stage sequence: FFmpeg -> Demucs -> rhythm -> chords -> events -> merge."""
+    """The stage sequence: FFmpeg -> preprocessing -> Demucs (+ stem checks) -> rhythm -> chords -> events -> key -> merge."""
     cfg = ctx.config
 
     ctx.report("extracting", None)
@@ -102,22 +108,32 @@ def run_pipeline(ctx: JobContext) -> PipelineResult:
             "timestamps follow the decoded audio."
         )
 
+    ctx.report("preprocessing", None)
+    # Every stage below works on the preprocessed (possibly edge-trimmed) audio; times are moved
+    # back onto the original upload's timeline (prep.offset) just before merging.
+    ctx.prep = preprocess_audio(ctx.audio.wav_path, os.path.join(ctx.workdir, "audio"),
+                                min_seconds=cfg.min_audio_seconds)
+    ctx.warnings.extend(ctx.prep.warnings)
+    analysed = ctx.prep.duration
+
     ctx.report("separating", None)
     to_job_pct = _stage_span("separating", "rhythm")
     # report() also enforces the job deadline, so a timed-out job stops at the next Demucs chunk.
     ctx.stems = separate_stems(
-        ctx.audio.wav_path, os.path.join(ctx.workdir, "stems"),
+        ctx.prep.wav_path, os.path.join(ctx.workdir, "stems"),
         device=cfg.demucs_device,
         progress=lambda pct: ctx.report("separating", to_job_pct(pct)),
     )
     ctx.engines["separation"] = f"demucs:{ctx.stems.model}@{ctx.stems.device}"
     ctx.warnings.extend(ctx.stems.warnings)
+    stem_quality, stem_warnings = check_stems(ctx.stems.paths, ctx.prep.wav_path, ctx.prep)
+    ctx.warnings.extend(stem_warnings)
 
     ctx.report("rhythm", None)
     rhythm_pct = _stage_span("rhythm", "chords")
     ctx.rhythm = analyze_rhythm(
         ctx.stems.paths["no_vocals"], os.path.join(ctx.workdir, "rhythm"),
-        duration=ctx.audio.duration,
+        duration=analysed,
         config=cfg,
         remaining=ctx.remaining,
         progress=lambda pct: ctx.report("rhythm", rhythm_pct(pct)),
@@ -129,7 +145,7 @@ def run_pipeline(ctx: JobContext) -> PipelineResult:
     chords_pct = _stage_span("chords", "events")
     ctx.chords = analyze_chords(
         ctx.stems.paths["no_vocals"],
-        duration=ctx.audio.duration,
+        duration=analysed,
         config=cfg,
         remaining=ctx.remaining,
         progress=lambda pct: ctx.report("chords", chords_pct(pct)),
@@ -144,24 +160,30 @@ def run_pipeline(ctx: JobContext) -> PipelineResult:
         downbeats=ctx.rhythm.downbeats,
         sections=ctx.rhythm.sections,
         drums_path=ctx.stems.paths.get("drums", ""),
-        duration=ctx.audio.duration,
+        duration=analysed,
     )
     ctx.engines["events"] = ctx.events.engine
     ctx.warnings.extend(ctx.events.warnings)
 
+    ctx.report("key", None)
+    key = estimate_key_and_difficulty(ctx.stems.paths["no_vocals"], chords=ctx.events.chords,
+                                      bpm=ctx.rhythm.bpm, duration=analysed)
+    ctx.warnings.extend(key.warnings)
+
     ctx.report("merging", None)
+    timed = shift_times(ctx.prep.offset, beats=ctx.rhythm.beats, downbeats=ctx.rhythm.downbeats,
+                        sections=ctx.rhythm.sections, chords=ctx.events.chords, events=ctx.events.events,
+                        analysed=analysed, total=ctx.audio.duration)
     return build_result(
         audio_duration=ctx.audio.duration,
         sample_rate=ctx.audio.sample_rate,
         bpm=ctx.rhythm.bpm,
         time_signature=ctx.rhythm.time_signature,
-        beats=ctx.rhythm.beats,
-        downbeats=ctx.rhythm.downbeats,
-        sections=ctx.rhythm.sections,
-        chords=ctx.events.chords,
-        events=ctx.events.events,
         engines=ctx.engines,
         warnings=ctx.warnings,
+        summary={**{name: getattr(key, name) for name in KEY_FIELDS},
+                 "preprocessing": {**ctx.prep.metrics, "stems": stem_quality}},
+        **timed,
     )
 
 

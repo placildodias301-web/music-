@@ -7,3 +7,4 @@ export * from "./ArpeggioEngine";
 export * from "./AudioEngine";
 export * from "./pitch";
 export * from "./voicePlan";
+export * from "./synthVoices";

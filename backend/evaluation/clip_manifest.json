@@ -1,0 +1,142 @@
+{
+  "TEST_001": {
+    "original_filename": "TEST_001.mp4",
+    "source_path": "C:/Users/wilbu/OneDrive/Desktop/Analysis_demo folder/TEST_001.mp4",
+    "copied_path": "backend/evaluation/clips/TEST_001.mp4",
+    "sha256": "6e52001b33e2dca537195c4551810e1800aae10c2d48a4558b4466f78e6614af",
+    "size_bytes": 23323874
+  },
+  "TEST_002": {
+    "original_filename": "TEST_002.mp4",
+    "source_path": "C:/Users/wilbu/OneDrive/Desktop/Analysis_demo folder/TEST_002.mp4",
+    "copied_path": "backend/evaluation/clips/TEST_002.mp4",
+    "sha256": "98964d295ee6beca5605837bc5ab16c6fe007c4e71be2e592a9e46ba4e19b0d1",
+    "size_bytes": 46216595
+  },
+  "TEST_003": {
+    "original_filename": "TEST_003.mp4",
+    "source_path": "C:/Users/wilbu/OneDrive/Desktop/Analysis_demo folder/TEST_003.mp4",
+    "copied_path": "backend/evaluation/clips/TEST_003.mp4",
+    "sha256": "c284622b6c6b80cb650779c42b1997c398f0a83eb6f30d1779303bf5c2171358",
+    "size_bytes": 5896879
+  },
+  "TEST_004": {
+    "original_filename": "TEST_004.mp4",
+    "source_path": "C:/Users/wilbu/OneDrive/Desktop/Analysis_demo folder/TEST_004.mp4",
+    "copied_path": "backend/evaluation/clips/TEST_004.mp4",
+    "sha256": "8f8ac40a2065155e7b8b0416cc2d82bec30db3c67eace405aecb50250211a4e9",
+    "size_bytes": 9007239
+  },
+  "TEST_005": {
+    "original_filename": "TEST_005.mp4",
+    "source_path": "C:/Users/wilbu/OneDrive/Desktop/Analysis_demo folder/TEST_005.mp4",
+    "copied_path": "backend/evaluation/clips/TEST_005.mp4",
+    "sha256": "a6ab6a338278e48d4c6490533eb5d0c24ed9e5500dda23d76bc20462c18d29ef",
+    "size_bytes": 4860174
+  },
+  "TEST_006": {
+    "original_filename": "TEST_006.mp4",
+    "source_path": "C:/Users/wilbu/OneDrive/Desktop/Analysis_demo folder/TEST_006.mp4",
+    "copied_path": "backend/evaluation/clips/TEST_006.mp4",
+    "sha256": "701d670dfd137e9ee9ce2adc49c78626d54de64a203781c3a7b8a9e353667976",
+    "size_bytes": 11986301
+  },
+  "TEST_007": {
+    "original_filename": "TEST_007.mp4",
+    "source_path": "C:/Users/wilbu/OneDrive/Desktop/Analysis_demo folder/TEST_007.mp4",
+    "copied_path": "backend/evaluation/clips/TEST_007.mp4",
+    "sha256": "dec75838a215a5e29bd904498f1d6a6885ae7e2f081bd7fa90e6c18c9386339c",
+    "size_bytes": 3595604
+  },
+  "TEST_008": {
+    "original_filename": "TEST_008.mp4",
+    "source_path": "C:/Users/wilbu/OneDrive/Desktop/Analysis_demo folder/TEST_008.mp4",
+    "copied_path": "backend/evaluation/clips/TEST_008.mp4",
+    "sha256": "e0ace1a6b2e8be75308a563ca61b16e17700679add84fd02757570da2b1b668d",
+    "size_bytes": 5894306
+  },
+  "TEST_009": {
+    "original_filename": "TEST_009.mp4",
+    "source_path": "C:/Users/wilbu/OneDrive/Desktop/Analysis_demo folder/TEST_009.mp4",
+    "copied_path": "backend/evaluation/clips/TEST_009.mp4",
+    "sha256": "3042c01864e0fce2c39cfb4ddd56ff0953f67df504d1b91d465e7ddb2244b49b",
+    "size_bytes": 19233178
+  },
+  "TEST_010": {
+    "original_filename": "TEST_010.mp4",
+    "source_path": "C:/Users/wilbu/OneDrive/Desktop/Analysis_demo folder/TEST_010.mp4",
+    "copied_path": "backend/evaluation/clips/TEST_010.mp4",
+    "sha256": "9aa202b4e79588d5ab9c8d0b53acb0e2499fa5ddf57a08827cce5f619a70d816",
+    "size_bytes": 16191845
+  },
+  "TEST_011": {
+    "original_filename": "TEST_011.mp4",
+    "source_path": "C:/Users/wilbu/OneDrive/Desktop/Analysis_demo folder/TEST_011.mp4",
+    "copied_path": "backend/evaluation/clips/TEST_011.mp4",
+    "sha256": "60d95665f38cbc84022be70c11dde1f366b6ce89db3dfd990de4b4c37898402f",
+    "size_bytes": 18525558
+  },
+  "TEST_012": {
+    "original_filename": "TEST_012.mp4",
+    "source_path": "C:/Users/wilbu/OneDrive/Desktop/Analysis_demo folder/TEST_012.mp4",
+    "copied_path": "backend/evaluation/clips/TEST_012.mp4",
+    "sha256": "b9154534e6a574fbbbe3cd384dc5ef4098516c3b1beb74f7d17ba717683cfa13",
+    "size_bytes": 9194673
+  },
+  "TEST_013": {
+    "original_filename": "TEST_013.mp4",
+    "source_path": "C:/Users/wilbu/OneDrive/Desktop/Analysis_demo folder/TEST_013.mp4",
+    "copied_path": "backend/evaluation/clips/TEST_013.mp4",
+    "sha256": "79b3013e53a08e2f2758ce1e3f06a7b198ebe566aae7a76d46ac2d12d49c9727",
+    "size_bytes": 15159930
+  },
+  "TEST_014": {
+    "original_filename": "TEST_014.mp4",
+    "source_path": "C:/Users/wilbu/OneDrive/Desktop/Analysis_demo folder/TEST_014.mp4",
+    "copied_path": "backend/evaluation/clips/TEST_014.mp4",
+    "sha256": "87d6411e7ebe0771e7403b2ee5396c936e9c39aaed447f6cb6d69016c29cd4cd",
+    "size_bytes": 8278339
+  },
+  "TEST_015": {
+    "original_filename": "TEST_015.mp4",
+    "source_path": "C:/Users/wilbu/OneDrive/Desktop/Analysis_demo folder/TEST_015.mp4",
+    "copied_path": "backend/evaluation/clips/TEST_015.mp4",
+    "sha256": "8758362dee04ea402347b6b9b98f7665184a526d7c6bb5c61b0d733cfe8cfb6f",
+    "size_bytes": 5819202
+  },
+  "TEST_016": {
+    "original_filename": "TEST_016.mp4",
+    "source_path": "C:/Users/wilbu/OneDrive/Desktop/Analysis_demo folder/TEST_016.mp4",
+    "copied_path": "backend/evaluation/clips/TEST_016.mp4",
+    "sha256": "3a2c4bb231d213faabde0d23fbb90fc19faaeca469118ef2e5975d5fc1d2fe11",
+    "size_bytes": 15663173
+  },
+  "TEST_017": {
+    "original_filename": "TEST_017.mp4",
+    "source_path": "C:/Users/wilbu/OneDrive/Desktop/Analysis_demo folder/TEST_017.mp4",
+    "copied_path": "backend/evaluation/clips/TEST_017.mp4",
+    "sha256": "308858d1e749b9ef393afb1b95ebc90442a6d093e9a00a40406591a80654c89f",
+    "size_bytes": 26567142
+  },
+  "TEST_018": {
+    "original_filename": "TEST_018.mp4",
+    "source_path": "C:/Users/wilbu/OneDrive/Desktop/Analysis_demo folder/TEST_018.mp4",
+    "copied_path": "backend/evaluation/clips/TEST_018.mp4",
+    "sha256": "e9aa3fe2b793e588aad656e665a97e3c0d5d9e283e9c6ad4ab81f9374bb923bf",
+    "size_bytes": 15601717
+  },
+  "TEST_019": {
+    "original_filename": "TEST_019.mp4",
+    "source_path": "C:/Users/wilbu/OneDrive/Desktop/Analysis_demo folder/TEST_019.mp4",
+    "copied_path": "backend/evaluation/clips/TEST_019.mp4",
+    "sha256": "15c309629098c2847ff776f6876fedcd78fbbb8df55382edf6c1fc9f32445c9c",
+    "size_bytes": 16283718
+  },
+  "TEST_020": {
+    "original_filename": "TEST_020.mp4",
+    "source_path": "C:/Users/wilbu/OneDrive/Desktop/Analysis_demo folder/TEST_020.mp4",
+    "copied_path": "backend/evaluation/clips/TEST_020.mp4",
+    "sha256": "5ffb4dfb370491f335ae6a47eee21bf52750ffa57b95b556f34bd2fd69ea3ce1",
+    "size_bytes": 19724997
+  }
+}

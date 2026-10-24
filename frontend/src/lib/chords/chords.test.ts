@@ -78,14 +78,14 @@ describe("instrument registry", () => {
     for (const d of INSTRUMENTS_DEFINITIONS) if (d.tuner) expect(findInstrument(d.tuner.instrumentId), d.id).toBeDefined();
     for (const id of ["guitar", "electric-guitar", "guitar-7", "guitar-12", "bass", "banjo", "harp", "chromatic"]) expect(resolveDefinition(selectionForDefinition(def(id))).id).toBe(id);
   });
-  it("the Tuner lists only string instruments, plus Chromatic", () => {
+  it("the Tuner lists tuned instruments only: strings, drums, bars, winds (intonation) and Chromatic — never pianos or keyboards", () => {
     const ids = tunerInstruments().map((d) => d.id);
-    for (const id of ["piano", "keyboard", "organ", "synthesizer", "accordion", "marimba", "xylophone"]) expect(ids, id).not.toContain(id);
-    for (const id of ["guitar", "bass", "ukulele", "mandolin", "banjo", "harp", "violin", "cello", "chromatic"]) expect(ids, id).toContain(id);
-    expect(new Set(tunerInstruments().map((d) => d.category))).toEqual(new Set(["guitars", "bass", "folk", "orchestral", "chromatic"]));
+    for (const id of ["keyboard", "organ", "synthesizer", "accordion"]) expect(ids, id).not.toContain(id);
+    for (const id of ["guitar", "bass", "ukulele", "mandolin", "banjo", "harp", "violin", "cello", "chromatic", "flute", "trumpet", "timpani", "marimba", "tabla", "piano"]) expect(ids, id).toContain(id);
+    expect(new Set(tunerInstruments().map((d) => d.category))).toEqual(new Set(["guitars", "bass", "folk", "world", "keys", "mallet", "percussion", "wind", "orchestral", "chromatic"]));
   });
   it("a saved keys or mallet selection reopens the Tuner on Chromatic", () => {
-    for (const id of ["piano", "organ", "accordion", "marimba"]) expect(resolveDefinition(selectionForDefinition(def(id))).id, id).toBe("chromatic");
+    for (const id of ["organ", "accordion"]) expect(resolveDefinition(selectionForDefinition(def(id))).id, id).toBe("chromatic");
   });
   it("grouping and search", () => {
     expect(groupByCategory(INSTRUMENTS_DEFINITIONS).map((g) => g.label.toLowerCase())).toEqual(expect.arrayContaining(["guitars", "bass"]));
@@ -223,12 +223,14 @@ describe("keys, mallet, harp and accordion models", () => {
 describe("wind instruments", () => {
   const WIND_IDS = ["flute", "piccolo", "recorder", "tin-whistle", "bansuri", "oboe", "clarinet", "bassoon", "soprano-sax", "alto-sax", "tenor-sax", "baritone-sax", "trumpet", "french-horn", "trombone", "tuba", "harmonica"];
 
-  it("every wind instrument is on the Chords page, in a Wind group, and not in the Tuner", () => {
+  it("every wind instrument is on the Chords page, in a Wind group, and in the Tuner as intonation (not string tuning)", () => {
     const chordIds = chordInstruments().map((d) => d.id);
     const tunerIds = tunerInstruments().map((d) => d.id);
     for (const id of WIND_IDS) {
       expect(chordIds, id).toContain(id);
-      expect(tunerIds, id).not.toContain(id);
+      expect(tunerIds, id).toContain(id);
+      expect(def(id).tuningType, id).toBe("wind");
+      expect(def(id).tunerSupport, id).toBe("specialized");
       expect(def(id).category).toBe("wind");
     }
     expect(groupByCategory(chordInstruments()).some((g) => g.category === "wind")).toBe(true);
@@ -387,5 +389,22 @@ describe("fingerings are physically playable on every fretted instrument", () =>
         }
       }
     }
+  });
+});
+
+describe("shapes are listed in neck order", () => {
+  it("open position first, then up the neck, on every instrument and chord", async () => {
+    const { shapePosition, ALL_CHORD_SYMBOLS } = await import("../chordTheory");
+    for (const id of ["guitar", "ukulele", "mandolin", "banjo", "cavaquinho", "bass"]) {
+      for (const symbol of ALL_CHORD_SYMBOLS.filter((_, i) => i % 4 === 0)) {
+        const m = model(symbol, id);
+        if (m.kind !== "fretted") continue;
+        const positions = m.shapes.map((s) => shapePosition(s.frets));
+        expect(positions, `${id} ${symbol} ${positions}`).toEqual([...positions].sort((a, b) => a - b));
+      }
+    }
+    const c = model("C", "guitar");
+    if (c.kind !== "fretted") throw new Error();
+    expect(c.shapes[0].name).toBe("Open position");
   });
 });

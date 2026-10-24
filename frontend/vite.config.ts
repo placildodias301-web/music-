@@ -2,6 +2,7 @@
 import { defineConfig, type Plugin } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
+import { alphaTab } from "@coderline/alphatab-vite";
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -80,7 +81,8 @@ function licencesModule(): Plugin {
 
 // https://vite.dev/config/
 export default defineConfig({
-  plugins: [react(), tailwindcss(), licencesModule()],
+  // alphaTab (Sheet Music page): serves its notation font, piano soundfont and audio worker.
+  plugins: [react(), tailwindcss(), licencesModule(), alphaTab()],
   define: {
     __APP_VERSION__: JSON.stringify(pkg.version),
   },

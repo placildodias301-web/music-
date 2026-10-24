@@ -69,7 +69,9 @@ export function isValidAnalysisResult(raw: unknown): raw is AnalysisResult {
   if (!raw || typeof raw !== "object") return false;
   const a = raw as Partial<AnalysisResult>;
   if (typeof a.key !== "string" || !a.key.trim()) return false;
-  if (typeof a.bpm !== "number" || !Number.isFinite(a.bpm) || a.bpm <= 0) return false;
+  // bpm 0 is valid only as the pipeline's "no clear pulse" (bpmStatus "unavailable").
+  if (typeof a.bpm !== "number" || !Number.isFinite(a.bpm) || a.bpm < 0) return false;
+  if (a.bpm === 0 && a.bpmStatus !== "unavailable") return false;
   if (!Array.isArray(a.chordProgression) || a.chordProgression.length === 0) return false;
   if (!Array.isArray(a.chordTimeline) || a.chordTimeline.length === 0) return false;
   return true;

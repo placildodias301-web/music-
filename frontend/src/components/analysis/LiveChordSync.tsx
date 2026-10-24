@@ -149,6 +149,14 @@ export function LiveChordSync({ analysis, audioUrl, selectedChord, onActiveChord
     },
     [audioUrl, loop, onSelectChord, playFrom, setLoop, syncOffsetMs]
   );
+  // Section bands and fill markers seek exactly like a chord does (same playFrom, same offset).
+  const handleSeekTime = useCallback(
+    (time: number) => {
+      if (!audioUrl) return;
+      playFrom(time + (syncOffsetMs / 1000));
+    },
+    [audioUrl, playFrom, syncOffsetMs]
+  );
 
   useEffect(() => {
     const audio = audioRef.current;
@@ -163,7 +171,8 @@ export function LiveChordSync({ analysis, audioUrl, selectedChord, onActiveChord
       countAbort.current?.abort();
       return;
     }
-    if (clock.isPlaying || countInBars === 0) {
+    // No tempo (no clear pulse): nothing to count in.
+    if (clock.isPlaying || countInBars === 0 || !(analysis.bpm > 0)) {
       clock.toggle();
       return;
     }
@@ -486,6 +495,7 @@ export function LiveChordSync({ analysis, audioUrl, selectedChord, onActiveChord
           isPlaying={clock.isPlaying}
           interactive={Boolean(audioUrl)}
           onPickSegment={handlePick}
+          onSeekTime={handleSeekTime}
         />
       </div>
     </>

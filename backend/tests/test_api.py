@@ -1730,3 +1730,117 @@ def test_six_stems_keep_a_clear_guitar_and_fold_an_unsure_piano_into_other(clien
             break
         _time.sleep(0.05)
     assert used["model"] == ss.MODEL_4
+
+
+def test_build_score_puts_melody_right_hand_and_chords_left_hand():
+    from music21 import converter
+
+    from services.sheet_generation import build_score
+
+    analysis = {
+        "bpm": 120.0, "beats": [i * 0.5 for i in range(17)], "downbeats": [0.0, 2.0, 4.0, 6.0], "beatsPerBar": 4,
+        "timeSignature": "4/4", "key": "G Major",
+        "chordTimeline": [{"start": 0.0, "end": 2.0, "chord": "G"}, {"start": 2.0, "end": 4.0, "chord": "Em7"},
+                          {"start": 4.0, "end": 6.0, "chord": "N"}],
+    }
+    # Sung a little early/late around the beat (seconds); a male voice (G3) to check the octave lift.
+    melody = [(0.02, 0.48, 50), (0.51, 0.97, 55), (1.03, 1.95, 59), (2.0, 3.9, 57)]
+    score = converter.parseData(build_score(melody, analysis, "block", "Test"))
+
+    rh, lh = score.parts[0], score.parts[1]
+    rh_notes = [n for n in rh.flatten().notes if n.isNote]
+    assert [n.pitch.midi for n in rh_notes] == [62, 67, 71, 69]  # lifted an octave onto the treble staff
+    assert [float(n.offset) for n in rh.flatten().notes if n.isNote][:3] == [0.0, 1.0, 2.0]  # snapped to beats
+    assert [c.figure for c in rh.flatten().getElementsByClass("ChordSymbol")] == ["G", "Em7"]  # "N" is no chord
+    lh_chords = list(lh.flatten().getElementsByClass("Chord"))
+    assert {p.name for p in lh_chords[0].pitches} == {"G", "B", "D"}
+    assert str(score.flatten().getElementsByClass("Key").first()) == "G major"
+
+
+def test_sheet_generate_endpoint_returns_musicxml(client, tmp_path, monkeypatch):
+    from services import sheet_generation
+
+    seen = {}
+
+    def fake_generate(path, title, left_hand):
+        seen.update(path=path, title=title, left_hand=left_hand)
+        return {"title": title, "musicxml": "<score-partwise/>", "model": {}, "noteCount": 1}
+
+    monkeypatch.setattr(sheet_generation, "generate", fake_generate)
+    wav = tmp_path / "song.wav"
+    _progression_wav(wav, ["C", "G"])
+    with open(wav, "rb") as f:
+        r = client.post("/api/sheet/generate?left_hand=bass", files={"file": ("My Song.wav", f, "audio/wav")})
+    assert r.status_code == 200, r.text
+    assert r.json()["musicxml"] == "<score-partwise/>"
+    assert seen["title"] == "My Song" and seen["left_hand"] == "bass"
+    assert not os.path.exists(seen["path"])  # the upload is deleted afterwards
+
+
+def test_sheet_generate_says_when_there_is_no_singing(client, tmp_path, monkeypatch):
+    from services import sheet_generation
+
+    def no_melody(path, title, left_hand):
+        raise sheet_generation.SheetError("No sung melody was found in this song.")
+
+    monkeypatch.setattr(sheet_generation, "generate", no_melody)
+    wav = tmp_path / "song.wav"
+    _progression_wav(wav, ["C", "G"])
+    with open(wav, "rb") as f:
+        r = client.post("/api/sheet/generate", files={"file": ("s.wav", f, "audio/wav")})
+    assert r.status_code == 400 and "No sung melody" in r.json()["detail"]
+
+
+def test_flat_keys_are_spelled_with_flats_and_transpose_moves_everything(client):
+    from music21 import converter
+
+    from services.sheet_generation import build_score
+
+    analysis = {
+        "bpm": 120.0, "beats": [i * 0.5 for i in range(9)], "downbeats": [0.0, 2.0], "beatsPerBar": 4,
+        "timeSignature": "4/4", "key": "D# Major",  # how the engine names E-flat major
+        "chordTimeline": [{"start": 0.0, "end": 2.0, "chord": "D#"}, {"start": 2.0, "end": 4.0, "chord": "G#"}],
+    }
+    melody = [(0.0, 0.9, 70), (1.0, 1.9, 67), (2.0, 3.9, 68)]
+    xml = build_score(melody, analysis, "block")
+    score = converter.parseData(xml)
+    assert score.parts[0].flatten().getElementsByClass("KeySignature").first().sharps == -3
+    assert [c.figure for c in score.parts[0].flatten().getElementsByClass("ChordSymbol")] == ["E-", "A-"]
+
+    r = client.post("/api/sheet/transpose", json={"musicxml": xml, "semitones": 2})
+    assert r.status_code == 200, r.text
+    up = converter.parseData(r.json()["musicxml"])
+    notes = lambda s: [n for n in s.parts[0].flatten().notes if n.isNote]
+    assert [n.pitch.midi for n in notes(up)] == [n.pitch.midi + 2 for n in notes(score)]
+    assert [float(n.offset) for n in notes(up)] == [float(n.offset) for n in notes(score)]  # rhythm untouched
+    assert [c.root().name for c in up.parts[0].flatten().getElementsByClass("ChordSymbol")] == ["F", "B-"]
+
+    assert client.post("/api/sheet/transpose", json={"musicxml": xml, "semitones": 13}).status_code == 422
+
+
+def test_sheet_render_applies_edits_and_rejects_bad_input(client):
+    from music21 import converter
+
+    model = {
+        "title": "Edited", "bpm": 100, "beatsPerBar": 4, "key": "G Major",
+        "notes": [{"start": 0, "end": 1, "midi": 67}, {"start": 1, "end": 3, "midi": 71}],
+        "chords": [{"start": 0, "end": 4, "name": "G"}],
+    }
+    r = client.post("/api/sheet/render", json={"model": model, "left_hand": "bass"})
+    assert r.status_code == 200, r.text
+    s = converter.parseData(r.json()["musicxml"])
+    rh = [n for n in s.parts[0].flatten().notes if n.isNote]
+    assert [(n.pitch.midi, float(n.quarterLength)) for n in rh] == [(67, 1.0), (71, 2.0)]
+    assert [n.pitch.name for n in s.parts[1].flatten().notes] == ["G"]  # bass-only left hand
+    assert s.metadata.title == "Edited"
+
+    # An edit that makes notes overlap: the later note wins, nothing crashes.
+    model["notes"] = [{"start": 0, "end": 2, "midi": 67}, {"start": 1, "end": 2, "midi": 69}]
+    r = client.post("/api/sheet/render", json={"model": model, "semitones": 2})
+    up = [n for n in converter.parseData(r.json()["musicxml"]).parts[0].flatten().notes if n.isNote]
+    assert [(n.pitch.midi, float(n.quarterLength)) for n in up] == [(69, 1.0), (71, 1.0)]
+
+    bad = dict(model, notes=[{"start": 0, "end": 1, "midi": 200}])
+    assert client.post("/api/sheet/render", json={"model": bad}).status_code == 422
+    bad = dict(model, chords=[{"start": 0, "end": 1, "name": "<script>"}])
+    assert client.post("/api/sheet/render", json={"model": bad}).status_code == 422

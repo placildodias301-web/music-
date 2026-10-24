@@ -9,6 +9,8 @@ export type InstrumentType =
   | "electric-guitar"
   | "bass"
   | "ukulele"
+  | "mandolin"
+  | "banjo"
   | "piano";
 
 export type PluckStyle = "pick" | "finger";

@@ -27,19 +27,33 @@ export function describeKeyConfidence(analysis: AnalysisResult) {
   return { label: "Low confidence", className: "text-[var(--color-ns-amber)]", alternative };
 }
 
+/** True when the analysis has a tempo to show (the pipeline reports none for music without a clear pulse). */
+export function hasTempo(analysis: Pick<AnalysisResult, "bpm" | "bpmStatus">): boolean {
+  return analysis.bpmStatus !== "unavailable" && analysis.bpm > 0;
+}
+
+/** The BPM as shown in cards and lists: "—" when there is no tempo. */
+export function formatBpm(analysis: Pick<AnalysisResult, "bpm" | "bpmStatus">): string {
+  return hasTempo(analysis) ? `${Math.round(analysis.bpm)}` : "—";
+}
+
 /** Line under the BPM: how the tempo was found (never a list of guesses). */
 export function tempoNote(analysis: AnalysisResult): string {
   if (analysis.bpmStatus === "confirmed") return "Set by you";
+  if (!hasTempo(analysis)) return "No clear beat detected";
   // No steady drum pulse: the analyser worked it out from the rhythm and the chord cycle.
   if (analysis.bpmStatus === "estimated" || analysis.bpmStatus === "low_confidence") return "Estimated from rhythm and chord changes";
   return analysis.beats?.length ? `${analysis.beats.length} beats tracked` : "Auto beat tracking";
 }
 
+/** "4/4", "3/4", "5/4", "6/8", ... as detected; "—" when the pipeline found no confident meter. */
 export function timeSignatureValue(analysis: AnalysisResult): string {
+  if (!analysis.timeSignature && analysis.timeSignatureStatus === "unavailable") return "—";
   return analysis.timeSignature || "4/4";
 }
 
 export function timeSignatureNote(analysis: AnalysisResult): string {
   if (analysis.timeSignatureStatus === "confirmed") return "Set by you";
+  if (!analysis.timeSignature && analysis.timeSignatureStatus === "unavailable") return "No confident meter detected";
   return "Estimated from beat accents";
 }

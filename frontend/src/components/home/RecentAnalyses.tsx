@@ -1,5 +1,6 @@
 import { Link } from "react-router-dom";
 import type { SavedAnalysis } from "../../lib/library";
+import { formatBpm } from "../../lib/analysisDisplay";
 import { ICON, Icon } from "./icons";
 import { stripExtension, topChords } from "./homeUtils";
 
@@ -144,7 +145,7 @@ export function RecentAnalyses({ items, totalCount, onOpenItem }: RecentAnalyses
                       <div className="mt-2 flex items-center gap-1 text-[0.6875rem] font-medium text-[var(--color-ns-blue)]">
                         <span>{item.analysis.key}</span>
                         <span className="text-[var(--color-ns-dim)]">·</span>
-                        <span className="text-[var(--color-ns-muted)]">{item.analysis.bpm} BPM</span>
+                        <span className="text-[var(--color-ns-muted)]">{formatBpm(item.analysis)} BPM</span>
                         <span className="text-[var(--color-ns-dim)]">·</span>
                         <span className="text-[var(--color-ns-muted)]">{item.analysis.timeSignature || "4/4"}</span>
                       </div>

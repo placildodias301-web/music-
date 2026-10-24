@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { getLibrary, removeFromLibrary, toggleFavorite, markPracticed, type SavedAnalysis } from "../lib/library";
 import { useMvp } from "../lib/MvpContext";
+import { formatBpm } from "../lib/analysisDisplay";
 import { ConfirmDialog } from "../components/ui";
 
 type Tab = "all" | "recent" | "favorites" | "practiced";
@@ -357,7 +358,7 @@ export function Library() {
                       {item.analysis.key} {item.analysis.scale}
                     </span>
                     <span className="rounded-md border border-secondary/25 bg-secondary/10 px-2 py-0.5 text-[0.6875rem] font-semibold text-secondary">
-                      {item.analysis.bpm} BPM
+                      {formatBpm(item.analysis)} BPM
                     </span>
                     {item.analysis.duration && (
                       <span className="rounded-md border border-[var(--color-ns-border)] bg-white/[0.03] px-2 py-0.5 font-mono text-[0.6875rem] font-medium text-[var(--color-ns-muted)]">

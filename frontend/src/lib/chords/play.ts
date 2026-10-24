@@ -1,14 +1,20 @@
 /**
- * Reference playback for a chord model. Plucked-string instruments use a simple string simulation; keys, accordion, harp and
- * mallets use a plain tone. NONE of these is a recording or a model of the real instrument — they only let you hear which notes
- * the chord contains, and the Chords page says so.
+ * Playback for a chord model. Every instrument has its own sound model — NONE of them is a recording:
+ *
+ *  - plucked strings (guitars, ukulele, bass, mandolin, banjo, …): a physical string model, one voice per sounding string/strand
+ *    (lib/audio/KarplusStrong.ts), strummed at that instrument's own speed;
+ *  - everything else (bowed strings, winds, keys, mallets, accordion, harp): an instrument recipe — its spectrum, how it starts,
+ *    vibrato, body resonance (lib/audio/synthVoices.ts) — so a violin, a flute and a piano don't sound alike.
+ *
+ * The notes played are always the notes drawn: strings come from the shape on screen, the rest from the model's own note list.
  */
 
-import { playPluckedNotes, playToneNotes, playWindNotes, type PluckKind, type WindVoiceName } from "../playChord";
 import { arpeggioMidi, bassOptions, modelMidi, type ChordModel } from "./model";
-import { audioEngine } from "../audio";
+import { audioEngine, playSynth, recipeForInstrument, type SynthMode } from "../audio";
 
-const VOICE: Record<string, PluckKind> = {
+type StringVoice = "guitar" | "bass" | "ukulele" | "mandolin" | "banjo";
+
+const VOICE: Record<string, StringVoice> = {
   guitar: "guitar",
   "acoustic-guitar": "guitar",
   "electric-guitar": "guitar",
@@ -19,75 +25,80 @@ const VOICE: Record<string, PluckKind> = {
   cavaquinho: "ukulele",
   mandolin: "mandolin",
   balalaika: "mandolin",
+  bouzouki: "mandolin",
+  charango: "mandolin",
+  cuatro: "ukulele",
+  tres: "guitar",
+  "classical-guitar": "guitar",
+  "guitar-8": "guitar",
+  "double-bass": "bass",
   banjo: "banjo",
-  harp: "harp",
 };
 
-/** Which synthetic wind voice each wind instrument uses. Instruments not listed here fall back to the flute voice. */
-const WIND_VOICE: Record<string, WindVoiceName> = {
-  flute: "flute",
-  piccolo: "flute",
-  bansuri: "flute",
-  "tin-whistle": "recorder",
-  recorder: "recorder",
-  oboe: "oboe",
-  clarinet: "clarinet",
-  bassoon: "bassoon",
-  "soprano-sax": "sax",
-  "alto-sax": "sax",
-  "tenor-sax": "sax",
-  "baritone-sax": "sax",
-  trumpet: "trumpet",
-  trombone: "trombone",
-  "french-horn": "horn",
-  tuba: "tuba",
-  harmonica: "harmonica",
-};
-
-/** The physical-string voice the audio engine uses for a plucked instrument (guitar, bass or ukulele; guitar for the rest). */
-export function stringVoiceFor(definitionId: string): "guitar" | "bass" | "ukulele" {
-  const voice = VOICE[definitionId];
-  return voice === "bass" ? "bass" : voice === "ukulele" ? "ukulele" : "guitar";
+/** The plucked-string voice the audio engine uses for an instrument (guitar for anything unlisted). */
+export function stringVoiceFor(definitionId: string): StringVoice {
+  return VOICE[definitionId] ?? "guitar";
 }
 
-/** Whether playback is the nearest string voice or only a neutral tone. */
-export function playbackKind(model: ChordModel): "string-simulation" | "neutral-tone" {
-  return VOICE[model.definition.id] && model.kind !== "keyboard" ? "string-simulation" : "neutral-tone";
+/** Instruments whose sound is an instrument recipe rather than a plucked-string model. */
+export function usesSynthVoice(definitionId: string): boolean {
+  return !VOICE[definitionId] && recipeForInstrument(definitionId) !== undefined;
 }
 
-const BOWED = new Set(["violin", "viola", "cello"]);
+const EMPTY = { voices: [], durationSeconds: 0 };
 
+/** Seconds between notes when an instrument plays its chord one note after another. */
+const ARPEGGIO_GAP: Record<string, number> = { wind: 0.5, keys: 0.3, mallet: 0.25, plucked: 0.2, bowed: 0.55, reed: 0.5 };
+
+function synthPlay(instrumentId: string, midis: number[], mode: SynthMode) {
+  const recipe = recipeForInstrument(instrumentId);
+  if (!recipe || !midis.length) return Promise.resolve({ notes: [], durationSeconds: 0 });
+  return playSynth(recipe, midis, mode, ARPEGGIO_GAP[recipe.family] ?? 0.35);
+}
+
+function shapesOf(model: ChordModel): (number | null)[][] {
+  if (model.kind === "fretted") return model.shapes.map((sh) => sh.frets);
+  if (model.kind === "bass") return bassOptions(model).map((o) => o.frets);
+  return [];
+}
+
+/** Plays the chord as the instrument plays it: strummed, rolled or struck, all notes overlapping. */
 export function playModel(model: ChordModel, shapeIndex = 0) {
-  // Violin family: a sustained bowed-string tone, all notes of the shape together.
-  if (BOWED.has(model.definition.id)) {
-    const bowed = modelMidi(model, shapeIndex);
-    if (bowed.length) return playWindNotes(bowed, "bowed", 0);
-    return;
-  }
-  // Strings: ONE chord shape → every sounding string (and every strand of a paired course) → one voice each. The shape played
-  // is exactly the shape drawn: for bass, the same option list the diagram steps through (two-note dyads first, then chords).
+  const id = model.definition.id;
+  // Instruments with their own sound model (violin family included): the notes of the shape/chord shown, together.
+  if (usesSynthVoice(id)) return synthPlay(id, modelMidi(model, shapeIndex), "chord");
+
+  // Plucked strings: ONE chord shape → every sounding string (and every strand of a paired course) → one voice each. The shape
+  // played is exactly the shape drawn: for bass, the same option list the diagram steps through (two-note dyads first).
   if (model.kind === "fretted" || model.kind === "bass") {
-    const shapes = model.kind === "fretted" ? model.shapes.map((sh) => sh.frets) : bassOptions(model).map((o) => o.frets);
+    const shapes = shapesOf(model);
     const frets = shapes[shapeIndex % Math.max(shapes.length, 1)];
-    if (!frets) return Promise.resolve({ voices: [], durationSeconds: 0 });
+    if (!frets) return Promise.resolve(EMPTY);
     return audioEngine.playChord({
       frets,
       tuningMidi: model.tuning.midi,
       courses: model.tuning.offsets,
-      instrument: stringVoiceFor(model.definition.id),
+      instrument: stringVoiceFor(id),
       direction: "down",
     });
   }
-
-  const midis = modelMidi(model, shapeIndex);
-  if (!midis.length) return;
-  if (model.kind === "harp") return playPluckedNotes(midis, "harp", 0.12);
-  // Wind instruments play one note at a time, so the reference steps up the chord tones; a harmonica sounds its hole group together.
-  if (model.kind === "wind") return playWindNotes(midis, WIND_VOICE[model.definition.id] ?? "flute", 0.5);
-  if (model.kind === "harmonica") return playWindNotes(midis, "harmonica", 0);
-  return playToneNotes(midis, model.kind === "mallet" ? "struck" : "sustained");
+  return Promise.resolve(EMPTY);
 }
 
+/** The same chord one note after another (how you would practise it), with each instrument's own sound. */
+export function playModelArpeggio(model: ChordModel, shapeIndex = 0) {
+  const id = model.definition.id;
+  if (usesSynthVoice(id)) return synthPlay(id, modelMidi(model, shapeIndex), "arpeggio");
+  if (model.kind === "fretted" || model.kind === "bass") {
+    const shapes = shapesOf(model);
+    const frets = shapes[shapeIndex % Math.max(shapes.length, 1)];
+    if (!frets) return Promise.resolve(EMPTY);
+    return audioEngine.playArpeggio({ frets, tuningMidi: model.tuning.midi, courses: model.tuning.offsets, instrument: stringVoiceFor(id), speed: "normal" });
+  }
+  return Promise.resolve(EMPTY);
+}
+
+/** Bass only: the chord's tones as a one-note-at-a-time run from the root up to the octave. */
 export function playArpeggio(model: ChordModel) {
   if (model.kind !== "bass") return;
   const midis = arpeggioMidi(model);
@@ -100,6 +111,25 @@ export function playArpeggio(model: ChordModel) {
   });
 }
 
+/** What the Explorer's practice panel plays: the shape on screen, chord or arpeggio, on the instrument's own sound. */
+export function playShape(opts: {
+  instrumentId: string;
+  frets: (number | null)[];
+  tuningMidi: number[];
+  courses?: number[][];
+  mode: "chord" | "arpeggio";
+  speed?: "slow" | "normal" | "fast";
+}) {
+  if (usesSynthVoice(opts.instrumentId)) {
+    const midis = opts.frets.flatMap((f, i) => (f === null || f < 0 || !Number.isFinite(opts.tuningMidi[i]) ? [] : [opts.tuningMidi[i] + f]));
+    return synthPlay(opts.instrumentId, midis, opts.mode === "chord" ? "chord" : "arpeggio");
+  }
+  const common = { frets: opts.frets, tuningMidi: opts.tuningMidi, courses: opts.courses, instrument: stringVoiceFor(opts.instrumentId) };
+  return opts.mode === "chord"
+    ? audioEngine.playChord({ ...common, direction: "down" })
+    : audioEngine.playArpeggio({ ...common, speed: opts.speed ?? "normal" });
+}
+
 /** What a string-table row or a diagram dot describes — just the parts the audio needs. */
 export interface PlayableString {
   stringIndex: number;
@@ -109,11 +139,12 @@ export interface PlayableString {
 }
 
 /**
- * Plays ONE string of the shape being shown: the pitch the table/diagram says (`midi`), on that instrument's voice. For a paired
+ * Plays ONE string of the shape being shown: the pitch the table/diagram says (`midi`), on that instrument's sound. For a paired
  * course (mandolin, 12-string) both strings of the pair sound. A muted string is silent.
  */
 export function playPlayedString(info: PlayableString, opts: { instrumentId: string; totalStrings: number; courses?: number[][] }) {
-  if (info.action === "muted" || info.midi === null) return Promise.resolve({ voices: [], durationSeconds: 0 });
+  if (info.action === "muted" || info.midi === null) return Promise.resolve(EMPTY);
+  if (usesSynthVoice(opts.instrumentId)) return synthPlay(opts.instrumentId, [info.midi], "chord");
   return audioEngine.playNote({
     midi: info.midi,
     stringIndex: info.stringIndex,

@@ -14,6 +14,7 @@ import json
 import logging
 import os
 import queue
+import subprocess
 import threading
 import time
 import uuid
@@ -39,13 +40,13 @@ from pydantic import BaseModel, Field, StringConstraints, ValidationError
 
 from services.analysis_engine import AnalysisInputError, analyze, analyze_from_array
 from services.assistant_engine import answer_question
-from services.audio_extract import TMP_DIR, AudioExtractionError, cleanup, extract_audio_to_wav
+from services.audio_extract import TMP_DIR, AudioExtractionError, cleanup, extract_audio_to_wav, find_ffmpeg
 from services.difficulty import rate_difficulty
 from services.media_fetch import LINK_FALLBACK_MESSAGE, MediaFetchError, YOUTUBE_FALLBACK_MESSAGE, fetch_media, search_youtube
 from services.midi_export import build_midi_bytes
 from services.pdf_export import build_chord_chart_pdf, build_lead_sheet_pdf
 from services.pitch_shift import pitch_shift_to_m4a
-from services import stem_separation
+from services import sheet_generation, sheet_scan, stem_separation
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("wilsify")
@@ -72,7 +73,9 @@ RATE_LIMITED_PATHS = {
     "/api/pitch-shift",
     "/api/stems/analyze",
     "/api/stems/separate",
+    "/api/sheet/generate",
     "/api/pipeline/jobs",
+    "/api/sheet/scan",
     "/api/fetch-media",
     "/api/youtube/search",
 }
@@ -955,6 +958,158 @@ def stems_job_file(job_id: str, stem: str):
         media_type="audio/flac" if path.endswith(".flac") else "audio/wav",
         filename=os.path.basename(path),
     )
+
+
+# ── AI sheet generation ────────────────────────────────────────────────────
+
+
+@app.post("/api/sheet/generate")
+async def sheet_generate(file: UploadFile = File(...), left_hand: str = "block"):
+    """Song -> piano lead sheet (MusicXML): sung melody in the right hand, detected chords in the left.
+
+    Synchronous: about the song's length on a laptop CPU (Demucs dominates).
+    ponytail: one blocking request; move to the stems-style job queue if songs get long or users many.
+    """
+    ext = _validate_upload_type(file)
+    tmp_input_path, _size = await _save_upload(file, ext)
+    title = os.path.splitext(_safe_display_name(file.filename))[0] or "Song"
+    try:
+        return await run_in_threadpool(sheet_generation.generate, tmp_input_path, title, left_hand)
+    except (sheet_generation.SheetError, AnalysisInputError, AudioExtractionError, stem_separation.StemError) as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except ImportError:
+        logger.exception("Sheet generation dependencies missing")
+        raise HTTPException(status_code=503, detail="Sheet generation isn't installed on this server yet.")
+    except Exception:
+        logger.exception("Sheet generation failed for %r", title)
+        raise HTTPException(status_code=500, detail="Couldn't make a sheet from that file. Please try another song.")
+    finally:
+        cleanup(tmp_input_path)
+
+
+IMAGE_SIGNATURES = (b"\x89PNG\r\n\x1a\n", b"\xff\xd8\xff", b"BM", b"II*\x00", b"MM\x00*")
+IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".webp", ".bmp", ".tif", ".tiff"}
+
+
+@app.post("/api/sheet/scan")
+async def sheet_scan_image(file: UploadFile = File(...)):
+    """Photo or scan of printed sheet music -> MusicXML (optical music recognition, can take a few minutes on CPU)."""
+    ext = os.path.splitext(_safe_display_name(file.filename))[1].lower()
+    if ext not in IMAGE_EXTENSIONS:
+        raise HTTPException(status_code=400, detail="Please upload a picture of the sheet music (png, jpg, webp, bmp or tiff).")
+    os.makedirs(TMP_DIR, exist_ok=True)
+    path = os.path.join(TMP_DIR, f"{uuid.uuid4().hex}{ext}")
+    try:
+        data = await file.read(MAX_UPLOAD_BYTES + 1)
+        if not data:
+            raise HTTPException(status_code=400, detail="That file is empty.")
+        if len(data) > MAX_UPLOAD_BYTES:
+            raise HTTPException(status_code=413, detail="File is too large. Maximum size is 100 MB.")
+        if not (data.startswith(IMAGE_SIGNATURES) or (data[:4] == b"RIFF" and data[8:12] == b"WEBP")):
+            raise HTTPException(status_code=400, detail="That doesn't look like a picture. Please upload a png, jpg or webp of the sheet.")
+        with open(path, "wb") as f:
+            f.write(data)
+        title = os.path.splitext(_safe_display_name(file.filename))[0] or "Sheet"
+        xml = await run_in_threadpool(sheet_scan.scan, path)
+        return {"title": title, "musicxml": xml}
+    except sheet_scan.SheetScanError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except ImportError:
+        logger.exception("Sheet scanning dependency missing")
+        raise HTTPException(status_code=503, detail="Reading sheet pictures isn't installed on this server yet. In backend/, run: pip install homr")
+    except HTTPException:
+        raise
+    except Exception:
+        logger.exception("Sheet scan failed for %r", file.filename)
+        raise HTTPException(status_code=500, detail="Couldn't read that picture. Please try another photo.")
+    finally:
+        cleanup(path)
+        await file.close()
+
+
+@app.post("/api/sheet/audio")
+async def sheet_audio_mp3(file: UploadFile = File(...)):
+    """WAV rendered in the browser -> MP3, which WhatsApp and phones accept (WAV is rejected as 'not supported')."""
+    ffmpeg = find_ffmpeg()
+    if not ffmpeg:
+        raise HTTPException(status_code=503, detail="Making MP3 files needs ffmpeg, which isn't installed on the server.")
+    os.makedirs(TMP_DIR, exist_ok=True)
+    stem = os.path.join(TMP_DIR, uuid.uuid4().hex)
+    src, dst = f"{stem}.wav", f"{stem}.mp3"
+    try:
+        data = await file.read(MAX_UPLOAD_BYTES + 1)
+        if len(data) > MAX_UPLOAD_BYTES:
+            raise HTTPException(status_code=413, detail="File is too large. Maximum size is 100 MB.")
+        if data[:4] != b"RIFF" or data[8:12] != b"WAVE":
+            raise HTTPException(status_code=400, detail="That isn't a WAV file.")
+        with open(src, "wb") as f:
+            f.write(data)
+        proc = await run_in_threadpool(
+            subprocess.run,
+            [ffmpeg, "-y", "-i", src, "-codec:a", "libmp3lame", "-b:a", "192k", dst],
+            capture_output=True, timeout=120,
+        )
+        if proc.returncode != 0 or not os.path.exists(dst):
+            logger.error("ffmpeg mp3 failed: %s", proc.stderr[-800:])
+            raise HTTPException(status_code=500, detail="Couldn't make the MP3 file.")
+        with open(dst, "rb") as f:
+            return Response(content=f.read(), media_type="audio/mpeg")
+    finally:
+        cleanup(src, dst)
+        await file.close()
+
+
+class SheetNote(BaseModel):
+    start: float = Field(ge=0, le=10_000)  # quarter notes from bar 1
+    end: float = Field(ge=0, le=10_000)
+    midi: int = Field(ge=21, le=108)  # piano range
+
+
+class SheetChord(BaseModel):
+    start: float = Field(ge=0, le=10_000)
+    end: float = Field(ge=0, le=10_000)
+    name: str = Field(min_length=1, max_length=12, pattern=r"^[A-G][#b]?[a-z0-9#b+]*$")
+
+
+class SheetModel(BaseModel):
+    title: str = Field(default="", max_length=200)
+    bpm: float = Field(ge=20, le=320)
+    beatsPerBar: int = Field(ge=2, le=12)
+    key: str = Field(default="", max_length=20)
+    notes: list[SheetNote] = Field(max_length=5000)
+    chords: list[SheetChord] = Field(max_length=2000)
+
+
+class SheetRenderRequest(BaseModel):
+    model: SheetModel
+    left_hand: Literal["block", "bass", "none"] = "block"
+    semitones: int = Field(default=0, ge=-12, le=12)
+
+
+@app.post("/api/sheet/render")
+async def sheet_render(req: SheetRenderRequest):
+    """Edited sheet model -> MusicXML (the editor calls this after every change)."""
+    try:
+        xml = await run_in_threadpool(sheet_generation.render, req.model.model_dump(), req.left_hand, req.semitones)
+    except Exception:
+        logger.exception("Sheet render failed")
+        raise HTTPException(status_code=400, detail="Couldn't draw that sheet. Undo the last change and try again.")
+    return {"musicxml": xml}
+
+
+class SheetTransposeRequest(BaseModel):
+    musicxml: str = Field(max_length=5_000_000)
+    semitones: int = Field(ge=-12, le=12)
+
+
+@app.post("/api/sheet/transpose")
+async def sheet_transpose(req: SheetTransposeRequest):
+    """Moves every pitch by `semitones` (notes, chord names, key signature); rhythm stays exactly the same."""
+    try:
+        return {"musicxml": await run_in_threadpool(sheet_generation.transpose_musicxml, req.musicxml, req.semitones)}
+    except Exception:
+        logger.exception("Sheet transpose failed")
+        raise HTTPException(status_code=400, detail="Couldn't transpose that sheet. Is it a valid MusicXML file?")
 
 
 @app.post("/api/rights-attestation")

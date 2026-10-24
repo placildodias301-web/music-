@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 import { useMemo, useState } from "react";
 import type { ParsedChord } from "../../lib/chordTheory";
 import { buildChordModel, type ChordSettings } from "../../lib/chords/model";
-import { playArpeggio, playModel } from "../../lib/chords/play";
+import { playArpeggio, playModel, playModelArpeggio, usesSynthVoice } from "../../lib/chords/play";
 import { usePlayback } from "./usePlayback";
 import { findDefinition } from "../../lib/instruments/definitions";
 import { ChordDiagram } from "./ChordDiagram";
@@ -141,6 +141,16 @@ export function ChordCard({
             className="flex h-8 w-20 items-center justify-center rounded-xl border border-[var(--color-ns-amber)]/40 bg-[var(--color-ns-amber)]/10 text-[0.6875rem] font-bold text-[var(--color-ns-amber)] transition-colors hover:bg-[var(--color-ns-amber)] hover:text-[var(--color-ns-ink)]"
           >
             Explore
+          </button>
+        )}
+        {usesSynthVoice(definition.id) && (
+          <button
+            type="button"
+            onClick={() => playback.run(() => playModelArpeggio(model, shapeIndex))}
+            aria-label={`Play ${chord.label} one note at a time`}
+            className="flex h-8 items-center justify-center rounded-xl border border-[var(--color-ns-border)] bg-[var(--color-ns-bg)] px-3 text-[0.6875rem] font-medium text-[var(--color-ns-muted)] transition-colors hover:border-[var(--color-ns-amber)]/60 hover:text-[var(--color-ns-text)]"
+          >
+            One by one
           </button>
         )}
         {model.kind === "bass" && (

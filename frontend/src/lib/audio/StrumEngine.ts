@@ -9,11 +9,30 @@ import { playPhysicalStringNote } from "./KarplusStrong";
 import { audioContextManager } from "./AudioContextManager";
 import { planStrumVoices, type PlannedVoice } from "./voicePlan";
 
-export const STRUM_DURATIONS: Record<StrumSpeed, number> = {
-  fast: 0.1,
-  normal: 0.22,
-  slow: 0.36,
+/**
+ * Seconds between one string and the next in a normal strum, per instrument: a guitar pick sweeps at ~32 ms a string, a fingerstyle
+ * bass or a mandolin plectrum is much tighter. Fixed gaps (not a fixed total) mean a two-note bass chord sounds together, while
+ * a six-string guitar chord still spreads.
+ */
+export const STRUM_GAP_SECONDS: Record<string, number> = {
+  guitar: 0.032,
+  "acoustic-guitar": 0.032,
+  "electric-guitar": 0.028,
+  ukulele: 0.028,
+  bass: 0.014,
+  mandolin: 0.012,
+  banjo: 0.01,
 };
+const SPEED_SCALE: Record<StrumSpeed, number> = { fast: 0.45, normal: 1, slow: 1.8 };
+const MAX_STRUM_SECONDS = 0.5;
+
+/** Strum timing for a speed setting: a label scales the instrument's own gap; a number is a total sweep in seconds. */
+export function strumTiming(speed: ChordPlayOptions["speed"], instrument: string, stringCount: number): { strumSeconds?: number; gapSeconds?: number } {
+  if (typeof speed === "number") return { strumSeconds: Math.max(0, speed) };
+  const scale = SPEED_SCALE[speed ?? "normal"] ?? 1;
+  const gap = Math.min((STRUM_GAP_SECONDS[instrument] ?? 0.03) * scale, MAX_STRUM_SECONDS / Math.max(1, stringCount - 1));
+  return { gapSeconds: gap };
+}
 
 /** What a play call did: the exact voices scheduled and roughly how long they ring. */
 export interface PlaybackResult {
@@ -22,11 +41,6 @@ export interface PlaybackResult {
 }
 
 const RING_SECONDS = 3;
-
-export function strumSeconds(speed: ChordPlayOptions["speed"]): number {
-  if (typeof speed === "number") return Math.max(0, speed);
-  return (speed && STRUM_DURATIONS[speed]) || STRUM_DURATIONS.normal;
-}
 
 export async function strumChord(options: ChordPlayOptions): Promise<PlaybackResult> {
   const ctx = await audioContextManager.getContext();
@@ -38,7 +52,7 @@ export async function strumChord(options: ChordPlayOptions): Promise<PlaybackRes
     courses: options.courses,
     capo: options.capo,
     direction: options.direction === "up" ? "up" : "down",
-    strumSeconds: strumSeconds(options.speed),
+    ...strumTiming(options.speed, instrument, options.frets.filter((f) => f !== null).length),
     velocity: options.velocity,
     humanize: options.humanize ?? true,
   });

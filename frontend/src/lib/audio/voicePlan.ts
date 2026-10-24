@@ -101,6 +101,8 @@ export interface StrumVoiceOptions extends ShapeVoiceOptions {
   direction?: "down" | "up";
   /** Total seconds from the first string to the last. */
   strumSeconds?: number;
+  /** Seconds between consecutive strings. Takes precedence over `strumSeconds`; the sweep then grows with the number of strings. */
+  gapSeconds?: number;
 }
 
 export interface ArpeggioVoiceOptions extends ShapeVoiceOptions {
@@ -152,8 +154,7 @@ export function planStrumVoices(opts: StrumVoiceOptions): PlannedVoice[] {
   const strings = soundingStrings(opts.frets, opts.tuningMidi);
   if (!strings.length) return [];
   const ordered = (opts.direction ?? "down") === "up" ? [...strings].reverse() : strings;
-  const total = opts.strumSeconds ?? 0.22;
-  const step = total / Math.max(1, ordered.length - 1);
+  const step = opts.gapSeconds ?? (opts.strumSeconds ?? 0.22) / Math.max(1, ordered.length - 1);
   const humanize = opts.humanize ?? false;
   const rand = opts.random ?? Math.random;
   const base = opts.velocity ?? 0.82;

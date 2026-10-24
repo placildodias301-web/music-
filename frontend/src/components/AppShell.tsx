@@ -122,6 +122,7 @@ const NAV_GROUPS: { label: string | null; items: NavItem[] }[] = [
     items: [
       { to: "/analysis", label: "Analysis", icon: icon(ICONS.analysis) },
       { to: "/stems", label: "Stem Splitter", icon: icon(ICONS.tools) },
+      { to: "/sheet", label: "Sheet Music", icon: icon(ICONS.chords) },
       { to: "/song/current", label: "Chord Sheet", icon: icon(ICONS.chords) },
       { to: "/library", label: "Library", icon: icon(ICONS.library) },
       { to: "/assistant", label: "AI Assistant", icon: icon(ICONS.assistant) },
@@ -148,6 +149,7 @@ const SECTION_META: Record<string, { title: string; subtitle: string }> = {
   "/studio": { title: "", subtitle: "" },
   "/analysis": { title: "Analysis", subtitle: "Chord timeline, stems and export — everything from one analysis." },
   "/song/current": { title: "Chord Sheet", subtitle: "Synced chord timeline and lyrics." },
+  "/sheet": { title: "Sheet Music", subtitle: "Turn a song into sheet music you can play, transpose and export." },
   "/stems": { title: "Stem Splitter", subtitle: "Split a song into the layers detected in it — vocals, drums, bass and more." },
   "/library": { title: "Library", subtitle: "Saved analyses keep their chords, tab and stems together." },
   "/community": { title: "Community", subtitle: "Community features are coming soon." },

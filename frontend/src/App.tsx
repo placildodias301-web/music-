@@ -1,7 +1,7 @@
 import { createBrowserRouter, Navigate, Outlet, RouterProvider, useLocation } from "react-router-dom";
 import { AuthProvider, useAuth } from "./lib/auth";
 import { MvpProvider } from "./lib/MvpContext";
-import { useEffect } from "react";
+import { lazy, Suspense, useEffect } from "react";
 import { SettingsProvider } from "./lib/settings/SettingsProvider";
 import { useSettings } from "./lib/settings/settingsContext";
 import { pruneLibrary } from "./lib/library";
@@ -20,6 +20,8 @@ import { Song } from "./pages/Song";
 import { Community } from "./pages/Community";
 import { Tools } from "./pages/Tools";
 import { Stems } from "./pages/Stems";
+// Loaded only when opened: it pulls in alphaTab (notation + synth), which no other page needs.
+const Sheet = lazy(() => import("./pages/Sheet").then((m) => ({ default: m.Sheet })));
 import { SettingsHome } from "./pages/settings/SettingsHome";
 import { EditProfile } from "./pages/settings/EditProfile";
 import { AccountSettings } from "./pages/settings/AccountSettings";
@@ -155,6 +157,14 @@ const router = createBrowserRouter([
       { path: "/song/:songId", element: <Song /> },
       { path: "/community", element: <Community /> },
       { path: "/stems", element: <Stems /> },
+      {
+        path: "/sheet",
+        element: (
+          <Suspense fallback={<p className="p-8 text-sm text-[var(--color-ns-muted)]">Loading sheet music…</p>}>
+            <Sheet />
+          </Suspense>
+        ),
+      },
       { path: "/tools", element: <Tools /> },
       { path: "/account", element: <Navigate to="/settings" replace /> },
       { path: "/settings", element: <SettingsHome /> },

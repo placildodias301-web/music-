@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { NOTE_NAMES, type ParsedChord } from "../../lib/chordTheory";
 import { midiToFrequency } from "../../lib/theory/notes";
-import { audioEngine } from "../../lib/audio";
+import { playPlayedString } from "../../lib/chords/play";
 import { useSettings } from "../../lib/settings/settingsContext";
 
 export interface FretboardExplorerProps {
@@ -12,8 +12,8 @@ export interface FretboardExplorerProps {
   instrument?: string;
   /** How many frets to draw (24 on a guitar, fewer on a ukulele or mandolin). */
   numFrets?: number;
-  /** Heading name: "Fretboard", or "Fingerboard" for fretless instruments. */
-  boardName?: string;
+  /** No frets (violin family): no fret lines or numbers; notes are spaced by pitch along a plain fingerboard. */
+  fretless?: boolean;
   onNoteClick?: (info: {
     stringIndex: number;
     fret: number;
@@ -37,7 +37,7 @@ export function FretboardExplorer({
   activeShapeFrets,
   instrument = "guitar",
   numFrets = 24,
-  boardName = "Fretboard",
+  fretless = false,
   onNoteClick,
 }: FretboardExplorerProps) {
   const { settings } = useSettings();
@@ -68,15 +68,10 @@ export function FretboardExplorer({
     const freq = midiToFrequency(midi);
     const isRoot = pc === chord.root;
 
-    const inst = instrument === "bass" ? "bass" : instrument === "ukulele" ? "ukulele" : "guitar";
-    audioEngine.playNote({
-      midi,
-      stringIndex: sIdx,
-      totalStrings: numStrings,
-      fret,
-      isOpen: fret === 0,
-      instrument: inst,
-    });
+    void playPlayedString(
+      { stringIndex: sIdx, midi, fret, action: fret === 0 ? "open" : "fretted" },
+      { instrumentId: instrument, totalStrings: numStrings },
+    ).catch(() => {});
 
     if (onNoteClick) {
       onNoteClick({
@@ -93,7 +88,16 @@ export function FretboardExplorer({
   const fretWidth = 44;
   const stringHeight = 28;
   const nutWidth = 10;
-  const totalWidth = nutWidth + numFrets * fretWidth + 40;
+  // Fretless: a plain fingerboard whose notes are spaced like the real string — each semitone closer than the last, toward the bridge.
+  const boardLength = fretless ? numFrets * fretWidth * 0.85 : numFrets * fretWidth;
+  const positionX = (n: number) => {
+    if (n === 0) return nutWidth / 2;
+    if (!fretless) return nutWidth + (n - 0.5) * fretWidth;
+    const share = (1 - Math.pow(2, -n / 12)) / (1 - Math.pow(2, -numFrets / 12));
+    const prev = (1 - Math.pow(2, -(n - 1) / 12)) / (1 - Math.pow(2, -numFrets / 12));
+    return nutWidth + ((share + prev) / 2) * boardLength;
+  };
+  const totalWidth = nutWidth + boardLength + 40;
   const totalHeight = (numStrings + 1) * stringHeight + 20;
 
   // Render fretboard SVG
@@ -102,10 +106,12 @@ export function FretboardExplorer({
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[var(--color-ns-border)] pb-4">
         <div>
           <h4 className="font-heading text-sm font-bold text-[var(--color-ns-text)]">
-            Full {numFrets}-{boardName === "Fretboard" ? "Fret Fretboard" : "Position Fingerboard"} Explorer
+            {fretless ? "Full Fingerboard Explorer (no frets)" : `Full ${numFrets}-Fret Fretboard Explorer`}
           </h4>
           <p className="text-[0.6875rem] text-[var(--color-ns-muted)]">
-            Click any fret position to play the note and view its harmonic interval.
+            {fretless
+              ? `Every note up to ${numFrets} semitones above each open string. There are no frets: place the finger where the note sits, by ear. Click any note to hear it.`
+              : "Click any fret position to play the note and view its harmonic interval."}
           </p>
         </div>
 
@@ -180,7 +186,7 @@ export function FretboardExplorer({
           className="select-none min-w-[900px]"
         >
           {/* Fret marker dots on wood */}
-          {FRET_MARKERS_SINGLE.filter((f) => f <= numFrets).map((fret) => {
+          {!fretless && FRET_MARKERS_SINGLE.filter((f) => f <= numFrets).map((fret) => {
             const cx = nutWidth + (fret - 0.5) * fretWidth;
             const cy = (totalHeight - 20) / 2;
             return (
@@ -195,7 +201,7 @@ export function FretboardExplorer({
             );
           })}
 
-          {FRET_MARKERS_DOUBLE.filter((f) => f <= numFrets).map((fret) => {
+          {!fretless && FRET_MARKERS_DOUBLE.filter((f) => f <= numFrets).map((fret) => {
             const cx = nutWidth + (fret - 0.5) * fretWidth;
             return (
               <g key={`double-${fret}`}>
@@ -218,7 +224,14 @@ export function FretboardExplorer({
           })}
 
           {/* Frets (vertical lines) */}
-          {Array.from({ length: numFrets + 1 }).map((_, f) => {
+          {fretless && (
+            <>
+              <line x1={nutWidth} x2={nutWidth} y1={10} y2={numStrings * stringHeight} stroke="var(--color-ns-text)" strokeWidth={4} />
+              <text x={nutWidth} y={numStrings * stringHeight + 16} fontSize="10" fontWeight="600" textAnchor="start" fill="var(--color-ns-muted)">Nut</text>
+              <text x={nutWidth + boardLength} y={numStrings * stringHeight + 16} fontSize="10" fontWeight="600" textAnchor="end" fill="var(--color-ns-muted)">toward the bridge →</text>
+            </>
+          )}
+          {!fretless && Array.from({ length: numFrets + 1 }).map((_, f) => {
             const x = nutWidth + f * fretWidth;
             const isNut = f === 0;
             return (
@@ -258,7 +271,7 @@ export function FretboardExplorer({
               <line
                 key={`str-line-${s}`}
                 x1={nutWidth}
-                x2={nutWidth + numFrets * fretWidth}
+                x2={nutWidth + boardLength}
                 y1={y}
                 y2={y}
                 stroke="var(--color-ns-border-strong)"
@@ -294,7 +307,7 @@ export function FretboardExplorer({
 
               if (!showDot) return null;
 
-              const cx = fret === 0 ? nutWidth / 2 : nutWidth + (fret - 0.5) * fretWidth;
+              const cx = positionX(fret);
               const rawName = NOTE_NAMES[pc];
               const noteLabel = useFlats
                 ? rawName.replace("#", "b")

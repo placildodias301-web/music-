@@ -109,5 +109,13 @@ backend/venv/
 __pycache__/
 local.properties
 
+# Copied in by the alphaTab Vite plugin on every dev/build run (notation font, piano soundfont)
+frontend/public/font/
+frontend/public/soundfont/
+
 # Analysis pipeline: jobs, temp audio, SQLite results cache
 backend/pipeline_data/
+
+# ── Evaluation harness: reference clips (audio/video) and generated reports ──
+backend/evaluation/clips/
+backend/evaluation/reports/

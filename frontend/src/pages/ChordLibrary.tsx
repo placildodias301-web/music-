@@ -20,6 +20,7 @@ import { InstrumentPicker } from "../components/instruments/InstrumentPicker";
 import { chordTunings, loadChordSettings, saveChordSettings, tuningChoices, type ChordSettings } from "../lib/chords/model";
 import { inversionName } from "../lib/chords/theory";
 import { chordInstruments, findDefinition } from "../lib/instruments/definitions";
+import { syncChordsToTuner } from "../lib/instruments/activeInstrument";
 import { ChordFamilyPanel } from "../components/chords/ChordFamilyPanel";
 import { ChordExplorerView } from "../components/chords/ChordExplorerView";
 
@@ -72,6 +73,7 @@ export function ChordLibrary() {
   const update = (next: ChordSettings) => {
     setChordSettings(next);
     saveChordSettings(next);
+    syncChordsToTuner(next); // the Tuner follows the instrument and tuning chosen here
   };
   // Settings handed to every chord card: the tuning is resolved here so cards always agree with the selector.
   const cardSettings = useMemo<ChordSettings>(() => ({ ...chordSettings, definitionId: definition.id, tuningId: tuningValue || undefined }), [chordSettings, definition.id, tuningValue]);
@@ -262,6 +264,7 @@ export function ChordLibrary() {
           <p className="mb-4 text-[0.6875rem] leading-relaxed text-[var(--color-ns-muted)]">
             {tuningNote && <>{tuningNote} </>}
             {definition.caveat && <>{definition.caveat} </>}
+            {definition.chordCaveat && <>{definition.chordCaveat} </>}
             Playback is a plain reference tone, a simple string simulation or a synthetic wind voice for the chord’s notes — not a recording of a real {definition.name.toLowerCase()}.
           </p>
 

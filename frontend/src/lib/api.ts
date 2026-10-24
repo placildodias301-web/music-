@@ -22,6 +22,32 @@ export interface ChordSegment {
   passing?: boolean;
   /** True when this chord was held over a stretch with no new chord (never shown as "N.C."). */
   extended?: boolean;
+  /** The chord model's own Harte label ("A:min7", "N"), kept beside the visible symbol. Pipeline analyses only. */
+  harte?: string;
+}
+
+/** A labelled song section ("intro", "verse", "chorus", ...). Pipeline analyses with allin1 only. */
+export interface AnalysisSection {
+  start: number;
+  end: number;
+  label: string;
+}
+
+/** A timed musical event: a passing-chord change or a possible drum fill. */
+export interface AnalysisEvent {
+  time: number;
+  /** "chord_change" | "possible_fill" (more may be added). */
+  type: string;
+  value: string | null;
+  subtype?: string | null;
+  confidence: number | null;
+}
+
+/** A likely drum fill. A heuristic: shown as "possible", never as a certainty. */
+export interface PossibleFill {
+  time: number;
+  /** 0–1 */
+  confidence: number;
 }
 
 export interface DifficultyResult {
@@ -87,8 +113,9 @@ export interface AnalysisResult {
    * pulse and the tempo comes from the rhythm and the chord cycle.
    * ("low_confidence" and bpmAlternatives only appear on older saved analyses;
    * "confirmed" when the user set it on an older version.)
+   * "unavailable": the pipeline found no clear pulse; `bpm` is then 0 and must not be shown as a tempo.
    */
-  bpmStatus?: "detected" | "estimated" | "low_confidence" | "confirmed";
+  bpmStatus?: "detected" | "estimated" | "low_confidence" | "confirmed" | "unavailable";
   bpmAlternatives?: number[];
   /** Beat positions in seconds. */
   beats?: number[];
@@ -105,9 +132,20 @@ export interface AnalysisResult {
   /** Added in analysis v3. */
   capo?: CapoEstimate;
   passingChords?: PassingChord[];
+  // ── Pipeline analyses (POST /api/pipeline/jobs). All optional: v2 results lack them. ──
+  /** Which backend engine produced this analysis; absent means v2. */
+  engine?: "v2" | "pipeline";
+  pipelineVersion?: number;
+  /** Which model produced each part, e.g. { chords: "btc@cpu" }. */
+  engines?: Record<string, string>;
+  sections?: AnalysisSection[];
+  events?: AnalysisEvent[];
+  possibleFills?: PossibleFill[];
+  /** Notes from the analysis (fallback engines, missing sections, no clear pulse, ...). */
+  warnings?: string[];
 }
 
-/** Backend processing stages, in the order they run. */
+/** Backend processing stages: v2's stream stages, then the pipeline job's stages. */
 export type AnalysisStage =
   | "uploaded"
   | "decoding"
@@ -116,12 +154,21 @@ export type AnalysisStage =
   | "chroma"
   | "chords"
   | "key"
-  | "meter";
+  | "meter"
+  | "queued"
+  | "extracting"
+  | "preprocessing"
+  | "rhythm"
+  | "events"
+  | "merging"
+  | "completed";
 
 export interface AnalysisProgress {
   stage: AnalysisStage;
   /** 0–100, as reported by the server. */
   progress: number;
+  /** Pipeline only: the server already had a finished analysis of this exact file. */
+  cached?: boolean;
 }
 
 export interface AssistantResult {
@@ -225,6 +272,15 @@ function classifyFailure(status: number, detail: string): AnalysisError {
   return new AnalysisError("server", detail || "Something went wrong on the server while analysing.", status);
 }
 
+/** The same checks the server makes, before anything is sent. */
+function preflightFailure(file: File): AnalysisError | null {
+  const message = validateUploadFile(file);
+  if (!message) return null;
+  const kind: AnalysisErrorKind =
+    file && file.size > MAX_UPLOAD_BYTES ? "too-large" : message.startsWith("Unsupported file type") ? "unsupported" : "unreadable";
+  return new AnalysisError(kind, message, kind === "too-large" ? 413 : 400);
+}
+
 export const DEFAULT_HEARTBEAT_TIMEOUT_MS = 30_000;
 
 export interface AnalyzeOptions {
@@ -255,15 +311,9 @@ export function analyzeFile(file: File, options: AnalyzeOptions | ((progress: An
       return;
     }
 
-    const preflightError = validateUploadFile(file);
-    if (preflightError) {
-      const kind: AnalysisErrorKind =
-        file && file.size > MAX_UPLOAD_BYTES
-          ? "too-large"
-          : preflightError.startsWith("Unsupported file type")
-            ? "unsupported"
-            : "unreadable";
-      reject(new AnalysisError(kind, preflightError, kind === "too-large" ? 413 : 400));
+    const preflight = preflightFailure(file);
+    if (preflight) {
+      reject(preflight);
       return;
     }
 
@@ -377,6 +427,295 @@ export function analyzeFile(file: File, options: AnalyzeOptions | ((progress: An
     form.append("file", file);
     xhr.send(form);
   });
+}
+
+// ── Pipeline analysis (job API) ───────────────────────────────────────
+//
+// POST /api/pipeline/jobs queues the file and answers at once (202); the
+// client then polls GET /api/pipeline/jobs/{id} for stage and progress until
+// the job completes or fails. No request stays open for the whole analysis,
+// so there is no 3-minute limit: the server enforces its own job timeout.
+
+export type PipelineJobStatus = "queued" | "running" | "completed" | "failed";
+
+export interface PipelineChordSpan {
+  start: number;
+  end: number;
+  /** Harte notation ("A:min7", "N"). */
+  chord: string;
+  /** The app's symbol ("Am7", "N"); null when the app has no symbol for the quality. */
+  simple: string | null;
+  type: "chord" | "no_chord" | "passing" | "transition" | "embellishment";
+  confidence: number | null;
+}
+
+/** The pipeline's result JSON (backend services/pipeline/schemas.py, snake_case). */
+export interface PipelineResultJson {
+  status: "completed";
+  pipeline_version: number;
+  audio_duration: number;
+  sample_rate: number;
+  bpm: number | null;
+  time_signature: string | null;
+  beats: number[];
+  downbeats: number[];
+  sections: AnalysisSection[];
+  chords: PipelineChordSpan[];
+  events: AnalysisEvent[];
+  engines: Record<string, string>;
+  warnings: string[];
+  key?: string | null;
+  mode?: string | null;
+  scale?: string | null;
+  key_confidence?: number | null;
+  key_alternatives?: { key: string; score: number }[];
+  difficulty?: DifficultyResult | null;
+}
+
+export interface PipelineJobView {
+  job_id: string;
+  status: PipelineJobStatus;
+  stage: string;
+  progress: number;
+  file_name: string;
+  cached: boolean;
+  elapsed_seconds: number;
+  /** Safe to show: the server never puts paths or tracebacks in it. */
+  error: { code: string; message: string } | null;
+  result: PipelineResultJson | null;
+}
+
+interface PipelineJobCreated {
+  job_id: string;
+  status: PipelineJobStatus;
+  cached: boolean;
+  poll_url: string;
+}
+
+export const PIPELINE_POLL_INTERVAL_MS = 1000;
+/** Consecutive failed polls (server restarting, Wi-Fi blip) tolerated before giving up. */
+export const PIPELINE_MAX_POLL_FAILURES = 5;
+
+/** The symbol shown for a no-chord span (passed through unchanged by transposeChord). */
+export const NO_CHORD_SYMBOL = "N.C.";
+
+/**
+ * Which engine the backend wants the app to use (ANALYSIS_ENGINE on the
+ * server). Anything but a clear "pipeline" — including an older backend
+ * without /api/pipeline/info — keeps the v2 flow.
+ */
+export async function getAnalysisEngine(signal?: AbortSignal): Promise<"v2" | "pipeline"> {
+  try {
+    const res = await fetch(`${API_URL}/api/pipeline/info`, { signal });
+    if (!res.ok) return "v2";
+    const body = (await res.json()) as { analysis_engine?: unknown };
+    return body?.analysis_engine === "pipeline" ? "pipeline" : "v2";
+  } catch {
+    return "v2";
+  }
+}
+
+// Backend services/pipeline/errors.py codes that mean "this file", not "the server".
+const PIPELINE_INPUT_ERRORS = new Set(["no_audio_track", "decode_failed", "audio_too_short", "audio_too_long", "no_music"]);
+
+/** A failed job's error, sorted into what the user can do about it. The message is the server's own. */
+export function pipelineFailure(error: PipelineJobView["error"]): AnalysisError {
+  const message = error?.message || "Something went wrong on the server while analysing.";
+  if (error && PIPELINE_INPUT_ERRORS.has(error.code)) return new AnalysisError("unreadable", message, 400);
+  return new AnalysisError("server", message, 500);
+}
+
+function waitOrCancel(ms: number, signal?: AbortSignal): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if (signal?.aborted) {
+      reject(new AnalysisError("cancelled", "Analysis cancelled."));
+      return;
+    }
+    const onAbort = () => {
+      clearTimeout(timer);
+      reject(new AnalysisError("cancelled", "Analysis cancelled."));
+    };
+    const timer = setTimeout(() => {
+      signal?.removeEventListener("abort", onAbort);
+      resolve();
+    }, ms);
+    signal?.addEventListener("abort", onAbort, { once: true });
+  });
+}
+
+/** POST /api/pipeline/jobs with real upload progress (XHR, like analyzeFile). */
+function createPipelineJob(file: File, opts: AnalyzeOptions): Promise<PipelineJobCreated> {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    let settled = false;
+    const finish = (fn: () => void) => {
+      if (settled) return;
+      settled = true;
+      opts.signal?.removeEventListener("abort", onAbort);
+      fn();
+    };
+    const onAbort = () => xhr.abort();
+    opts.signal?.addEventListener("abort", onAbort);
+
+    xhr.open("POST", `${API_URL}/api/pipeline/jobs`);
+    if (opts.sourceType && typeof xhr.setRequestHeader === "function") {
+      xhr.setRequestHeader("X-Source-Type", opts.sourceType);
+    }
+    if (xhr.upload) {
+      xhr.upload.onprogress = (e) => {
+        if (e.lengthComputable) opts.onUpload?.(e.loaded, e.total);
+      };
+    }
+    xhr.onload = () => {
+      let body: (Partial<PipelineJobCreated> & { detail?: unknown }) | null = null;
+      try {
+        body = JSON.parse(xhr.responseText);
+      } catch {
+        body = null;
+      }
+      if ((xhr.status === 202 || xhr.status === 200) && body && typeof body.job_id === "string") {
+        finish(() => resolve(body as PipelineJobCreated));
+        return;
+      }
+      const detail = body && typeof body.detail === "string" ? body.detail : "";
+      finish(() => reject(classifyFailure(xhr.status === 200 || xhr.status === 202 ? 500 : xhr.status, detail)));
+    };
+    xhr.onerror = () => finish(() => reject(classifyFailure(0, "")));
+    xhr.ontimeout = () => finish(() => reject(new AnalysisError("network", "The upload timed out. Check your connection and try again.", 408)));
+    xhr.onabort = () => finish(() => reject(new AnalysisError("cancelled", "Analysis cancelled.")));
+
+    const form = new FormData();
+    form.append("file", file);
+    xhr.send(form);
+  });
+}
+
+export interface PipelineAnalyzeOptions extends AnalyzeOptions {
+  pollIntervalMs?: number;
+}
+
+/**
+ * Analyses a file with the job pipeline: upload, then poll until the job
+ * completes (resolves with an AnalysisResult the existing pages read) or
+ * fails (rejects with an AnalysisError carrying the server's safe message).
+ * A file the server has analysed before comes back as a cached, already
+ * completed job on the first poll. Cancel (the signal) stops the upload or
+ * the polling; a job already running on the server finishes there.
+ */
+export async function analyzeWithPipeline(file: File, opts: PipelineAnalyzeOptions = {}): Promise<AnalysisResult> {
+  if (opts.signal?.aborted) throw new AnalysisError("cancelled", "Analysis cancelled.");
+  const preflight = preflightFailure(file);
+  if (preflight) throw preflight;
+
+  const created = await createPipelineJob(file, opts);
+  const interval = opts.pollIntervalMs ?? PIPELINE_POLL_INTERVAL_MS;
+  opts.onProgress?.({ stage: created.cached ? "completed" : "queued", progress: created.cached ? 100 : 0, cached: created.cached });
+
+  let failures = 0;
+  for (;;) {
+    let view: PipelineJobView;
+    try {
+      const res = await fetch(`${API_URL}/api/pipeline/jobs/${encodeURIComponent(created.job_id)}`, { signal: opts.signal });
+      if (res.status === 404) {
+        throw new AnalysisError("server", "The server no longer has this analysis (it may have restarted). Please upload the file again.", 404);
+      }
+      if (!res.ok) throw classifyFailure(res.status, "");
+      view = (await res.json()) as PipelineJobView;
+      failures = 0;
+    } catch (err) {
+      if (opts.signal?.aborted) throw new AnalysisError("cancelled", "Analysis cancelled.");
+      if (err instanceof AnalysisError && err.status === 404) throw err;
+      failures += 1;
+      if (failures >= PIPELINE_MAX_POLL_FAILURES) throw err instanceof AnalysisError ? err : classifyFailure(0, "");
+      await waitOrCancel(interval, opts.signal);
+      continue;
+    }
+
+    if (view.status === "completed" && view.result) return mapPipelineResult(view, file);
+    if (view.status === "failed") throw pipelineFailure(view.error);
+    opts.onProgress?.({ stage: view.stage as AnalysisStage, progress: view.progress, cached: view.cached });
+    await waitOrCancel(interval, opts.signal);
+  }
+}
+
+function formatDuration(seconds: number): string {
+  const s = Math.max(0, Math.round(seconds));
+  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+}
+
+const FALLBACK_DIFFICULTY: DifficultyResult = {
+  difficultyLabel: "Beginner",
+  difficultyScore: 0,
+  factors: { chordComplexity: 0, chordChangeRate: 0, tempo: 0, modulation: 0 },
+};
+
+/**
+ * Pipeline JSON -> the AnalysisResult every page already reads. The visible
+ * chord is the app's simple symbol ("Am7"); the model's Harte label is kept in
+ * `harte`. A null BPM becomes bpm 0 with bpmStatus "unavailable" and a null
+ * meter an empty timeSignature with status "unavailable", so neither is shown
+ * as a real value. A result with no key or no chords is the v2 engine's
+ * "no pitched musical content" case and is reported as unreadable.
+ */
+export function mapPipelineResult(view: PipelineJobView, file: Pick<File, "name" | "size">): AnalysisResult {
+  const r = view.result;
+  if (!r) throw new AnalysisError("server", "The server finished without a result. Please try again.", 500);
+
+  const chordTimeline: ChordSegment[] = (r.chords ?? []).map((c) => ({
+    chord: c.type === "no_chord" ? NO_CHORD_SYMBOL : (c.simple ?? c.chord),
+    start: c.start,
+    end: c.end,
+    ...(c.confidence != null ? { confidence: c.confidence } : {}),
+    ...(c.type === "passing" ? { passing: true } : {}),
+    harte: c.chord,
+  }));
+  const chordProgression = (r.chords ?? []).filter((c) => c.type !== "no_chord").map((c) => c.simple ?? c.chord);
+  if (!r.key || chordProgression.length === 0) {
+    throw new AnalysisError(
+      "unreadable",
+      "No chords could be recognised in this audio — it may be percussion-only, speech, or too quiet for chord detection.",
+      422,
+    );
+  }
+
+  const meter = r.time_signature;
+  const perBar = meter ? Number.parseInt(meter.split("/")[0], 10) : NaN;
+  const bpm = r.bpm && r.bpm > 0 ? r.bpm : 0;
+  const events = r.events ?? [];
+
+  return {
+    isDemo: false,
+    demoNotice: null,
+    fileName: view.file_name || file.name,
+    fileSizeBytes: file.size,
+    processingSeconds: view.elapsed_seconds,
+    key: r.key,
+    mode: r.mode ?? (/minor$/i.test(r.key) ? "minor" : "major"),
+    scale: r.scale ?? r.key,
+    bpm,
+    bpmStatus: bpm > 0 ? "detected" : "unavailable",
+    timeSignature: meter ?? "",
+    timeSignatureStatus: meter ? "estimated" : "unavailable",
+    ...(Number.isFinite(perBar) && perBar > 0 ? { beatsPerBar: perBar } : {}),
+    beats: r.beats ?? [],
+    downbeats: r.downbeats ?? [],
+    durationSeconds: r.audio_duration,
+    duration: formatDuration(r.audio_duration),
+    chordProgression,
+    chordTimeline,
+    difficulty: r.difficulty ?? FALLBACK_DIFFICULTY,
+    ...(r.key_confidence != null ? { keyConfidence: r.key_confidence } : {}),
+    keyAlternatives: r.key_alternatives ?? [],
+    // Every v2-era field (key confidence, beats, meter status) is present.
+    analysisVersion: 2,
+    engine: "pipeline",
+    pipelineVersion: r.pipeline_version,
+    engines: r.engines ?? {},
+    sections: r.sections ?? [],
+    events,
+    possibleFills: events.filter((e) => e.type === "possible_fill").map((e) => ({ time: e.time, confidence: e.confidence ?? 0 })),
+    warnings: r.warnings ?? [],
+  };
 }
 
 export const ALLOWED_YOUTUBE_DOMAINS = [

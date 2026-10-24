@@ -31,7 +31,9 @@ def build_result(
     events: Iterable[dict] = (),
     engines: Optional[dict[str, str]] = None,
     warnings: Iterable[str] = (),
+    summary: Optional[dict] = None,
 ) -> PipelineResult:
+    """`summary`: key, mode, scale, key_confidence, key_alternatives, difficulty, preprocessing (all optional)."""
     d = round(float(audio_duration), 3)
 
     clean_sections = []
@@ -70,4 +72,5 @@ def build_result(
         events=clean_events,
         engines=dict(engines or {}),
         warnings=list(warnings),
+        **(summary or {}),
     )

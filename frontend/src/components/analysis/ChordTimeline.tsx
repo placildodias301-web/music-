@@ -1,7 +1,7 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNotation } from "../../lib/useNotation";
 import { useSettings } from "../../lib/settings/settingsContext";
-import type { AnalysisResult, ChordSegment } from "../../lib/api";
+import type { AnalysisResult, AnalysisSection, ChordSegment, PossibleFill } from "../../lib/api";
 import {
   chordColors,
   findMainLoop,
@@ -22,6 +22,21 @@ function defaultPixelsPerSecond(timeline: ChordSegment[]): number {
   const durations = timeline.map((s) => s.end - s.start).sort((a, b) => a - b);
   const median = durations[Math.floor(durations.length / 2)] || 2;
   return Math.min(110, Math.max(24, 76 / median));
+}
+
+/** Band colours per section label (allin1's vocabulary); anything else uses the neutral one. */
+const NEUTRAL_SECTION = "border-[var(--color-ns-border-bright)]/60 bg-[var(--color-ns-border-bright)]/10 text-[var(--color-ns-muted)]";
+const SECTION_STYLE: Record<string, string> = {
+  verse: "border-[var(--color-ns-blue)]/40 bg-[var(--color-ns-blue)]/10 text-[var(--color-ns-blue)]",
+  chorus: "border-[var(--color-ns-purple-light)]/45 bg-[var(--color-ns-purple)]/15 text-[var(--color-ns-purple-light)]",
+  bridge: "border-[var(--color-ns-amber)]/40 bg-[var(--color-ns-amber)]/10 text-[var(--color-ns-amber)]",
+  solo: "border-[var(--color-ns-cyan)]/40 bg-[var(--color-ns-cyan)]/10 text-[var(--color-ns-cyan)]",
+  inst: "border-[var(--color-ns-cyan)]/40 bg-[var(--color-ns-cyan)]/10 text-[var(--color-ns-cyan)]",
+  break: "border-[var(--color-ns-mint)]/40 bg-[var(--color-ns-mint)]/10 text-[var(--color-ns-mint)]",
+};
+
+function sectionName(label: string): string {
+  return label === "inst" ? "Instrumental" : label.charAt(0).toUpperCase() + label.slice(1);
 }
 
 /** Ruler spacing that keeps labels at least ~64px apart. */
@@ -53,6 +68,7 @@ const ChordBlock = memo(function ChordBlock({ seg, index, pps, active, selected,
   const confidencePct = seg.confidence !== undefined ? Math.round(seg.confidence * 100) : null;
   const title =
     `${label} · ${formatTime(seg.start)}–${formatTime(seg.end)}` +
+    (seg.passing ? " · passing chord" : "") +
     (uncertain && seg.alternative ? ` · uncertain${confidencePct !== null ? ` (${confidencePct}%)` : ""}, could be ${formatLabel(seg.alternative)}` : "");
 
   return (
@@ -64,7 +80,7 @@ const ChordBlock = memo(function ChordBlock({ seg, index, pps, active, selected,
       aria-current={active ? "true" : undefined}
       className={`absolute top-0 flex h-full flex-col justify-center overflow-hidden rounded-lg border px-1.5 text-left transition-[box-shadow,transform,background-color] duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ns-purple-light)] ${
         active ? "z-10" : "hover:shadow-[0_0_14px_rgba(255,176,32,0.45)]"
-      } ${uncertain ? "border-dashed" : ""}`}
+      } ${seg.passing ? "border-dotted opacity-80" : uncertain ? "border-dashed" : ""}`}
       style={{
         left: seg.start * pps,
         width,
@@ -103,6 +119,8 @@ interface ChordTimelineProps {
   /** True when audio is available, so picking a chord seeks + plays. */
   interactive: boolean;
   onPickSegment: (seg: ChordSegment) => void;
+  /** Seeks the player to a song time (section bands and fill markers); same path as picking a chord. */
+  onSeekTime?: (time: number) => void;
 }
 
 /**
@@ -121,6 +139,7 @@ export function ChordTimeline({
   isPlaying,
   interactive,
   onPickSegment,
+  onSeekTime,
 }: ChordTimelineProps) {
   const timeline = analysis.chordTimeline;
   const threshold = analysis.lowConfidenceThreshold ?? DEFAULT_LOW_CONFIDENCE;
@@ -147,6 +166,61 @@ export function ChordTimeline({
       onPickSegment(timeline[index]);
     },
     [onPickSegment, timeline]
+  );
+
+  const seekTo = useCallback(
+    (time: number) => {
+      setFollow(true);
+      onSeekTime?.(time);
+    },
+    [onSeekTime]
+  );
+
+  const sections = useMemo<AnalysisSection[]>(() => analysis.sections ?? [], [analysis.sections]);
+  const fills = useMemo<PossibleFill[]>(() => analysis.possibleFills ?? [], [analysis.possibleFills]);
+  const passingCount = timeline.filter((s) => s.passing).length;
+
+  const sectionBands = useMemo(
+    () =>
+      sections.map((sec, i) => {
+        const width = Math.max(4, (sec.end - sec.start) * pps - BLOCK_GAP);
+        const title = `${sectionName(sec.label)} · ${formatTime(sec.start)}–${formatTime(sec.end)}`;
+        return (
+          <button
+            key={`${sec.start}-${i}`}
+            type="button"
+            onClick={() => seekTo(sec.start)}
+            title={title}
+            aria-label={`${title}${interactive ? ". Play from here" : ""}`}
+            className={`absolute top-0 flex h-full items-center overflow-hidden rounded-md border px-1.5 text-left text-[0.625rem] font-semibold transition-colors hover:brightness-125 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ns-purple-light)] ${SECTION_STYLE[sec.label] ?? NEUTRAL_SECTION}`}
+            style={{ left: sec.start * pps, width }}
+          >
+            {width >= 28 && <span className="truncate">{sectionName(sec.label)}</span>}
+          </button>
+        );
+      }),
+    [sections, pps, seekTo, interactive]
+  );
+
+  const fillMarkers = useMemo(
+    () =>
+      fills.map((fill, i) => {
+        const title = `Possible drum fill · ${formatTime(fill.time)} · ${Math.round(fill.confidence * 100)}% likely`;
+        return (
+          <button
+            key={`${fill.time}-${i}`}
+            type="button"
+            onClick={() => seekTo(fill.time)}
+            title={title}
+            aria-label={`${title}${interactive ? ". Play from here" : ""}`}
+            className="absolute top-0 flex h-full w-3 -translate-x-1/2 items-center justify-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ns-purple-light)]"
+            style={{ left: fill.time * pps }}
+          >
+            <span className="h-2 w-2 rotate-45 rounded-[1px] bg-[var(--color-ns-amber)]" style={{ opacity: 0.45 + 0.55 * fill.confidence }} />
+          </button>
+        );
+      }),
+    [fills, pps, seekTo, interactive]
   );
 
   // Static layers are memoized as elements so per-frame renders only touch the playhead.
@@ -342,6 +416,7 @@ export function ChordTimeline({
         >
           <div className="relative" style={{ width: totalWidth }}>
             <div className="relative h-5">{ruler}</div>
+            {sections.length > 0 && <div className="relative mt-1 h-5">{sectionBands}</div>}
             <div className="relative mt-1 h-16">
               {timeline.map((seg, i) => (
                 <ChordBlock
@@ -360,6 +435,7 @@ export function ChordTimeline({
               ))}
             </div>
             {showBeats && <div className="relative mt-1.5 h-3">{beatTicks}</div>}
+            {fills.length > 0 && <div className="relative mt-1 h-3">{fillMarkers}</div>}
             {loop && <div className="relative mt-1 h-2">{loopBrackets}</div>}
 
             {interactive && (
@@ -377,20 +453,52 @@ export function ChordTimeline({
 
       {notation.legend && <p className="mt-2 text-[0.6875rem] text-[var(--color-ns-muted)]">{notation.legend}</p>}
 
-      {showBeats && timeline.length > 0 && (
+      {(showBeats || sections.length > 0 || fills.length > 0 || passingCount > 0) && timeline.length > 0 && (
         <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-[0.6562rem] text-[var(--color-ns-dim)]">
-          <span className="inline-flex items-center gap-1.5">
-            <span className="h-2.5 w-px bg-[var(--color-ns-purple-light)]" /> Bar start (estimated)
-          </span>
-          <span className="inline-flex items-center gap-1.5">
-            <span className="h-1.5 w-px bg-[var(--color-ns-border-bright)]" /> Beat
-          </span>
+          {showBeats && (
+            <>
+              <span className="inline-flex items-center gap-1.5">
+                <span className="h-2.5 w-px bg-[var(--color-ns-purple-light)]" /> Bar start (estimated)
+              </span>
+              <span className="inline-flex items-center gap-1.5">
+                <span className="h-1.5 w-px bg-[var(--color-ns-border-bright)]" /> Beat
+              </span>
+            </>
+          )}
+          {passingCount > 0 && (
+            <span className="inline-flex items-center gap-1.5">
+              <span className="h-2 w-3 rounded-sm border border-dotted border-[var(--color-ns-border-bright)]" /> Passing chord
+            </span>
+          )}
+          {sections.length > 0 && (
+            <span className="inline-flex items-center gap-1.5">
+              <span className="h-2 w-3 rounded-sm border border-[var(--color-ns-purple-light)]/45 bg-[var(--color-ns-purple)]/15" /> Song section
+            </span>
+          )}
+          {fills.length > 0 && (
+            <span className="inline-flex items-center gap-1.5">
+              <span className="h-1.5 w-1.5 rotate-45 bg-[var(--color-ns-amber)]" /> Possible drum fill
+            </span>
+          )}
           {loop && (
             <span className="inline-flex items-center gap-1.5">
               <span className="h-1.5 w-3 rounded-b-sm border-x border-b border-[var(--color-ns-cyan)]/60" /> Main progression
             </span>
           )}
         </div>
+      )}
+
+      {analysis.warnings && analysis.warnings.length > 0 && (
+        <details className="mt-2 text-[0.6875rem] text-[var(--color-ns-dim)]">
+          <summary className="cursor-pointer select-none font-semibold text-[var(--color-ns-muted)]">
+            Analysis notes ({analysis.warnings.length})
+          </summary>
+          <ul className="mt-1 list-disc space-y-0.5 pl-4">
+            {analysis.warnings.map((w, i) => (
+              <li key={i}>{w}</li>
+            ))}
+          </ul>
+        </details>
       )}
     </div>
   );

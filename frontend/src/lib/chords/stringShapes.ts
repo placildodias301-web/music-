@@ -87,19 +87,35 @@ export function guitarShapesFor(chord: ParsedChord, tuning: number[]): GuitarVoi
  * adds the chord's bass note when it can reach it below everything else, otherwise it stays muted.
  */
 export function guitar7Shapes(chord: ParsedChord, tuning7: number[]): StringShape[] {
-  const upper = tuning7.slice(1);
+  return extendedGuitarShapes(chord, tuning7);
+}
+
+/** 8-string guitar: the same idea with two extra low strings. */
+export function guitar8Shapes(chord: ParsedChord, tuning8: number[]): StringShape[] {
+  return extendedGuitarShapes(chord, tuning8);
+}
+
+/**
+ * Extended-range guitars: the six upper strings use the 6-string shapes (the same notes sound there); the extra low strings add the
+ * chord's bass note when one of them can reach it below everything else (lowest string preferred), otherwise they stay muted.
+ */
+function extendedGuitarShapes(chord: ParsedChord, tuning: number[]): StringShape[] {
+  const extra = tuning.length - 6;
+  const upper = tuning.slice(extra);
   return guitarShapesFor(chord, upper).map((v) => {
     const sounded = v.frets.flatMap((f, i) => (f === null ? [] : [upper[i] + f]));
     const lowest = sounded.length ? Math.min(...sounded) : 999;
     const bassPc = lowest % 12;
-    let low: number | null = null;
-    for (let f = 0; f <= 5; f++) {
-      if ((tuning7[0] + f) % 12 === bassPc && tuning7[0] + f < lowest) {
-        low = f;
-        break;
+    const lows: (number | null)[] = Array.from({ length: extra }, () => null);
+    outer: for (let s = 0; s < extra; s++) {
+      for (let f = 0; f <= 5; f++) {
+        if ((tuning[s] + f) % 12 === bassPc && tuning[s] + f < lowest) {
+          lows[s] = f;
+          break outer;
+        }
       }
     }
-    return { name: v.name, frets: [low, ...v.frets] };
+    return { name: v.name, frets: [...lows, ...v.frets] };
   });
 }
 
