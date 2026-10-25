@@ -7,6 +7,7 @@ import { scaleName } from "../lib/chordSync";
 import { useNotation } from "../lib/useNotation";
 import { useSettings } from "../lib/settings/settingsContext";
 import { LiveChordSync } from "../components/analysis/LiveChordSync";
+import { AnalysisNavSwitcher } from "../components/analysis/AnalysisNavSwitcher";
 import { InstrumentVoicings } from "../components/analysis/InstrumentVoicings";
 import { TransposePanel } from "../components/analysis/TransposePanel";
 import {
@@ -136,7 +137,9 @@ export function Analysis() {
 
   if (!analysis || !shown) {
     return (
-      <div className="mx-auto flex min-h-[calc(100vh-140px)] max-w-xl flex-col items-center justify-center px-4 py-16 text-center">
+      <div className="mx-auto max-w-6xl px-4 py-6 sm:px-6 md:px-8 space-y-6">
+        <AnalysisNavSwitcher />
+        <div className="mx-auto flex min-h-[calc(100vh-220px)] max-w-xl flex-col items-center justify-center py-12 text-center">
         <div className="flex h-16 w-16 items-center justify-center rounded-2xl border border-[var(--color-ns-border)] bg-[var(--color-ns-card)] text-[var(--color-ns-blue)] shadow-xl">
           <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <path d="M9 18V5l12-2v13" />
@@ -167,6 +170,7 @@ export function Analysis() {
           </button>
         </div>
       </div>
+    </div>
     );
   }
 
@@ -221,9 +225,22 @@ export function Analysis() {
   }
 
   return (
-    <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6 sm:py-10 md:px-8">
+    <div className="mx-auto max-w-6xl px-4 py-6 sm:px-6 md:px-8 space-y-6">
+      <AnalysisNavSwitcher />
+      {/* Workspace Header */}
+      <div className="mb-6 flex flex-col justify-between gap-3 border-b border-[var(--color-ns-border)] pb-5 sm:flex-row sm:items-center">
+        <div>
+          <h1 className="font-heading text-xl sm:text-2xl font-semibold tracking-tight text-[var(--color-ns-text)]">
+            Harmonic & Audio Analysis
+          </h1>
+          <p className="mt-0.5 text-xs sm:text-sm text-[var(--color-ns-muted)]">
+            Real-time chord synchronization, key and beat tracking, stem-level isolation, and sheet export.
+          </p>
+        </div>
+      </div>
+
       {/* 1. TRACK HEADER */}
-      <div className="mb-6 flex flex-col justify-between gap-5 rounded-2xl border border-[var(--color-ns-border)] bg-[var(--color-ns-card)] p-5 sm:flex-row sm:items-center sm:p-7">
+      <div className="mb-6 flex flex-col justify-between gap-5 rounded-2xl border border-[var(--color-ns-border)] bg-[var(--color-ns-surface)] p-5 sm:flex-row sm:items-center sm:p-6 shadow-sm">
         <div className="flex min-w-0 flex-1 items-start gap-4">
           <div className="flex h-14 w-14 flex-shrink-0 items-center justify-center rounded-2xl border border-[var(--color-ns-border)] bg-[var(--color-ns-raised)] text-[var(--color-ns-coral)] shadow-md">
             <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">

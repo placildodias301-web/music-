@@ -154,11 +154,11 @@ export function SettingsSelect<T extends string>({
         aria-haspopup="dialog"
         aria-expanded={open}
         onClick={openPicker}
-        className="flex w-full items-center gap-2 rounded-xl border border-[var(--color-ns-border)] bg-[var(--color-ns-bg)] px-3.5 py-2.5 text-left text-[0.8125rem] text-[var(--color-ns-text)] transition-colors hover:border-[var(--color-ns-border-strong)] focus-visible:border-[var(--color-ns-purple)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ns-purple)]/40 disabled:cursor-not-allowed disabled:opacity-50"
+        className="flex h-9 w-full items-center justify-between gap-2 rounded-xl border border-[var(--color-ns-border)] bg-[var(--color-ns-surface)] px-3 text-left text-xs font-medium text-[var(--color-ns-text)] transition-all hover:border-[var(--color-ns-border-strong)] hover:bg-[var(--color-ns-raised)] focus-visible:border-[var(--color-ns-amber)]/60 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--color-ns-amber)]/40 disabled:cursor-not-allowed disabled:opacity-50"
       >
         <span className="min-w-0 flex-1 truncate">{current?.label ?? value}</span>
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className={`shrink-0 text-[var(--color-ns-muted)] transition-transform ${open ? "rotate-180" : ""}`}>
-          <path d="m6 9 6 6 6-6" />
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className={`shrink-0 text-[var(--color-ns-muted)] transition-transform duration-200 ${open ? "rotate-180" : ""}`}>
+          <polyline points="6 9 12 15 18 9" />
         </svg>
       </button>
     ) : variant === "title" ? (
@@ -227,7 +227,7 @@ export function SettingsSelect<T extends string>({
             <div className="fixed inset-0 z-[100]" role="dialog" aria-label={label}>
               <button type="button" aria-label="Close" tabIndex={-1} className="absolute inset-0 cursor-default" onClick={() => close()} />
               <div
-                className="absolute max-h-[min(370px,calc(100vh-16px))] overflow-y-auto rounded-2xl border border-[var(--color-ns-border-strong)] bg-[var(--color-ns-card)] shadow-[0_18px_50px_rgba(0,0,0,0.5)]"
+                className="absolute max-h-[min(370px,calc(100vh-16px))] overflow-y-auto rounded-xl border border-[var(--color-ns-border)] bg-[var(--color-ns-surface)] shadow-2xl backdrop-blur-md"
                 style={
                   rect
                     ? variant === "field"

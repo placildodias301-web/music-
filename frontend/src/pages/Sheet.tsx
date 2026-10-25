@@ -1,13 +1,18 @@
 import { useEffect, useRef, useState } from "react";
-import type { ChangeEvent } from "react";
+import type { ChangeEvent, PointerEvent as ReactPointerEvent } from "react";
 import { AlphaTabApi, PlayerMode, synth } from "@coderline/alphatab";
 import type { model as atModel } from "@coderline/alphatab";
 import { API_URL } from "../lib/api";
 import { encodeWav } from "../lib/wavEncode";
+import { AiTutorDrawer } from "../components/AiTutorDrawer";
+import { CustomSelect } from "../components/CustomSelect";
+import { AnalysisNavSwitcher } from "../components/analysis/AnalysisNavSwitcher";
 import {
   addNote,
+  ALL_TARGET_KEYS,
   chordAt,
   deleteNote,
+  editMusicXmlInPlace,
   isChordName,
   isFlatKey,
   noteAt,
@@ -20,16 +25,6 @@ import {
   TICKS_PER_QUARTER,
 } from "../lib/sheetEdit";
 import type { SheetModel } from "../lib/sheetEdit";
-
-/**
- * AI sheet generation (MVP feature 10), first version.
- *
- * A song goes to /api/sheet/generate and comes back as a piano lead sheet in MusicXML (right hand =
- * sung melody, left hand = detected chords, chord names on top). A MusicXML file can also be opened
- * directly. alphaTab draws it, plays it with a highlighted cursor, transposes and exports it.
- * The notes are an AI draft: Edit mode lets you click a note and fix it. Edits change the sheet
- * model (see lib/sheetEdit) and /api/sheet/render redraws the MusicXML, so exports include them.
- */
 
 const INSTRUMENTS = [
   { label: "Piano", program: 0 },
@@ -55,18 +50,24 @@ interface SheetResult {
   timeSignature?: string;
   noteCount?: number;
   notice?: string;
-  /** The editable sheet behind a generated song (a MusicXML file you open has none). */
   model?: SheetModel;
 }
 type LeftHand = (typeof LEFT_HAND)[number]["value"];
 
-const card = "rounded-2xl border border-[var(--color-ns-border)] bg-[var(--color-ns-card)] p-5";
+interface ProgressInfo {
+  stage: string;
+  percent: number;
+  elapsed: number;
+  eta: number;
+}
+
+const card = "rounded-2xl border border-[var(--color-ns-border)] bg-[var(--color-ns-surface)] p-5";
 const btn =
-  "rounded-xl border border-[var(--color-ns-border-strong)] bg-[var(--color-ns-raised)] px-3.5 py-2 text-sm font-semibold text-[var(--color-ns-text)] hover:border-[var(--color-ns-purple-light)] disabled:cursor-not-allowed disabled:opacity-50";
+  "inline-flex h-9 items-center justify-center rounded-xl border border-[var(--color-ns-border)] bg-[var(--color-ns-surface)] px-3 text-xs font-semibold text-[var(--color-ns-text)] hover:border-[var(--color-ns-border-strong)] hover:bg-[var(--color-ns-raised)] transition-all disabled:cursor-not-allowed disabled:opacity-40";
 const field =
-  "rounded-xl border border-[var(--color-ns-border-strong)] bg-[var(--color-ns-raised)] px-3 py-2 text-sm text-[var(--color-ns-text)]";
+  "h-9 rounded-xl border border-[var(--color-ns-border)] bg-[var(--color-ns-bg-2)] px-3 text-xs text-[var(--color-ns-text)] focus:border-[var(--color-ns-amber)]/60 focus:outline-none";
 const btnPrimary =
-  "rounded-xl bg-[var(--color-ns-purple)] px-5 py-2.5 text-sm font-bold text-white shadow-[var(--shadow-primary)] hover:bg-[var(--color-ns-purple-light)] disabled:cursor-not-allowed disabled:opacity-50";
+  "inline-flex h-9 items-center justify-center rounded-xl bg-[var(--color-ns-purple)] px-4 text-xs font-bold text-white shadow-[var(--shadow-primary)] hover:bg-[var(--color-ns-purple-light)] transition-all disabled:cursor-not-allowed disabled:opacity-40";
 
 function download(name: string, data: BlobPart, type: string) {
   const a = document.createElement("a");
@@ -76,49 +77,96 @@ function download(name: string, data: BlobPart, type: string) {
   setTimeout(() => URL.revokeObjectURL(a.href), 5000);
 }
 
+function formatTime(ms: number): string {
+  if (!ms || isNaN(ms)) return "00:00";
+  const totalSec = Math.max(0, Math.floor(ms / 1000));
+  const min = Math.floor(totalSec / 60);
+  const sec = totalSec % 60;
+  return `${min < 10 ? "0" : ""}${min}:${sec < 10 ? "0" : ""}${sec}`;
+}
+
 export function Sheet() {
   const [sheet, setSheet] = useState<SheetResult | null>(null);
-  // What's on screen: the sheet's MusicXML after transposing (export uses this one).
   const [shown, setShown] = useState("");
   const [leftHand, setLeftHand] = useState<LeftHand>("block");
-  const [busy, setBusy] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false);
   const [exporting, setExporting] = useState(false);
-  const [scanning, setScanning] = useState(false); // busy because a picture of a sheet is being read, not a song
+  const [scanning, setScanning] = useState(false);
   const [error, setError] = useState("");
   const [ready, setReady] = useState(false);
   const [playing, setPlaying] = useState(false);
   const [transpose, setTranspose] = useState(0);
+  const [selectedKey, setSelectedKey] = useState<string>("");
+  const [changingKey, setChangingKey] = useState(false);
   const [speed, setSpeed] = useState(1);
   const [program, setProgram] = useState<number>(0);
   const [hasScore, setHasScore] = useState(false);
   const [model, setModel] = useState<SheetModel | null>(null);
   const [history, setHistory] = useState<SheetModel[]>([]);
   const [editing, setEditing] = useState(false);
-  const [selection, setSelection] = useState<number | null>(null); // quarter notes from bar 1
+  const [selection, setSelection] = useState<number | null>(null);
+  const [tutorOpen, setTutorOpen] = useState(false);
+
+  // Playhead scrubber & time state
+  const [currentTime, setCurrentTime] = useState(0);
+  const [endTime, setEndTime] = useState(0);
+  const [currentTick, setCurrentTick] = useState(0);
+  const [endTick, setEndTick] = useState(0);
+
+  // Real-time progress bar state & polling control
+  const [progress, setProgress] = useState<ProgressInfo | null>(null);
+  const pollIntervalRef = useRef<number | null>(null);
+
+  const stopPolling = () => {
+    if (pollIntervalRef.current !== null) {
+      window.clearInterval(pollIntervalRef.current);
+      pollIntervalRef.current = null;
+    }
+  };
+
+  const cancelProcessing = () => {
+    stopPolling();
+    setIsProcessing(false);
+    setScanning(false);
+    setProgress(null);
+  };
+
+  useEffect(() => {
+    return () => {
+      stopPolling();
+    };
+  }, []);
 
   const hostRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const apiRef = useRef<AlphaTabApi | null>(null);
 
-  // One alphaTab instance for the page; it re-renders whatever sheet is loaded.
   useEffect(() => {
     if (!hostRef.current || !scrollRef.current) return;
     const api = new AlphaTabApi(hostRef.current, {
-      // includeNoteBounds: clicks are matched to the exact note head (Edit mode needs the staff right).
       core: { fontDirectory: "/font/", includeNoteBounds: true },
       player: {
         playerMode: PlayerMode.EnabledSynthesizer,
-        // FluidR3 Mono GM (MIT, ~14 MB, licence beside it): real-sounding guitar, violin, flute.
-        // alphaTab's bundled Sonivox (~1 MB) made every instrument sound like a piano.
         soundFont: "/sounds/FluidR3Mono_GM.sf3",
         scrollElement: scrollRef.current,
         enableCursor: true,
+        enableAnimatedBeatCursor: true,
         enableElementHighlighting: true,
+        scrollMode: 1, // Continuous scrolling
       },
     });
+
     api.playerReady.on(() => setReady(true));
     api.scoreLoaded.on(() => setHasScore(true));
     api.playerStateChanged.on((e) => setPlaying(e.state === synth.PlayerState.Playing));
+
+    api.playerPositionChanged.on((e) => {
+      setCurrentTime(e.currentTime);
+      setEndTime(e.endTime);
+      setCurrentTick(e.currentTick);
+      setEndTick(e.endTick);
+    });
+
     apiRef.current = api;
     return () => {
       api.destroy();
@@ -126,7 +174,6 @@ export function Sheet() {
     };
   }, []);
 
-  // Whatever is shown gets drawn by alphaTab, played with the chosen instrument.
   const programRef = useRef(program);
   useEffect(() => {
     const api = apiRef.current;
@@ -138,31 +185,44 @@ export function Sheet() {
     return () => api.scoreLoaded.off(onLoaded);
   }, [shown]);
 
-  // Redraw the sheet. A generated sheet is drawn from its model (left hand style, transposition and
-  // edits all applied on the server by music21: notes, chord names and key move, rhythm stays).
-  // An opened MusicXML file has no model, so it can only be transposed as a whole.
   const transposeRef = useRef(0);
   const drawRef = useRef(0);
-  const redraw = async (m: SheetModel | null, style: LeftHand, semitones: number, raw = "") => {
+  const cacheRef = useRef(new Map<string, Promise<string>>());
+
+  const fetchSheet = (m: SheetModel | null, style: LeftHand, semitones: number, raw: string): Promise<string> => {
+    if (!m && semitones === 0) return Promise.resolve(raw);
+    const url = m ? "/api/sheet/render" : "/api/sheet/transpose";
+    const body = JSON.stringify(m ? { model: m, left_hand: style, semitones } : { musicxml: raw, semitones });
+    const key = url + body;
+    const cache = cacheRef.current;
+    let sheetXml = cache.get(key);
+    if (!sheetXml) {
+      if (cache.size >= 40) cache.clear();
+      sheetXml = fetch(`${API_URL}${url}`, { method: "POST", headers: { "Content-Type": "application/json" }, body }).then(async (res) => {
+        const data = (await res.json().catch(() => null)) as { musicxml?: string; detail?: string } | null;
+        if (!res.ok || !data?.musicxml) throw new Error(data?.detail ?? `Server error (${res.status}).`);
+        return data.musicxml;
+      });
+      sheetXml.catch(() => cache.delete(key));
+      cache.set(key, sheetXml);
+    }
+    return sheetXml;
+  };
+
+  const prefetchKeys = (m: SheetModel | null, style: LeftHand, semitones: number, raw: string) => {
+    for (const s of [semitones + 1, semitones - 1]) {
+      if (Math.abs(s) <= 12) fetchSheet(m, style, s, raw).catch(() => {});
+    }
+  };
+
+  const redraw = async (m: SheetModel | null, style: LeftHand, semitones: number, raw = "", prefetch = true) => {
     setError("");
     const id = ++drawRef.current;
     try {
-      let body: string;
-      let url: string;
-      if (m) {
-        url = "/api/sheet/render";
-        body = JSON.stringify({ model: m, left_hand: style, semitones });
-      } else if (semitones === 0) {
-        setShown(raw);
-        return;
-      } else {
-        url = "/api/sheet/transpose";
-        body = JSON.stringify({ musicxml: raw, semitones });
-      }
-      const res = await fetch(`${API_URL}${url}`, { method: "POST", headers: { "Content-Type": "application/json" }, body });
-      const data = (await res.json().catch(() => null)) as { musicxml?: string; detail?: string } | null;
-      if (!res.ok || !data?.musicxml) throw new Error(data?.detail ?? `Server error (${res.status}).`);
-      if (id === drawRef.current) setShown(data.musicxml); // a newer change already asked for a redraw
+      const xml = await fetchSheet(m, style, semitones, raw);
+      if (id !== drawRef.current) return;
+      setShown(xml);
+      if (prefetch) prefetchKeys(m, style, semitones, raw);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Couldn't draw the sheet.");
     }
@@ -175,9 +235,12 @@ export function Sheet() {
     setSelection(null);
     setEditing(false);
     setTranspose(0);
+    setSelectedKey(s.key || "C Major");
+    setChangingKey(false);
     transposeRef.current = 0;
     setShown(s.musicxml);
-    if (s.model && leftHand !== "block") void redraw(s.model, leftHand, 0); // generate draws block chords
+    if (s.model && leftHand !== "block") void redraw(s.model, leftHand, 0);
+    else prefetchKeys(s.model ?? null, leftHand, 0, s.musicxml);
   };
 
   const applyTranspose = (delta: number) => {
@@ -186,8 +249,38 @@ export function Sheet() {
     if (next === transposeRef.current) return;
     transposeRef.current = next;
     setTranspose(next);
-    void redraw(model, leftHand, next, sheet.musicxml);
+    setChangingKey(true);
+    void redraw(model, leftHand, next, sheet.musicxml).finally(() => {
+      if (transposeRef.current === next) setChangingKey(false);
+    });
   };
+
+  const applyTargetKey = async (targetKey: string) => {
+    if (!sheet || !shown) return;
+    setChangingKey(true);
+    setError("");
+    try {
+      const res = await fetch(`${API_URL}/api/sheet/transpose`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          musicxml: sheet.musicxml,
+          current_key: sheet.key || "C Major",
+          target_key: targetKey,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data?.musicxml) throw new Error(data?.detail || "Transpose failed");
+      setShown(data.musicxml);
+      setSelectedKey(targetKey);
+      setSheet({ ...sheet, key: targetKey });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Couldn't transpose to target key.");
+    } finally {
+      setChangingKey(false);
+    }
+  };
+
   const changeLeftHand = (style: LeftHand) => {
     setLeftHand(style);
     if (sheet) void redraw(model, style, transposeRef.current, sheet.musicxml);
@@ -198,32 +291,56 @@ export function Sheet() {
     if (!model) return;
     setHistory((h) => [...h.slice(-49), model]);
     setModel(next);
-    void redraw(next, leftHand, transposeRef.current);
+    void redraw(next, leftHand, transposeRef.current, "", false);
   };
+
   const undo = () => {
     const prev = history[history.length - 1];
     if (!prev) return;
     setHistory(history.slice(0, -1));
     setModel(prev);
-    void redraw(prev, leftHand, transposeRef.current);
+    void redraw(prev, leftHand, transposeRef.current, "", false);
   };
+
   const selectedNote = model && selection !== null ? noteAt(model, selection) : -1;
   const editNote = (fn: (m: SheetModel, i: number) => SheetModel) => {
     if (model && selectedNote >= 0) commit(fn(model, selectedNote));
   };
 
-  // Clicking the right-hand staff in Edit mode selects that beat. A note head click is exact; a
-  // plain beat click (how rests get picked) only counts when alphaTab places it on the top staff.
-  const select = (beat: atModel.Beat) => {
-    if (!editing || !model || beat.voice.bar.staff.index !== 0) return;
-    setSelection(positionOf(beat.voice.bar.index, beat.displayStart, model.beatsPerBar));
-  };
-  const onNoteClick = (n: atModel.Note) => select(n.beat);
-  const onBeatClick = (beat: atModel.Beat) => {
-    if (beat.isRest) select(beat);
+  const beatAt = (e: ReactPointerEvent): atModel.Beat | null => {
+    const api = apiRef.current;
+    const surface = hostRef.current?.querySelector(".at-surface") ?? hostRef.current;
+    if (!api || !surface) return null;
+    const rect = surface.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+    const pad = e.pointerType === "touch" ? 8 : 3;
+    const inside = (b: { x: number; y: number; w: number; h: number }) =>
+      x >= b.x - pad && x <= b.x + b.w + pad && y >= b.y - pad && y <= b.y + b.h + pad;
+    for (const system of api.renderer.boundsLookup?.staffSystems ?? [])
+      for (const master of system.bars)
+        for (const bar of master.bars) {
+          for (const b of bar.beats) {
+            if (b.beat.voice.bar.staff.index !== 0) break;
+            if (b.notes?.some((n) => inside(n.noteHeadBounds))) return b.beat;
+            if (b.beat.isRest && inside(b.visualBounds)) return b.beat;
+          }
+        }
+    return null;
   };
 
-  // Keep the selected beat highlighted, also after every redraw.
+  const onSheetPointerDown = (e: ReactPointerEvent) => {
+    if (!editing) return;
+    const beat = beatAt(e);
+    if (beat && model) {
+      setSelection(positionOf(beat.voice.bar.index, beat.displayStart, model.beatsPerBar));
+    }
+  };
+
+  const onSheetPointerMove = (e: ReactPointerEvent<HTMLDivElement>) => {
+    e.currentTarget.style.cursor = editing && beatAt(e) ? "pointer" : "";
+  };
+
   useEffect(() => {
     const api = apiRef.current;
     if (!api || !model) return;
@@ -245,7 +362,6 @@ export function Sheet() {
     return () => api.renderFinished.off(highlight);
   }, [selection, editing, model, shown]);
 
-  // Keyboard: arrows move the pitch (Shift = an octave), Delete removes, Ctrl+Z undoes.
   const onKey = (e: KeyboardEvent) => {
     if (!editing || (e.target instanceof Element && e.target.closest("input, select, textarea"))) return;
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "z") {
@@ -259,15 +375,10 @@ export function Sheet() {
       editNote(deleteNote);
     }
   };
-  // Re-registered after every render (cheap), so the handlers always see the current sheet.
+
   useEffect(() => {
-    const api = apiRef.current;
-    api?.noteMouseDown.on(onNoteClick);
-    api?.beatMouseDown.on(onBeatClick);
     window.addEventListener("keydown", onKey);
     return () => {
-      api?.noteMouseDown.off(onNoteClick);
-      api?.beatMouseDown.off(onBeatClick);
       window.removeEventListener("keydown", onKey);
     };
   });
@@ -286,7 +397,7 @@ export function Sheet() {
     if (apiRef.current) apiRef.current.playbackSpeed = s;
   };
 
-  /** Renders the sheet with the chosen instrument, speed-independent, and downloads it as a WAV file. */
+  /** Renders the melody with the chosen instrument, speed-independent, and downloads it as an MP3. */
   async function exportAudio() {
     const api = apiRef.current;
     if (!api?.score || exporting) return;
@@ -295,14 +406,34 @@ export function Sheet() {
     let exporter: Awaited<ReturnType<AlphaTabApi["exportAudio"]>> | null = null;
     try {
       const sampleRate = 44100;
-      exporter = await api.exportAudio(Object.assign(new synth.AudioExportOptions(), { sampleRate, useSyncPoints: false }));
+      // Melody only: the top staff of the first part (the right hand). alphaTab can only mute whole
+      // tracks and both hands are one piano track, so every other staff's notes are taken out while
+      // exportAudio builds its MIDI (synchronously, before its first await), then put straight back.
+      const muted: [atModel.Beat, atModel.Note[]][] = [];
+      let pending: ReturnType<AlphaTabApi["exportAudio"]>;
+      try {
+        api.score.tracks.forEach((track, t) =>
+          track.staves.forEach((staff, s) => {
+            if (t === 0 && s === 0) return;
+            for (const bar of staff.bars)
+              for (const voice of bar.voices)
+                for (const beat of voice.beats) {
+                  muted.push([beat, beat.notes]);
+                  beat.notes = [];
+                }
+          }),
+        );
+        pending = api.exportAudio(Object.assign(new synth.AudioExportOptions(), { sampleRate, useSyncPoints: false }));
+      } finally {
+        for (const [beat, notes] of muted) beat.notes = notes;
+      }
+      exporter = await pending;
       const chunks: Float32Array[] = [];
       for (let chunk = await exporter.render(2000); chunk; chunk = await exporter.render(2000)) chunks.push(chunk.samples);
       if (!chunks.length) throw new Error("There's nothing to play in this sheet.");
       const title = sheet?.title ?? "sheet";
       const name = `${title}${transpose ? ` (${transpose > 0 ? "+" : ""}${transpose})` : ""}`;
       const wav = encodeWav(chunks, sampleRate);
-      // WhatsApp and most phones refuse WAV ("file not supported"), so the server turns it into an MP3.
       try {
         const form = new FormData();
         form.append("file", new Blob([wav as BlobPart], { type: "audio/wav" }), "sheet.wav");
@@ -310,7 +441,7 @@ export function Sheet() {
         if (!res.ok) throw new Error(String(res.status));
         download(`${name}.mp3`, await res.blob(), "audio/mpeg");
       } catch {
-        download(`${name}.wav`, wav as BlobPart, "audio/wav"); // server unreachable: still give them something
+        download(`${name}.wav`, wav as BlobPart, "audio/wav");
         setError("Couldn't make an MP3 (the server is needed), so this is a WAV file. Many apps, like WhatsApp, won't accept WAV.");
       }
     } catch (err) {
@@ -324,88 +455,249 @@ export function Sheet() {
   async function onSong(e: ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     e.target.value = "";
-    if (!file) return;
+    if (!file || isProcessing) return;
     setError("");
-    setBusy(true);
+    stopPolling();
+    setIsProcessing(true);
+    setScanning(false);
+    setProgress({ stage: "Initializing audio upload & decoding...", percent: 2, elapsed: 0, eta: 25 });
+
     try {
       const form = new FormData();
       form.append("file", file);
       const res = await fetch(`${API_URL}/api/sheet/generate`, { method: "POST", body: form });
-      const data = (await res.json().catch(() => null)) as (SheetResult & { detail?: string }) | null;
-      if (!res.ok || !data?.musicxml) throw new Error(data?.detail ?? `Server error (${res.status}).`);
-      openSheet(data);
+      const initData = (await res.json().catch(() => null)) as { job_id?: string; detail?: string } | null;
+      if (!res.ok || !initData?.job_id) {
+        throw new Error(initData?.detail ?? `Server error (${res.status}).`);
+      }
+      const jobId = initData.job_id;
+
+      pollIntervalRef.current = window.setInterval(async () => {
+        try {
+          const r = await fetch(`${API_URL}/api/sheet/progress/${jobId}`);
+          if (!r.ok) return;
+          const d = await r.json();
+          if (d.status === "completed" && d.result?.musicxml) {
+            stopPolling();
+            setIsProcessing(false);
+            setProgress(null);
+            openSheet(d.result);
+            return;
+          }
+          if (d.status === "failed") {
+            stopPolling();
+            setIsProcessing(false);
+            setProgress(null);
+            setError(d.error || "Sheet generation failed.");
+            return;
+          }
+          if (d.stage) {
+            let stageName = d.stage;
+            if (stageName === "audio") stageName = "Extracting & decoding audio";
+            else if (stageName === "analysis") stageName = "Analyzing beats, chords & key";
+            else if (stageName === "vocals") stageName = "Separating vocal stem with Demucs";
+            else if (stageName === "melody") stageName = "High-precision melody transcription";
+            else if (stageName === "score") stageName = "Aligning rhythm to 16th/triplet grid";
+            else if (stageName === "render") stageName = "Generating MusicXML & MIDI velocities";
+            setProgress({
+              stage: stageName,
+              percent: d.percent,
+              elapsed: d.elapsed || 0,
+              eta: d.eta_seconds ?? d.eta ?? 0,
+            });
+          }
+        } catch {
+          // quiet poll
+        }
+      }, 600);
     } catch (err) {
+      stopPolling();
+      setIsProcessing(false);
+      setProgress(null);
       setError(err instanceof Error ? err.message : "Couldn't make a sheet from that file.");
-    } finally {
-      setBusy(false);
     }
   }
 
   async function onSheetFile(e: ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     e.target.value = "";
-    if (!file) return;
+    if (!file || isProcessing) return;
     setError("");
+    stopPolling();
     const title = file.name.replace(/\.[^.]+$/, "");
+
     if (IMAGE_FILE.test(file.name) || file.type.startsWith("image/")) {
-      // A photo or scan of printed music: the server reads the notes (optical music recognition).
-      setBusy(true);
+      setIsProcessing(true);
       setScanning(true);
+      setProgress({ stage: "Initializing RapidOCR & OMR scan...", percent: 2, elapsed: 0, eta: 20 });
+
       try {
         const form = new FormData();
         form.append("file", file);
         const res = await fetch(`${API_URL}/api/sheet/scan`, { method: "POST", body: form });
-        const data = (await res.json().catch(() => null)) as { title?: string; musicxml?: string; detail?: string } | null;
-        if (!res.ok || !data?.musicxml) throw new Error(data?.detail ?? `Server error (${res.status}).`);
-        openSheet({ title, musicxml: data.musicxml });
+        const initData = (await res.json().catch(() => null)) as { job_id?: string; detail?: string } | null;
+        if (!res.ok || !initData?.job_id) {
+          throw new Error(initData?.detail ?? `Server error (${res.status}).`);
+        }
+        const jobId = initData.job_id;
+
+        pollIntervalRef.current = window.setInterval(async () => {
+          try {
+            const r = await fetch(`${API_URL}/api/sheet/progress/${jobId}`);
+            if (!r.ok) return;
+            const d = await r.json();
+            if (d.status === "completed" && d.result?.musicxml) {
+              stopPolling();
+              setIsProcessing(false);
+              setScanning(false);
+              setProgress(null);
+              openSheet({ title: d.result.title || title, musicxml: d.result.musicxml });
+              return;
+            }
+            if (d.status === "failed") {
+              stopPolling();
+              setIsProcessing(false);
+              setScanning(false);
+              setProgress(null);
+              setError(d.error || "Sheet scan failed.");
+              return;
+            }
+            if (d.stage) {
+              let stageName = d.stage;
+              if (stageName === "ocr") stageName = "Extracting title, composer, chords & tempo";
+              else if (stageName === "omr") stageName = "Recognizing staves, notes & clefs";
+              else if (stageName === "enrich") stageName = "Injecting chords & instrument labels";
+              setProgress({
+                stage: stageName,
+                percent: d.percent,
+                elapsed: d.elapsed || 0,
+                eta: d.eta_seconds ?? d.eta ?? 0,
+              });
+            }
+          } catch {
+            // quiet poll
+          }
+        }, 600);
       } catch (err) {
-        setError(err instanceof Error ? err.message : "Couldn't read that picture.");
-      } finally {
-        setBusy(false);
+        stopPolling();
+        setIsProcessing(false);
         setScanning(false);
+        setProgress(null);
+        setError(err instanceof Error ? err.message : "Couldn't read that picture.");
       }
       return;
     }
+
+    // Direct MXL / XML files: completely bypass backend job polling
+    stopPolling();
+    setIsProcessing(false);
+    setScanning(false);
+    setProgress(null);
+
     if (file.name.toLowerCase().endsWith(".mxl")) {
-      // Compressed MusicXML: alphaTab reads the bytes itself; there's no text to re-export.
-      apiRef.current?.load(new Uint8Array(await file.arrayBuffer()));
-      setSheet(null);
+      const buf = await file.arrayBuffer();
+      apiRef.current?.load(new Uint8Array(buf));
+      setSheet({ title, musicxml: "" });
       setShown("");
       return;
     }
-    openSheet({ title, musicxml: await file.text() });
+
+    // Lossless MusicXML upload: pass raw XML string directly into alphaTab
+    const xml = await file.text();
+    openSheet({ title, musicxml: xml });
   }
 
   return (
-    <div className="mx-auto max-w-5xl space-y-4 px-4 py-8 sm:px-6 sm:py-10 md:px-8">
+    <div className="mx-auto max-w-6xl space-y-6 px-4 py-6 sm:px-6 md:px-8">
+      <AnalysisNavSwitcher />
+      {/* Workspace Header */}
+      <div className="flex flex-col justify-between gap-3 border-b border-[var(--color-ns-border)] pb-5 sm:flex-row sm:items-center">
+        <div>
+          <h1 className="font-heading text-xl sm:text-2xl font-semibold tracking-tight text-[var(--color-ns-text)]">
+            Sheet Music & OMR Studio
+          </h1>
+          <p className="mt-0.5 text-xs sm:text-sm text-[var(--color-ns-muted)]">
+            High-precision vocal melody transcription, standard notation, chord accompaniment & MusicXML editor.
+          </p>
+        </div>
+      </div>
+      {/* Dynamic styles for moving playhead bar & active note highlighting */}
+      <style>{`
+        .at-cursor-bar {
+          background: rgba(139, 92, 246, 0.12) !important;
+          border-left: 2px solid #8b5cf6 !important;
+          transition: transform 0.06s linear !important;
+        }
+        .at-cursor-beat {
+          background: rgba(168, 85, 247, 0.28) !important;
+          border-radius: 4px;
+        }
+        .at-highlight * {
+          fill: #7c3aed !important;
+          stroke: #7c3aed !important;
+          transition: fill 0.08s ease, stroke 0.08s ease;
+        }
+      `}</style>
+
       <section className={card} aria-labelledby="sheet-source">
         <h2 id="sheet-source" className="font-heading text-base font-bold text-[var(--color-ns-text)]">
           Make a sheet
         </h2>
         <p className="mt-1 text-sm text-[var(--color-ns-muted)]">
-          Upload a song and the AI writes the sung melody for the right hand and the chords for the left hand. Or open a
-          MusicXML file, or a photo or scan of printed sheet music (png, jpg, webp).
+          Upload a song and the AI transcribes high-precision vocal melodies and chord accompaniments. Or open an existing
+          MusicXML file, or a photo/scan of printed sheet music (png, jpg, webp).
         </p>
         <div className="mt-4 flex flex-wrap items-center gap-3">
-          <label className={`${btnPrimary} cursor-pointer ${busy ? "pointer-events-none opacity-50" : ""}`}>
-            {busy && !scanning ? "Writing the sheet…" : "Upload a song"}
-            <input type="file" accept={SONG_ACCEPT} className="sr-only" disabled={busy} onChange={onSong} />
+          <label className={`${btnPrimary} cursor-pointer ${isProcessing ? "pointer-events-none opacity-50 cursor-not-allowed" : ""}`}>
+            {isProcessing && !scanning ? "Processing current file…" : "Upload a song"}
+            <input type="file" accept={SONG_ACCEPT} className="sr-only" disabled={isProcessing} onChange={onSong} />
           </label>
           <span className="text-sm text-[var(--color-ns-muted)]">or</span>
-          <label className={`${btn} cursor-pointer ${busy ? "pointer-events-none opacity-50" : ""}`}>
-            {scanning ? "Reading the page…" : "Open MusicXML or a sheet photo"}
-            <input type="file" accept={SHEET_ACCEPT} className="sr-only" disabled={busy} onChange={onSheetFile} />
+          <label className={`${btn} cursor-pointer ${isProcessing ? "pointer-events-none opacity-50 cursor-not-allowed" : ""}`}>
+            {isProcessing && scanning ? "Processing current file…" : "Open MusicXML or a sheet photo"}
+            <input type="file" accept={SHEET_ACCEPT} className="sr-only" disabled={isProcessing} onChange={onSheetFile} />
           </label>
         </div>
-        {busy && (
-          <p role="status" className="mt-3 text-sm text-[var(--color-ns-muted)]">
-            {scanning
-              ? "Reading the notes from your picture. This can take a few minutes the first time."
-              : "Separating the vocals and finding the notes. This takes about as long as the song."}
-          </p>
+
+        {/* Real-time processing progress bar & ETA */}
+        {isProcessing && progress && (
+          <div className="mt-5 rounded-xl border border-[var(--color-ns-purple)]/30 bg-[var(--color-ns-raised)] p-4 shadow-sm">
+            <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
+              <span className="font-semibold text-[var(--color-ns-text)] flex items-center gap-2">
+                <span className="relative flex h-3 w-3">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[var(--color-ns-purple)] opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-3 w-3 bg-[var(--color-ns-purple)]"></span>
+                </span>
+                {progress.stage}
+              </span>
+              <div className="flex items-center gap-3">
+                <span className="font-mono font-bold text-[var(--color-ns-purple)]">{progress.percent}%</span>
+                <button
+                  type="button"
+                  onClick={cancelProcessing}
+                  className="rounded-md border border-[var(--color-ns-border)] px-2.5 py-0.5 text-xs font-semibold text-[var(--color-ns-muted)] hover:bg-[var(--color-ns-border)] hover:text-[var(--color-ns-text)] transition-colors"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+
+            <div className="mt-2.5 h-2.5 w-full overflow-hidden rounded-full bg-[var(--color-ns-border)]">
+              <div
+                className="h-full rounded-full bg-gradient-to-r from-[var(--color-ns-purple)] to-[var(--color-ns-purple-light)] transition-all duration-300 ease-out"
+                style={{ width: `${Math.max(5, progress.percent)}%` }}
+              />
+            </div>
+
+            <div className="mt-2 flex items-center justify-between text-xs text-[var(--color-ns-muted)]">
+              <span>Elapsed: {formatTime(progress.elapsed * 1000)}</span>
+              <span>{progress.eta > 0 ? `Estimated: ~${Math.round(progress.eta)}s remaining` : "Finishing touches…"}</span>
+            </div>
+          </div>
         )}
+
         {error && (
-          <p role="alert" className="mt-3 text-sm text-[var(--color-ns-red)]">
+          <p role="alert" className="mt-3 text-sm text-[var(--color-ns-red)] font-medium">
             {error}
           </p>
         )}
@@ -417,7 +709,7 @@ export function Sheet() {
             <h2 className="font-heading text-lg font-bold text-[var(--color-ns-text)]">{sheet.title}</h2>
             <p className="text-sm text-[var(--color-ns-muted)]">
               {[
-                sheet.key && (transpose ? `${sheet.key}, transposed ${transpose > 0 ? "+" : ""}${transpose}` : sheet.key),
+                sheet.key || selectedKey,
                 sheet.timeSignature,
                 sheet.bpm ? `${Math.round(sheet.bpm)} BPM` : "",
               ]
@@ -428,53 +720,124 @@ export function Sheet() {
           </div>
         )}
 
+        {/* Interactive Playback Scrubber & Timeline */}
+        {hasScore && (
+          <div className="mb-4 rounded-xl border border-[var(--color-ns-border)] bg-[var(--color-ns-raised)]/70 px-4 py-2.5">
+            <div className="flex items-center gap-3">
+              <span className="w-12 text-left font-mono text-xs text-[var(--color-ns-muted)]">
+                {formatTime(currentTime)}
+              </span>
+              <input
+                type="range"
+                aria-label="Playback scrubber"
+                min={0}
+                max={endTick || 1000}
+                value={currentTick}
+                onChange={(e) => {
+                  const val = Number(e.target.value);
+                  setCurrentTick(val);
+                  if (apiRef.current) apiRef.current.tickPosition = val;
+                }}
+                className="flex-1 accent-[var(--color-ns-purple)] cursor-pointer h-1.5 rounded-lg bg-[var(--color-ns-border-strong)]"
+              />
+              <span className="w-12 text-right font-mono text-xs text-[var(--color-ns-muted)]">
+                {formatTime(endTime)}
+              </span>
+            </div>
+          </div>
+        )}
+
         <div className="flex flex-wrap items-end gap-x-6 gap-y-3">
           <div role="group" aria-label="Playback" className="flex flex-wrap items-center gap-2">
-            <button type="button" className={`${btnPrimary} w-24`} disabled={!ready || !hasScore} onClick={() => apiRef.current?.playPause()}>
+            <button
+              type="button"
+              className={`${btnPrimary} w-24`}
+              disabled={!ready || !hasScore}
+              onClick={() => apiRef.current?.playPause()}
+            >
               {playing ? "Pause" : "Play"}
             </button>
-            <button type="button" className={btn} disabled={!ready || !hasScore} onClick={() => apiRef.current?.stop()}>
+            <button
+              type="button"
+              className={btn}
+              disabled={!ready || !hasScore}
+              onClick={() => apiRef.current?.stop()}
+            >
               Stop
             </button>
-            <select aria-label="Playback speed" value={speed} onChange={(e) => applySpeed(Number(e.target.value))} className={field}>
-              {[0.5, 0.75, 1, 1.25].map((s) => (
-                <option key={s} value={s}>
-                  {s === 1 ? "1× speed" : `${s}× speed`}
-                </option>
-              ))}
-            </select>
-            <select aria-label="Playback instrument" value={program} onChange={(e) => applyProgram(Number(e.target.value))} className={field}>
-              {INSTRUMENTS.map((i) => (
-                <option key={i.program} value={i.program}>
-                  {i.label}
-                </option>
-              ))}
-            </select>
+            <CustomSelect
+              aria-label="Playback speed"
+              value={speed}
+              onChange={(v) => applySpeed(Number(v))}
+              width="110px"
+              options={[
+                { value: 0.5, label: "0.5× speed" },
+                { value: 0.75, label: "0.75× speed" },
+                { value: 1, label: "1× speed" },
+                { value: 1.25, label: "1.25× speed" },
+              ]}
+            />
+            <CustomSelect
+              aria-label="Playback instrument"
+              value={program}
+              onChange={(v) => applyProgram(Number(v))}
+              width="145px"
+              options={INSTRUMENTS.map((i) => ({ value: i.program, label: i.label }))}
+            />
           </div>
 
           <div role="group" aria-label="Sheet" className="flex flex-wrap items-center gap-2">
-            <span className="text-sm text-[var(--color-ns-muted)]">Key</span>
-            <button type="button" className={btn} aria-label="Transpose down a semitone" disabled={!sheet} onClick={() => applyTranspose(-1)}>
+            <span className="text-xs font-semibold text-[var(--color-ns-muted)]">Key</span>
+            <button
+              type="button"
+              className={btn}
+              aria-label="Transpose down a semitone"
+              disabled={!sheet}
+              onClick={() => applyTranspose(-1)}
+            >
               −
             </button>
-            <span className="w-8 text-center text-sm tabular-nums text-[var(--color-ns-text)]" aria-live="polite">
+            <span className="w-8 text-center text-xs font-mono font-bold tabular-nums text-[var(--color-ns-text)]" aria-live="polite">
               {transpose > 0 ? `+${transpose}` : transpose}
             </span>
-            <button type="button" className={btn} aria-label="Transpose up a semitone" disabled={!sheet} onClick={() => applyTranspose(1)}>
+            <button
+              type="button"
+              className={btn}
+              aria-label="Transpose up a semitone"
+              disabled={!sheet}
+              onClick={() => applyTranspose(1)}
+            >
               +
             </button>
+
+            {/* Target Key Transpose selector */}
+            <CustomSelect
+              aria-label="Target key transposition"
+              value={selectedKey}
+              onChange={(v) => applyTargetKey(String(v))}
+              disabled={!sheet || changingKey}
+              placeholder="Target Key"
+              width="135px"
+              options={[
+                ...ALL_TARGET_KEYS.slice(0, 12).map((k) => ({ value: k, label: k, group: "Major Keys" })),
+                ...ALL_TARGET_KEYS.slice(12).map((k) => ({ value: k, label: k, group: "Minor Keys" })),
+              ]}
+            />
+
+            {changingKey && <span className="text-xs text-[var(--color-ns-muted)] animate-pulse">Transposing…</span>}
+
             {model && (
-              <select aria-label="Left hand" value={leftHand} onChange={(e) => changeLeftHand(e.target.value as LeftHand)} className={field}>
-                {LEFT_HAND.map((o) => (
-                  <option key={o.value} value={o.value}>
-                    {o.label}
-                  </option>
-                ))}
-              </select>
+              <CustomSelect
+                aria-label="Left hand"
+                value={leftHand}
+                onChange={(v) => changeLeftHand(v as LeftHand)}
+                width="170px"
+                options={LEFT_HAND.map((o) => ({ value: o.value, label: o.label }))}
+              />
             )}
           </div>
 
-          {model && (
+          {sheet && (
             <button
               type="button"
               aria-pressed={editing}
@@ -489,17 +852,37 @@ export function Sheet() {
           )}
 
           <div role="group" aria-label="Export" className="ml-auto flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setTutorOpen(true)}
+              className="flex items-center gap-1.5 rounded-xl border border-[var(--color-ns-purple)]/50 bg-[var(--color-ns-purple)]/15 px-3 py-1.5 text-xs font-bold text-[var(--color-ns-purple-light)] hover:bg-[var(--color-ns-purple)]/25 transition-all shadow-xs"
+            >
+              <span>✨</span>
+              <span>AI Music Tutor</span>
+            </button>
             <button type="button" className={btn} disabled={!hasScore} onClick={() => apiRef.current?.downloadMidi()}>
               MIDI
             </button>
-            <button type="button" className={btn} disabled={!hasScore || exporting} onClick={() => void exportAudio()}>
-              {exporting ? "Making audio…" : "Audio (MP3)"}
+            <button
+              type="button"
+              className={btn}
+              disabled={!hasScore || exporting}
+              onClick={() => void exportAudio()}
+            >
+              {exporting ? "Making audio…" : "Melody (MP3)"}
             </button>
             <button
               type="button"
               className={btn}
               disabled={!sheet || !shown}
-              onClick={() => sheet && download(`${sheet.title}${transpose ? ` (${transpose > 0 ? "+" : ""}${transpose})` : ""}.musicxml`, shown, "application/vnd.recordare.musicxml+xml")}
+              onClick={() =>
+                sheet &&
+                download(
+                  `${sheet.title}${transpose ? ` (${transpose > 0 ? "+" : ""}${transpose})` : ""}.musicxml`,
+                  shown,
+                  "application/vnd.recordare.musicxml+xml",
+                )
+              }
             >
               MusicXML
             </button>
@@ -522,25 +905,45 @@ export function Sheet() {
           />
         )}
 
-        <div ref={scrollRef} className="mt-4 max-h-[70vh] overflow-auto rounded-xl bg-white">
-          <div ref={hostRef} />
+        {editing && !model && shown && (
+          <InPlaceEditPanel
+            musicxml={shown}
+            onUpdateXml={(newXml) => setShown(newXml)}
+            onError={(msg) => setError(msg)}
+          />
+        )}
+
+        <div ref={scrollRef} className="mt-4 max-h-[70vh] overflow-auto rounded-xl bg-white shadow-inner">
+          <div ref={hostRef} onPointerDown={onSheetPointerDown} onPointerMove={onSheetPointerMove} />
         </div>
-        {!hasScore && !busy && (
+        {!hasScore && !isProcessing && (
           <p className="mt-3 text-sm text-[var(--color-ns-muted)]">Your sheet will appear here.</p>
         )}
       </section>
+
+      {/* Wilsify AI Master Music Tutor Drawer */}
+      <AiTutorDrawer
+        isOpen={tutorOpen}
+        onClose={() => setTutorOpen(false)}
+        songContext={{
+          title: sheet?.title,
+          key: sheet?.key || selectedKey,
+          bpm: sheet?.bpm ? Math.round(sheet.bpm) : undefined,
+          chords: model?.chords ? Array.from(new Set(model.chords.map((c) => c.name))) : undefined,
+        }}
+      />
     </div>
   );
 }
 
 const LENGTHS = [
+  { quarters: 0.25, label: "𝅘𝅥𝅯", name: "16th note" },
   { quarters: 0.5, label: "♪", name: "Eighth note" },
   { quarters: 1, label: "♩", name: "Quarter note" },
   { quarters: 2, label: "𝅗𝅥", name: "Half note" },
   { quarters: 4, label: "𝅝", name: "Whole note" },
 ] as const;
 
-/** The edit controls for the selected beat, plus tempo and time signature. */
 function EditPanel({
   model,
   selection,
@@ -581,14 +984,19 @@ function EditPanel({
   };
 
   return (
-    <div className="mt-4 rounded-xl border border-[var(--color-ns-purple)]/40 bg-[var(--color-ns-raised)] p-4" role="region" aria-label="Edit sheet">
+    <div
+      className="mt-4 rounded-xl border border-[var(--color-ns-purple)]/40 bg-[var(--color-ns-raised)] p-4"
+      role="region"
+      aria-label="Edit sheet"
+    >
       <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="text-sm text-[var(--color-ns-text)]" aria-live="polite">
           {selection === null ? (
-            "Click a note or rest in the top (melody) staff to edit it."
+            "Click a note or rest in the top staff to edit it."
           ) : note ? (
             <>
-              <b>{where}</b> · {noteName(note.midi + transpose, isFlatKey(model.key, transpose))}, {note.end - note.start} beat{note.end - note.start === 1 ? "" : "s"}
+              <b>{where}</b> · {noteName(note.midi + transpose, isFlatKey(model.key, transpose))},{" "}
+              {note.end - note.start} beat{note.end - note.start === 1 ? "" : "s"}
             </>
           ) : (
             <>
@@ -605,16 +1013,40 @@ function EditPanel({
         <div className="mt-3 flex flex-wrap items-center gap-2">
           {note ? (
             <>
-              <button type="button" className={btn} aria-label="Pitch up a semitone" title="↑" onClick={() => onEditNote((m, i) => shiftPitch(m, i, 1))}>
+              <button
+                type="button"
+                className={btn}
+                aria-label="Pitch up a semitone"
+                title="↑"
+                onClick={() => onEditNote((m, i) => shiftPitch(m, i, 1))}
+              >
                 ▲
               </button>
-              <button type="button" className={btn} aria-label="Pitch down a semitone" title="↓" onClick={() => onEditNote((m, i) => shiftPitch(m, i, -1))}>
+              <button
+                type="button"
+                className={btn}
+                aria-label="Pitch down a semitone"
+                title="↓"
+                onClick={() => onEditNote((m, i) => shiftPitch(m, i, -1))}
+              >
                 ▼
               </button>
-              <button type="button" className={btn} aria-label="Up an octave" title="Shift+↑" onClick={() => onEditNote((m, i) => shiftPitch(m, i, 12))}>
+              <button
+                type="button"
+                className={btn}
+                aria-label="Up an octave"
+                title="Shift+↑"
+                onClick={() => onEditNote((m, i) => shiftPitch(m, i, 12))}
+              >
                 Oct ▲
               </button>
-              <button type="button" className={btn} aria-label="Down an octave" title="Shift+↓" onClick={() => onEditNote((m, i) => shiftPitch(m, i, -12))}>
+              <button
+                type="button"
+                className={btn}
+                aria-label="Down an octave"
+                title="Shift+↓"
+                onClick={() => onEditNote((m, i) => shiftPitch(m, i, -12))}
+              >
                 Oct ▼
               </button>
               <span className="mx-1 h-6 w-px bg-[var(--color-ns-border-strong)]" aria-hidden="true" />
@@ -637,7 +1069,11 @@ function EditPanel({
               </button>
             </>
           ) : (
-            <button type="button" className={btn} onClick={() => onCommit(addNote(model, selection, pitchNear(model, selection)))}>
+            <button
+              type="button"
+              className={btn}
+              onClick={() => onCommit(addNote(model, selection, pitchNear(model, selection)))}
+            >
               Add a note here
             </button>
           )}
@@ -660,7 +1096,9 @@ function EditPanel({
           <button type="button" className={btn} disabled={transpose !== 0} onClick={applyChord}>
             Set chord
           </button>
-          {transpose !== 0 && <span className="text-xs text-[var(--color-ns-muted)]">Set Key back to 0 to edit chord names.</span>}
+          {transpose !== 0 && (
+            <span className="text-xs text-[var(--color-ns-muted)]">Set Key back to 0 to edit chord names.</span>
+          )}
         </div>
       )}
       {chordError && (
@@ -688,22 +1126,94 @@ function EditPanel({
           className={`${field} w-20`}
         />
         <span className="text-sm text-[var(--color-ns-muted)]">BPM</span>
-        <label className="ml-3 text-sm text-[var(--color-ns-muted)]" htmlFor="sheet-meter">
+        <label className="ml-3 text-xs font-semibold text-[var(--color-ns-muted)]" htmlFor="sheet-meter">
           Time signature
         </label>
-        <select
-          id="sheet-meter"
+        <CustomSelect
           value={model.beatsPerBar}
-          onChange={(e) => onCommit({ ...model, beatsPerBar: Number(e.target.value) })}
-          className={field}
-        >
-          {[2, 3, 4].map((b) => (
-            <option key={b} value={b}>
-              {b}/4
-            </option>
-          ))}
-        </select>
-        <span className="ml-auto text-xs text-[var(--color-ns-muted)]">↑ ↓ pitch · Shift = octave · Delete · Ctrl+Z undo</span>
+          onChange={(v) => onCommit({ ...model, beatsPerBar: Number(v) })}
+          width="80px"
+          options={[
+            { value: 2, label: "2/4" },
+            { value: 3, label: "3/4" },
+            { value: 4, label: "4/4" },
+          ]}
+        />
+        <span className="ml-auto text-xs text-[var(--color-ns-muted)]">
+          ↑ ↓ pitch · Shift = octave · Delete · Ctrl+Z undo
+        </span>
+      </div>
+    </div>
+  );
+}
+
+function InPlaceEditPanel({
+  musicxml,
+  onUpdateXml,
+  onError,
+}: {
+  musicxml: string;
+  onUpdateXml: (xml: string) => void;
+  onError: (msg: string) => void;
+}) {
+  const [measureNum, setMeasureNum] = useState(1);
+  const [noteIdx, setNoteIdx] = useState(0);
+  const [saving, setSaving] = useState(false);
+
+  const performEdit = async (action: "shift_pitch" | "delete_note", shift = 0) => {
+    setSaving(true);
+    onError("");
+    try {
+      const xml = await editMusicXmlInPlace(API_URL, {
+        musicxml,
+        measure_number: measureNum,
+        note_index: noteIdx,
+        action,
+        pitch_shift: shift,
+      });
+      onUpdateXml(xml);
+    } catch (e) {
+      onError(e instanceof Error ? e.message : "In-place edit failed.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="mt-4 rounded-xl border border-[var(--color-ns-purple)]/40 bg-[var(--color-ns-raised)] p-4">
+      <div className="flex flex-wrap items-center gap-3">
+        <span className="text-sm font-semibold text-[var(--color-ns-text)]">In-place MusicXML Edit:</span>
+        <label className="text-xs text-[var(--color-ns-muted)]">Bar:</label>
+        <input
+          type="number"
+          min={1}
+          value={measureNum}
+          onChange={(e) => setMeasureNum(Math.max(1, Number(e.target.value)))}
+          className={`${field} w-16`}
+        />
+        <label className="text-xs text-[var(--color-ns-muted)]">Note #:</label>
+        <input
+          type="number"
+          min={0}
+          value={noteIdx}
+          onChange={(e) => setNoteIdx(Math.max(0, Number(e.target.value)))}
+          className={`${field} w-16`}
+        />
+        <button type="button" className={btn} disabled={saving} onClick={() => performEdit("shift_pitch", 1)}>
+          ▲ Pitch
+        </button>
+        <button type="button" className={btn} disabled={saving} onClick={() => performEdit("shift_pitch", -1)}>
+          ▼ Pitch
+        </button>
+        <button type="button" className={btn} disabled={saving} onClick={() => performEdit("shift_pitch", 12)}>
+          Oct ▲
+        </button>
+        <button type="button" className={btn} disabled={saving} onClick={() => performEdit("shift_pitch", -12)}>
+          Oct ▼
+        </button>
+        <button type="button" className={btn} disabled={saving} onClick={() => performEdit("delete_note")}>
+          Rest (Delete)
+        </button>
       </div>
     </div>
   );

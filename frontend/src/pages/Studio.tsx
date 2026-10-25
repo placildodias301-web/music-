@@ -14,6 +14,7 @@ import { PracticeWeekCard } from "../components/home/PracticeWeekCard";
 import { RecentAnalyses } from "../components/home/RecentAnalyses";
 import { QuickTools } from "../components/home/QuickTools";
 import { BottomBanner } from "../components/home/BottomBanner";
+import { MusicianToolkit } from "../components/home/MusicianToolkit";
 import type { UploadLocationState } from "./Upload";
 
 export function Studio() {
@@ -125,6 +126,9 @@ export function Studio() {
           />
         </div>
       </div>
+
+      {/* MUSICIAN TOOLKIT — CHORDS, TUNER & PRACTICE */}
+      <MusicianToolkit />
 
       {/* 2. SECOND ROW: RECENT ANALYSES (Left) & QUICK TOOLS (Right) */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-12 lg:items-stretch">

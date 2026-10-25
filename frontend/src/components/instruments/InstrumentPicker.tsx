@@ -163,7 +163,7 @@ export function InstrumentPicker({
         aria-expanded={open}
         aria-label={`${label}: ${current?.name ?? value}`}
         onClick={openPicker}
-        className="flex w-full items-center gap-2 rounded-xl border border-[var(--color-ns-border)] bg-[var(--color-ns-bg)] px-3.5 py-2 text-left text-[0.8125rem] font-semibold text-[var(--color-ns-text)] transition-colors hover:border-[var(--color-ns-border-strong)] focus-visible:border-[var(--color-ns-purple)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ns-purple)]/40"
+        className="flex h-9 w-full items-center justify-between gap-2 rounded-xl border border-[var(--color-ns-border)] bg-[var(--color-ns-surface)] px-3 text-left text-xs font-medium text-[var(--color-ns-text)] transition-all hover:border-[var(--color-ns-border-strong)] hover:bg-[var(--color-ns-raised)] focus-visible:border-[var(--color-ns-amber)]/60 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--color-ns-amber)]/40"
       >
         <span className="min-w-0 flex-1 truncate">{current?.name ?? value}</span>
         {CHEVRON(open, "text-[var(--color-ns-muted)]")}
@@ -198,7 +198,7 @@ export function InstrumentPicker({
             <div className="fixed inset-0 z-[100]" role="dialog" aria-label={label}>
               <button type="button" aria-label="Close" tabIndex={-1} className="absolute inset-0 cursor-default" onClick={() => close()} />
               <div
-                className="absolute max-h-[min(430px,calc(100vh-16px))] overflow-y-auto rounded-2xl border border-[var(--color-ns-border-strong)] bg-[var(--color-ns-card)] shadow-[0_18px_50px_rgba(0,0,0,0.5)]"
+                className="absolute max-h-[min(430px,calc(100vh-16px))] overflow-y-auto rounded-xl border border-[var(--color-ns-border)] bg-[var(--color-ns-surface)] shadow-2xl backdrop-blur-md"
                 style={rect ? { ...vertical, left: Math.max(8, Math.min(rect.left - (variant === "title" ? 8 : 0), window.innerWidth - 328)), width: variant === "field" ? Math.max(rect.width, 280) : 320 } : undefined}
               >
                 {panel}

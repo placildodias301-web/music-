@@ -1,16 +1,18 @@
 /**
- * Playback for a chord model. Every instrument has its own sound model — NONE of them is a recording:
+ * Playback for a chord model. Uses high-fidelity studio sampled soundfonts with
+ * Karplus-Strong physical modeling and additive synthesis fallbacks:
  *
- *  - plucked strings (guitars, ukulele, bass, mandolin, banjo, …): a physical string model, one voice per sounding string/strand
- *    (lib/audio/KarplusStrong.ts), strummed at that instrument's own speed;
- *  - everything else (bowed strings, winds, keys, mallets, accordion, harp): an instrument recipe — its spectrum, how it starts,
- *    vibrato, body resonance (lib/audio/synthVoices.ts) — so a violin, a flute and a piano don't sound alike.
+ *  - studio sampled audio (soundfontPlayer.ts) providing authentic instrument samples across 88 keys and fretboards;
+ *  - plucked strings physical model fallback (KarplusStrong.ts) strummed at that instrument's own speed;
+ *  - synth voice recipes fallback (synthVoices.ts) for winds, bowed strings, mallets, and organs.
  *
- * The notes played are always the notes drawn: strings come from the shape on screen, the rest from the model's own note list.
+ * The notes played are always the notes drawn, correctly transposed by capo and alternate tunings.
  */
 
 import { arpeggioMidi, bassOptions, modelMidi, type ChordModel } from "./model";
 import { audioEngine, playSynth, recipeForInstrument, type SynthMode } from "../audio";
+import { playSampledChord, getAudioEngineMode, setAudioEngineMode, type AudioEngineMode } from "../audio/soundfontPlayer";
+export { getAudioEngineMode, setAudioEngineMode, type AudioEngineMode };
 
 type StringVoice = "guitar" | "bass" | "ukulele" | "mandolin" | "banjo";
 
@@ -63,39 +65,60 @@ function shapesOf(model: ChordModel): (number | null)[][] {
 }
 
 /** Plays the chord as the instrument plays it: strummed, rolled or struck, all notes overlapping. */
-export function playModel(model: ChordModel, shapeIndex = 0) {
+export async function playModel(model: ChordModel, shapeIndex = 0) {
   const id = model.definition.id;
-  // Instruments with their own sound model (violin family included): the notes of the shape/chord shown, together.
-  if (usesSynthVoice(id)) return synthPlay(id, modelMidi(model, shapeIndex), "chord");
+  const midis = modelMidi(model, shapeIndex);
 
-  // Plucked strings: ONE chord shape → every sounding string (and every strand of a paired course) → one voice each. The shape
-  // played is exactly the shape drawn: for bass, the same option list the diagram steps through (two-note dyads first).
+  // 1. Try studio sampled soundfont playback first
+  try {
+    const playedSample = await playSampledChord(id, midis);
+    if (playedSample) return { voices: [], durationSeconds: 2.8 };
+  } catch {
+    // fallback to physical synthesis
+  }
+
+  // 2. Physical string model and additive synth recipe fallback
+  if (usesSynthVoice(id)) return synthPlay(id, midis, "chord");
+
   if (model.kind === "fretted" || model.kind === "bass") {
     const shapes = shapesOf(model);
     const frets = shapes[shapeIndex % Math.max(shapes.length, 1)];
-    if (!frets) return Promise.resolve(EMPTY);
+    if (!frets) return EMPTY;
+    const capoOffset = model.capo ?? 0;
+    const tuningMidi = capoOffset > 0 ? model.tuning.midi.map((m) => m + capoOffset) : model.tuning.midi;
     return audioEngine.playChord({
       frets,
-      tuningMidi: model.tuning.midi,
+      tuningMidi,
       courses: model.tuning.offsets,
       instrument: stringVoiceFor(id),
       direction: "down",
     });
   }
-  return Promise.resolve(EMPTY);
+  return EMPTY;
 }
 
 /** The same chord one note after another (how you would practise it), with each instrument's own sound. */
-export function playModelArpeggio(model: ChordModel, shapeIndex = 0) {
+export async function playModelArpeggio(model: ChordModel, shapeIndex = 0) {
   const id = model.definition.id;
-  if (usesSynthVoice(id)) return synthPlay(id, modelMidi(model, shapeIndex), "arpeggio");
+  const midis = modelMidi(model, shapeIndex);
+
+  try {
+    const playedSample = await playSampledChord(id, midis, { arpeggio: true });
+    if (playedSample) return { voices: [], durationSeconds: midis.length * 0.35 };
+  } catch {
+    // fallback
+  }
+
+  if (usesSynthVoice(id)) return synthPlay(id, midis, "arpeggio");
   if (model.kind === "fretted" || model.kind === "bass") {
     const shapes = shapesOf(model);
     const frets = shapes[shapeIndex % Math.max(shapes.length, 1)];
-    if (!frets) return Promise.resolve(EMPTY);
-    return audioEngine.playArpeggio({ frets, tuningMidi: model.tuning.midi, courses: model.tuning.offsets, instrument: stringVoiceFor(id), speed: "normal" });
+    if (!frets) return EMPTY;
+    const capoOffset = model.capo ?? 0;
+    const tuningMidi = capoOffset > 0 ? model.tuning.midi.map((m) => m + capoOffset) : model.tuning.midi;
+    return audioEngine.playArpeggio({ frets, tuningMidi, courses: model.tuning.offsets, instrument: stringVoiceFor(id), speed: "normal" });
   }
-  return Promise.resolve(EMPTY);
+  return EMPTY;
 }
 
 /** Bass only: the chord's tones as a one-note-at-a-time run from the root up to the octave. */
@@ -112,19 +135,34 @@ export function playArpeggio(model: ChordModel) {
 }
 
 /** What the Explorer's practice panel plays: the shape on screen, chord or arpeggio, on the instrument's own sound. */
-export function playShape(opts: {
+export async function playShape(opts: {
   instrumentId: string;
   frets: (number | null)[];
   tuningMidi: number[];
   courses?: number[][];
   mode: "chord" | "arpeggio";
   speed?: "slow" | "normal" | "fast";
+  capo?: number;
 }) {
+  const capoOffset = opts.capo ?? 0;
+  const effectiveTuning = capoOffset > 0 ? opts.tuningMidi.map((m) => m + capoOffset) : opts.tuningMidi;
+  const midis = opts.frets.flatMap((f, i) =>
+    f === null || f < 0 || !Number.isFinite(effectiveTuning[i]) ? [] : [effectiveTuning[i] + f]
+  );
+
+  // 1. Studio sampled soundfont playback
+  try {
+    const isArp = opts.mode === "arpeggio";
+    const playedSample = await playSampledChord(opts.instrumentId, midis, { arpeggio: isArp });
+    if (playedSample) return { voices: [], durationSeconds: isArp ? midis.length * 0.35 : 2.8 };
+  } catch {
+    // fallback
+  }
+
   if (usesSynthVoice(opts.instrumentId)) {
-    const midis = opts.frets.flatMap((f, i) => (f === null || f < 0 || !Number.isFinite(opts.tuningMidi[i]) ? [] : [opts.tuningMidi[i] + f]));
     return synthPlay(opts.instrumentId, midis, opts.mode === "chord" ? "chord" : "arpeggio");
   }
-  const common = { frets: opts.frets, tuningMidi: opts.tuningMidi, courses: opts.courses, instrument: stringVoiceFor(opts.instrumentId) };
+  const common = { frets: opts.frets, tuningMidi: effectiveTuning, courses: opts.courses, instrument: stringVoiceFor(opts.instrumentId) };
   return opts.mode === "chord"
     ? audioEngine.playChord({ ...common, direction: "down" })
     : audioEngine.playArpeggio({ ...common, speed: opts.speed ?? "normal" });
@@ -142,8 +180,17 @@ export interface PlayableString {
  * Plays ONE string of the shape being shown: the pitch the table/diagram says (`midi`), on that instrument's sound. For a paired
  * course (mandolin, 12-string) both strings of the pair sound. A muted string is silent.
  */
-export function playPlayedString(info: PlayableString, opts: { instrumentId: string; totalStrings: number; courses?: number[][] }) {
+export async function playPlayedString(info: PlayableString, opts: { instrumentId: string; totalStrings: number; courses?: number[][] }) {
   if (info.action === "muted" || info.midi === null) return Promise.resolve(EMPTY);
+
+  // 1. Studio sampled soundfont playback
+  try {
+    const played = await playSampledChord(opts.instrumentId, [info.midi]);
+    if (played) return { voices: [], durationSeconds: 2.0 };
+  } catch {
+    // fallback
+  }
+
   if (usesSynthVoice(opts.instrumentId)) return synthPlay(opts.instrumentId, [info.midi], "chord");
   return audioEngine.playNote({
     midi: info.midi,
@@ -153,5 +200,30 @@ export function playPlayedString(info: PlayableString, opts: { instrumentId: str
     isOpen: info.action === "open",
     instrument: stringVoiceFor(opts.instrumentId),
     strands: opts.courses?.[info.stringIndex],
+  });
+}
+
+/** Stop all running synthesizers and physical string voices. */
+export function stopAllAudio(): void {
+  audioEngine.stop();
+}
+
+/** Plays a single pitch / MIDI note on the selected instrument voice. */
+export async function playSinglePitch(midi: number, instrumentId: string = 'guitar') {
+  try {
+    const played = await playSampledChord(instrumentId, [midi]);
+    if (played) return { voices: [], durationSeconds: 2.0 };
+  } catch {
+    // fallback
+  }
+
+  if (usesSynthVoice(instrumentId)) {
+    return synthPlay(instrumentId, [midi], 'chord');
+  }
+  return audioEngine.playNote({
+    midi,
+    fret: 0,
+    isOpen: true,
+    instrument: stringVoiceFor(instrumentId),
   });
 }

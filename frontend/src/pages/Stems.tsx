@@ -1,3 +1,4 @@
+import { AnalysisNavSwitcher } from "../components/analysis/AnalysisNavSwitcher";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { DragEvent, FormEvent } from "react";
 import { AbCompare } from "../components/stems/AbCompare";
@@ -80,11 +81,11 @@ function Pill({ conf }: { conf: StemConfidence | "custom" }) {
   );
 }
 
-const card = "rounded-2xl border border-[var(--color-ns-border)] bg-[var(--color-ns-card)] p-5";
+const card = "rounded-2xl border border-[var(--color-ns-border)] bg-[var(--color-ns-surface)] p-5";
 const btn =
-  "rounded-xl border border-[var(--color-ns-border-strong)] bg-[var(--color-ns-raised)] px-3.5 py-2 text-sm font-semibold text-[var(--color-ns-text)] hover:border-[var(--color-ns-purple-light)] disabled:cursor-not-allowed disabled:opacity-50";
+  "inline-flex h-9 items-center justify-center rounded-xl border border-[var(--color-ns-border)] bg-[var(--color-ns-surface)] px-3 text-xs font-semibold text-[var(--color-ns-text)] hover:border-[var(--color-ns-border-strong)] hover:bg-[var(--color-ns-raised)] transition-all disabled:cursor-not-allowed disabled:opacity-40";
 const btnPrimary =
-  "rounded-xl bg-[var(--color-ns-purple)] px-5 py-2.5 text-sm font-bold text-white shadow-[var(--shadow-primary)] hover:bg-[var(--color-ns-purple-light)] disabled:cursor-not-allowed disabled:opacity-50";
+  "inline-flex h-9 items-center justify-center rounded-xl bg-[var(--color-ns-purple)] px-4 text-xs font-bold text-white shadow-[var(--shadow-primary)] hover:bg-[var(--color-ns-purple-light)] transition-all disabled:cursor-not-allowed disabled:opacity-40";
 
 function StepTitle({ n, children }: { n: number; children: string }) {
   return (
@@ -312,7 +313,20 @@ export function Stems() {
   const stageIdx = STAGES.indexOf(stage);
 
   return (
-    <div className="mx-auto max-w-3xl space-y-4 pb-10">
+    <div className="mx-auto max-w-5xl space-y-6 px-4 py-6 sm:px-6 md:px-8">
+      <AnalysisNavSwitcher />
+      {/* Workspace Header */}
+      <div className="flex flex-col justify-between gap-3 border-b border-[var(--color-ns-border)] pb-5 sm:flex-row sm:items-center">
+        <div>
+          <h1 className="font-heading text-xl sm:text-2xl font-semibold tracking-tight text-[var(--color-ns-text)]">
+            AI Stem Splitter
+          </h1>
+          <p className="mt-0.5 text-xs sm:text-sm text-[var(--color-ns-muted)]">
+            State-of-the-art Demucs deep neural source separation into Vocals, Drums, Bass, Guitars and Keys.
+          </p>
+        </div>
+      </div>
+
       {USE_MOCK && (
         <p className="inline-block rounded-full border border-[var(--color-ns-border-strong)] px-3 py-0.5 text-xs text-[var(--color-ns-purple-light)]">
           Mock backend — no server is being called

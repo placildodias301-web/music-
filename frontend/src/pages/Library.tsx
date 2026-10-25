@@ -98,22 +98,22 @@ export function Library() {
   const practicedCount = items.filter((i) => i.lastPracticed).length;
 
   return (
-    <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6 sm:py-10 md:px-8">
+    <div className="mx-auto max-w-6xl px-4 py-6 sm:px-6 md:px-8">
       {/* Header section */}
-      <div className="mb-6 flex flex-col justify-between gap-4 border-b border-[var(--color-ns-border)] pb-6 sm:flex-row sm:items-center">
+      <div className="mb-6 flex flex-col justify-between gap-4 border-b border-[var(--color-ns-border)] pb-5 sm:flex-row sm:items-center">
         <div>
           <div className="flex items-center gap-2">
-            <span className="inline-flex items-center rounded-md border border-secondary/30 bg-secondary/10 px-2.5 py-0.5 text-[0.6875rem] font-semibold text-secondary">
+            <span className="inline-flex items-center rounded-md border border-[var(--color-ns-amber)]/30 bg-[var(--color-ns-amber)]/10 px-2.5 py-0.5 text-[0.6875rem] font-semibold text-[var(--color-ns-amber)]">
               Personal Collection
             </span>
-            <span className="inline-flex items-center rounded-md border border-[var(--color-ns-border)] bg-[var(--color-ns-card)] px-2.5 py-0.5 text-[0.6875rem] font-semibold text-[var(--color-ns-muted)]">
+            <span className="inline-flex items-center rounded-md border border-[var(--color-ns-border)] bg-[var(--color-ns-surface)] px-2.5 py-0.5 text-[0.6875rem] font-semibold text-[var(--color-ns-muted)]">
               {items.length} {items.length === 1 ? "track" : "tracks"}
             </span>
           </div>
-          <h1 className="mt-2 font-heading text-2xl font-bold tracking-tight text-[var(--color-ns-text)] sm:text-3xl">
+          <h1 className="mt-2 font-heading text-xl sm:text-2xl font-semibold tracking-tight text-[var(--color-ns-text)]">
             Song Library
           </h1>
-          <p className="mt-1 text-xs sm:text-sm text-[var(--color-ns-muted)]">
+          <p className="mt-0.5 text-xs sm:text-sm text-[var(--color-ns-muted)]">
             Access your saved tracks, detected chord charts, and practice setups anytime.
           </p>
         </div>
@@ -122,9 +122,9 @@ export function Library() {
           <button
             type="button"
             onClick={() => navigate("/upload")}
-            className="btn-primary flex items-center gap-2"
+            className="btn-primary flex items-center gap-2 h-9 px-4 text-xs font-bold"
           >
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
               <line x1="12" y1="5" x2="12" y2="19" />
               <line x1="5" y1="12" x2="19" y2="12" />
             </svg>
@@ -136,13 +136,13 @@ export function Library() {
       {/* Tabs & Search Row */}
       <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         {/* Category Tabs: All, Recent, Favorites, Practiced */}
-        <div className="flex gap-1.5 rounded-xl border border-[var(--color-ns-border)] bg-[var(--color-ns-bg)] p-1">
+        <div className="flex h-9 items-center gap-1.5 rounded-xl border border-[var(--color-ns-border)] bg-[var(--color-ns-bg)] p-1">
           <button
             type="button"
             onClick={() => setTab("all")}
-            className={`rounded-lg px-3.5 py-1.5 text-xs font-semibold transition-all ${
+            className={`inline-flex h-7 items-center rounded-lg px-3 text-xs font-semibold transition-all ${
               tab === "all"
-                ? "bg-primary text-white font-bold shadow-sm"
+                ? "bg-[var(--color-ns-amber)] text-[var(--color-ns-ink)] font-bold shadow-sm"
                 : "text-[var(--color-ns-muted)] hover:text-[var(--color-ns-text)]"
             }`}
           >
@@ -151,9 +151,9 @@ export function Library() {
           <button
             type="button"
             onClick={() => setTab("recent")}
-            className={`rounded-lg px-3.5 py-1.5 text-xs font-semibold transition-all ${
+            className={`inline-flex h-7 items-center rounded-lg px-3 text-xs font-semibold transition-all ${
               tab === "recent"
-                ? "bg-primary text-white font-bold shadow-sm"
+                ? "bg-[var(--color-ns-amber)] text-[var(--color-ns-ink)] font-bold shadow-sm"
                 : "text-[var(--color-ns-muted)] hover:text-[var(--color-ns-text)]"
             }`}
           >
@@ -162,9 +162,9 @@ export function Library() {
           <button
             type="button"
             onClick={() => setTab("favorites")}
-            className={`flex items-center gap-1.5 rounded-lg px-3.5 py-1.5 text-xs font-semibold transition-all ${
+            className={`inline-flex h-7 items-center gap-1.5 rounded-lg px-3 text-xs font-semibold transition-all ${
               tab === "favorites"
-                ? "bg-primary text-white font-bold shadow-sm"
+                ? "bg-[var(--color-ns-amber)] text-[var(--color-ns-ink)] font-bold shadow-sm"
                 : "text-[var(--color-ns-muted)] hover:text-[var(--color-ns-text)]"
             }`}
           >
@@ -174,9 +174,9 @@ export function Library() {
           <button
             type="button"
             onClick={() => setTab("practiced")}
-            className={`flex items-center gap-1.5 rounded-lg px-3.5 py-1.5 text-xs font-semibold transition-all ${
+            className={`inline-flex h-7 items-center gap-1.5 rounded-lg px-3 text-xs font-semibold transition-all ${
               tab === "practiced"
-                ? "bg-primary text-white font-bold shadow-sm"
+                ? "bg-[var(--color-ns-amber)] text-[var(--color-ns-ink)] font-bold shadow-sm"
                 : "text-[var(--color-ns-muted)] hover:text-[var(--color-ns-text)]"
             }`}
           >
@@ -188,9 +188,9 @@ export function Library() {
         {/* Search */}
         <div className="relative flex-1 max-w-xs">
           <svg
-            className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-[var(--color-ns-muted)]"
-            width="15"
-            height="15"
+            className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[var(--color-ns-muted)]"
+            width="14"
+            height="14"
             viewBox="0 0 24 24"
             fill="none"
             stroke="currentColor"
@@ -206,7 +206,7 @@ export function Library() {
             onChange={(e) => setQuery(e.target.value)}
             aria-label="Filter your saved songs"
             placeholder="Search saved songs…"
-            className="input-base pl-9 pr-8 w-full rounded-xl text-xs py-2"
+            className="h-9 w-full rounded-xl border border-[var(--color-ns-border)] bg-[var(--color-ns-bg-2)] pl-9 pr-8 text-xs text-[var(--color-ns-text)] placeholder:text-[var(--color-ns-muted)] focus:border-[var(--color-ns-amber)]/60 focus:outline-none transition-all"
           />
           {query && (
             <button
@@ -293,7 +293,7 @@ export function Library() {
             return (
               <div
                 key={item.id}
-                className="group flex flex-col justify-between rounded-2xl border border-[var(--color-ns-border)] bg-[var(--color-ns-card)] p-5 shadow-sm transition-all hover:border-[var(--color-ns-border-strong)] hover:bg-[var(--color-ns-raised)]"
+                className="group flex flex-col justify-between h-full rounded-2xl border border-[var(--color-ns-border)] bg-[var(--color-ns-surface)] p-5 shadow-sm transition-all hover:border-[var(--color-ns-border-strong)] hover:bg-[var(--color-ns-raised)]"
               >
                 <div>
                   {/* Top: Artwork + Title/Artist + Fav/Remove */}
@@ -396,11 +396,11 @@ export function Library() {
                 </div>
 
                 {/* Actions */}
-                <div className="mt-5 pt-3.5 border-t border-[var(--color-ns-border)] flex items-center gap-2">
+                <div className="mt-auto pt-4 border-t border-[var(--color-ns-border)] flex items-center gap-2">
                   <button
                     type="button"
                     onClick={() => handleOpen(item)}
-                    className="btn-primary flex-1 py-1.5 text-xs font-semibold"
+                    className="btn-primary flex-1 h-8 text-xs font-bold"
                     title="Open synced chord & lyric sheet"
                   >
                     Open
@@ -408,7 +408,7 @@ export function Library() {
                   <button
                     type="button"
                     onClick={() => handleOpenAnalysis(item)}
-                    className="btn-secondary py-1.5 text-xs font-semibold"
+                    className="btn-secondary h-8 px-3 text-xs font-semibold"
                     title="Open full harmonic analysis"
                   >
                     Analysis
@@ -416,7 +416,7 @@ export function Library() {
                   <button
                     type="button"
                     onClick={() => handlePractice(item)}
-                    className="btn-secondary py-1.5 text-xs font-semibold"
+                    className="btn-secondary h-8 px-3 text-xs font-semibold"
                     title="Practice chords for this song"
                   >
                     Practice Studio

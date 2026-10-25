@@ -5,10 +5,13 @@ import { FretboardDiagram } from "./FretboardDiagram";
 import { HarpChord } from "./HarpChord";
 import { KeyboardChord } from "./KeyboardChord";
 import { HarmonicaChord, WindChord } from "./WindChord";
+import { ModalDroneInstrumentView } from "./ModalDroneInstrumentView";
 
 /** Draws a chord model. The model's `kind` (set by the instrument's renderer in lib/instruments/definitions.ts) picks the component. */
 export function ChordDiagram({ model, shapeIndex, onShape }: { model: ChordModel; shapeIndex: number; onShape: (i: number) => void }) {
   switch (model.kind) {
+    case "modal":
+      return <ModalDroneInstrumentView model={model} />;
     case "fretted": {
       const shape = model.shapes[shapeIndex % Math.max(model.shapes.length, 1)];
       if (!shape) return <p className="max-w-[16rem] text-center text-xs text-[var(--color-ns-muted)]">No playable {model.chord.label} shape found on this tuning.</p>;
@@ -21,6 +24,8 @@ export function ChordDiagram({ model, shapeIndex, onShape }: { model: ChordModel
           fretless={model.definition.fretless}
           caption={shape.name}
           ariaLabel={`${model.chord.label} on ${model.definition.name}, ${model.tuning.name}`}
+          capo={model.capo}
+          leftHanded={model.leftHanded}
         />
       );
     }

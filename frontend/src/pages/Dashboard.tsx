@@ -110,18 +110,17 @@ export function Dashboard() {
   const weeklyValues = [25, 40, 15, 50, 30, 45, 60];
 
   return (
-    <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6 sm:py-10 md:px-8">
-      {/* Header */}
-      <div className="mb-6 sm:mb-8">
-        <span className="inline-flex items-center gap-1.5 rounded-full border border-primary/30 bg-primary/10 px-3 py-0.5 text-[0.6875rem] font-semibold uppercase tracking-wider text-primary">
-          Musician Performance & Analytics
-        </span>
-        <h1 className="mt-3 font-heading text-3xl font-bold tracking-tight text-[var(--color-ns-text)] sm:text-4xl">
-          Practice Progress & Analytics
-        </h1>
-        <p className="mt-1.5 text-xs sm:text-sm text-[var(--color-ns-muted)]">
-          Real session metrics logged directly on your device — monitoring tempo progression, practice consistency, and transition weak spots.
-        </p>
+    <div className="mx-auto max-w-6xl px-4 py-6 sm:px-6 md:px-8">
+      {/* Workspace Header */}
+      <div className="mb-6 flex flex-col justify-between gap-3 border-b border-[var(--color-ns-border)] pb-5 sm:flex-row sm:items-center">
+        <div>
+          <h1 className="font-heading text-xl sm:text-2xl font-semibold tracking-tight text-[var(--color-ns-text)]">
+            Practice Progress & Analytics
+          </h1>
+          <p className="mt-0.5 text-xs sm:text-sm text-[var(--color-ns-muted)]">
+            Real session metrics logged directly on your device — monitoring tempo progression, consistency, and transition weak spots.
+          </p>
+        </div>
       </div>
 
       {/* 4 Core Stat Cards */}

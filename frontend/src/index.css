@@ -148,6 +148,9 @@ h3 {
     box-shadow: 0 1px 0 rgba(255, 255, 255, 0.04) inset, 0 24px 50px -20px rgba(0, 0, 0, 0.8);
   }
 
+  .no-scrollbar::-webkit-scrollbar { display: none; }
+  .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
   .bottom-nav-blur {
     background: rgba(7, 13, 28, 0.92);
     backdrop-filter: blur(20px);
@@ -224,7 +227,7 @@ h3 {
     align-items: flex-start;
     gap: 10px;
     padding: 12px 14px;
-    border-radius: var(--radius-card-sm);
+    border-radius: 9999px;
     border: 1px solid var(--tint-border);
     background: var(--tint-bg);
     color: var(--color-content-light);
@@ -243,7 +246,7 @@ h3 {
     gap: 8px;
     padding: 10px 20px;
     min-height: 44px;
-    border-radius: var(--radius-card-sm);
+    border-radius: 9999px;
     font-size: 0.875rem;
     font-weight: 700;
     font-family: var(--font-body);
@@ -281,7 +284,7 @@ h3 {
     gap: 8px;
     padding: 10px 20px;
     min-height: 44px;
-    border-radius: var(--radius-card-sm);
+    border-radius: 9999px;
     font-size: 0.875rem;
     font-weight: 700;
     font-family: var(--font-body);
@@ -314,7 +317,7 @@ h3 {
     justify-content: center;
     gap: 8px;
     padding: 10px 18px;
-    border-radius: var(--radius-card-sm);
+    border-radius: 9999px;
     font-size: 0.875rem;
     font-weight: 600;
     font-family: var(--font-body);
@@ -338,7 +341,7 @@ h3 {
     gap: 8px;
     padding: 10px 20px;
     min-height: 44px;
-    border-radius: var(--radius-card-sm);
+    border-radius: 9999px;
     font-size: 0.875rem;
     font-weight: 700;
     font-family: var(--font-body);
@@ -395,7 +398,7 @@ h3 {
     padding: 11px 14px;
     background: var(--color-ns-raised);
     border: 1px solid var(--color-ns-border);
-    border-radius: var(--radius-card-sm);
+    border-radius: 9999px;
     color: var(--color-content);
     font-family: var(--font-body);
     font-size: 0.875rem;
@@ -612,7 +615,7 @@ h3 {
     gap: 8px;
     min-height: 44px;
     padding: 10px 20px;
-    border-radius: 12px;
+    border-radius: 9999px;
     font-family: var(--font-body);
     font-size: 0.875rem;
     font-weight: 700;
@@ -774,7 +777,7 @@ h3 {
   .btn-danger:focus-visible,
   .btn-cta-nav:focus-visible {
     box-shadow: var(--focus-ring);
-    border-radius: var(--radius-card-sm);
+    border-radius: 9999px;
   }
 
   .input-base:focus-visible {

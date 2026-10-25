@@ -9,7 +9,7 @@ import { clearSyncError, getLastSyncError, subscribeSyncError } from "../lib/clo
 import { firstNameOf, initialsOf, profileSubtitle } from "../lib/settings/profile";
 import { useSettings } from "../lib/settings/settingsContext";
 import { useAuth } from "../lib/auth";
-import { ErrorBanner } from "./ErrorBanner";
+import { SettingsSheet } from "./settings/SettingsSheet";
 
 interface NavItem {
   to: string;
@@ -268,7 +268,7 @@ function SidebarContent({
         <Link
           to="/upload"
           onClick={onNavigate}
-          className="ns-btn-primary mb-6 flex w-full items-center justify-center gap-2 rounded-xl py-2.5 text-sm font-bold shadow-[0_6px_20px_rgba(108,77,255,0.45)] hover:shadow-[0_8px_24px_rgba(108,77,255,0.65)]"
+          className="ns-btn-primary mb-6 flex w-full items-center justify-center gap-2 rounded-full py-2.5 text-sm font-bold shadow-[0_6px_20px_rgba(108,77,255,0.45)] hover:shadow-[0_8px_24px_rgba(108,77,255,0.65)]"
         >
           {icon(ICONS.plus, 16)}
           <span>Analyze a Song</span>
@@ -499,6 +499,14 @@ export function AppShell({ children }: { children: ReactNode }) {
   }, []);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [libraryCount, setLibraryCount] = useState(0);
+  const [settingsSheetOpen, setSettingsSheetOpen] = useState(false);
+  const [syncDismissed, setSyncDismissed] = useState(() => {
+    try {
+      return localStorage.getItem("wilsify_dismiss_sync_warn") === "1";
+    } catch {
+      return false;
+    }
+  });
   const syncError = useSyncExternalStore(subscribeSyncError, getLastSyncError, () => null);
   const { settings } = useSettings();
   const profile = settings.profile;
@@ -593,13 +601,13 @@ export function AppShell({ children }: { children: ReactNode }) {
           isChat ? "h-[100dvh] overflow-hidden pb-16 md:pb-0" : "min-h-screen pb-24 md:pb-10"
         }`}
       >
-        <header className="sticky top-0 z-30 flex items-center justify-between gap-3 border-b border-[var(--color-ns-border)]/80 bg-[var(--color-ns-bg)]/85 px-4 py-3 backdrop-blur-xl sm:px-6 md:px-8">
+        <header className="sticky top-0 z-30 flex h-12 sm:h-14 items-center justify-between gap-2.5 border-b border-[var(--color-ns-border)]/80 bg-[var(--color-ns-bg)]/85 px-3 py-2 backdrop-blur-xl sm:px-6 md:px-8">
           <div className="flex min-w-0 items-center gap-3">
             <button
               type="button"
               aria-label="Open menu"
               onClick={() => setMobileNavOpen(true)}
-              className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl border border-[var(--color-ns-border)] bg-[var(--color-ns-bg-2)] text-[var(--color-ns-text)] transition-colors hover:border-[var(--color-ns-border-strong)] md:hidden"
+              className="flex h-8 w-8 sm:h-9 sm:w-9 flex-shrink-0 items-center justify-center rounded-xl border border-[var(--color-ns-border)] bg-[var(--color-ns-bg-2)] text-[var(--color-ns-text)] transition-colors hover:border-[var(--color-ns-border-strong)] md:hidden"
             >
               <svg width="18" height="18" viewBox="0 0 20 20" fill="none" aria-hidden="true">
                 <path d="M3 5h14M3 10h14M3 15h14" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
@@ -654,16 +662,37 @@ export function AppShell({ children }: { children: ReactNode }) {
           </div>
         </header>
 
-        {syncError && (
-          <div className="px-4 py-2 sm:px-6 md:px-8">
-            <ErrorBanner
-              severity="warning"
+        {syncError && !syncDismissed && (
+          <div className="px-3 py-1.5 sm:px-6 md:px-8">
+            <div
               role="status"
-              title="Cloud Sync Unavailable"
-              message={syncError}
-              actionLabel="Dismiss"
-              onAction={clearSyncError}
-            />
+              className="flex items-center justify-between gap-2 rounded-xl border border-[var(--color-ns-amber)]/40 bg-[var(--color-ns-amber)]/10 px-3 py-1.5 text-xs text-[var(--color-ns-amber)]"
+            >
+              <div className="flex min-w-0 items-center gap-2">
+                <span className="flex h-1.5 w-1.5 shrink-0 rounded-full bg-[var(--color-ns-amber)]" />
+                <h2 className="shrink-0 text-xs font-semibold">Cloud Sync Unavailable</h2>
+                <span className="truncate text-[11px] text-[var(--color-ns-muted)] sm:text-xs">
+                  — {syncError}
+                </span>
+              </div>
+              <button
+                type="button"
+                aria-label="Dismiss"
+                onClick={() => {
+                  setSyncDismissed(true);
+                  try {
+                    localStorage.setItem("wilsify_dismiss_sync_warn", "1");
+                  } catch {}
+                  clearSyncError();
+                }}
+                className="shrink-0 rounded-lg p-1 text-[var(--color-ns-muted)] hover:bg-white/[0.08] hover:text-[var(--color-ns-text)]"
+              >
+                <span className="sr-only">Dismiss</span>
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="M18 6L6 18M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
           </div>
         )}
 
@@ -671,8 +700,8 @@ export function AppShell({ children }: { children: ReactNode }) {
       </div>
 
       {/* Mobile bottom navigation with raised center upload action */}
-      <nav aria-label="Primary" className="bottom-nav-blur fixed inset-x-0 bottom-0 z-40 border-t border-[var(--color-ns-border)] bg-[var(--color-ns-bg-2)]/95 backdrop-blur-xl md:hidden">
-        <div className="flex h-16 items-center px-2">
+      <nav aria-label="Primary" className="bottom-nav-blur fixed inset-x-0 bottom-0 z-40 border-t border-[var(--color-ns-border)] bg-[var(--color-ns-bg-2)]/95 backdrop-blur-xl pb-[max(env(safe-area-inset-bottom),6px)] md:hidden">
+        <div className="flex h-14 items-center px-2">
           {BOTTOM_LEFT.map((item) => (
             <BottomLink key={item.to} item={item} pathname={location.pathname} />
           ))}
@@ -680,9 +709,9 @@ export function AppShell({ children }: { children: ReactNode }) {
             <Link
               to="/upload"
               aria-label="Analyze a song"
-              className="-mt-7 flex h-14 w-14 items-center justify-center rounded-2xl border border-white/20 bg-gradient-to-br from-[var(--color-ns-purple)] to-[var(--color-ns-purple-light)] text-white shadow-[0_10px_24px_-8px_rgba(108,77,255,0.85)] transition-transform active:scale-95"
+              className="-mt-3.5 flex h-11 w-11 items-center justify-center rounded-2xl border border-white/20 bg-gradient-to-br from-[var(--color-ns-purple)] to-[var(--color-ns-purple-light)] text-white shadow-[0_6px_16px_-4px_rgba(108,77,255,0.7)] transition-transform active:scale-95"
             >
-              {icon(ICONS.plus, 24)}
+              {icon(ICONS.plus, 18)}
             </Link>
           </div>
           {BOTTOM_RIGHT.map((item) => (
@@ -690,14 +719,18 @@ export function AppShell({ children }: { children: ReactNode }) {
           ))}
           <button
             type="button"
-            onClick={() => setMobileNavOpen(true)}
-            className="flex flex-1 flex-col items-center gap-1 py-1.5 text-[0.6875rem] font-semibold text-[var(--color-ns-muted)] transition-colors hover:text-[var(--color-ns-text)]"
+            onClick={() => setSettingsSheetOpen(true)}
+            aria-label="Settings and Profile"
+            className="flex flex-1 flex-col items-center gap-1 py-1 text-[0.6875rem] font-semibold text-[var(--color-ns-muted)] transition-colors hover:text-[var(--color-ns-text)]"
           >
-            {icon(ICONS.more, 21)}
-            More
+            {icon(ICONS.settings, 19)}
+            Settings
           </button>
         </div>
       </nav>
+
+      {/* Dedicated Settings & Profile Bottom Sheet */}
+      <SettingsSheet open={settingsSheetOpen} onClose={() => setSettingsSheetOpen(false)} />
     </div>
   );
 }

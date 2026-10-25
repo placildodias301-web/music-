@@ -12,6 +12,12 @@
  */
 
 export const NOTE_NAMES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"] as const;
+export const SHARP_ROOTS = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"] as const;
+export const FLAT_ROOTS = ["C", "Db", "D", "Eb", "E", "F", "Gb", "G", "Ab", "A", "Bb", "B"] as const;
+export const BOTH_ROOTS = ["C", "C♯/D♭", "D", "D♯/E♭", "E", "F", "F♯/G♭", "G", "G♯/A♭", "A", "A♯/B♭", "B"] as const;
+
+export type EnharmonicMode = "sharps" | "flats" | "both";
+
 
 /* ─── Chord qualities ─── */
 
@@ -39,13 +45,18 @@ export const CHORD_QUALITIES: QualityDef[] = [
   { suffix: "aug", name: "augmented", category: "Triads", tones: [[0, 1], [4, 3], [8, 5]], optional: [], aliases: ["+"] },
   { suffix: "sus2", name: "suspended 2nd", category: "Triads", tones: [[0, 1], [2, 2], [7, 5]], optional: [] },
   { suffix: "sus4", name: "suspended 4th", category: "Triads", tones: [[0, 1], [5, 4], [7, 5]], optional: [], aliases: ["sus"] },
+  { suffix: "b5", name: "flat fifth", category: "Triads", tones: [[0, 1], [4, 3], [6, 5]], optional: [], aliases: ["flat5", "-5"] },
   // Sixths & added tones
   { suffix: "6", name: "major sixth", category: "Sixths & adds", tones: [[0, 1], [4, 3], [7, 5], [9, 6]], optional: [7] },
   { suffix: "m6", name: "minor sixth", category: "Sixths & adds", tones: [[0, 1], [3, 3], [7, 5], [9, 6]], optional: [7] },
   { suffix: "6/9", name: "six-nine", category: "Sixths & adds", tones: [[0, 1], [4, 3], [7, 5], [9, 6], [14, 9]], optional: [7], aliases: ["69"] },
+  { suffix: "m6/9", name: "minor six-nine", category: "Sixths & adds", tones: [[0, 1], [3, 3], [7, 5], [9, 6], [14, 9]], optional: [7], aliases: ["m69"] },
+  { suffix: "add2", name: "added second", category: "Sixths & adds", tones: [[0, 1], [2, 2], [4, 3], [7, 5]], optional: [7] },
+  { suffix: "add4", name: "added fourth", category: "Sixths & adds", tones: [[0, 1], [4, 3], [5, 4], [7, 5]], optional: [7] },
   { suffix: "add9", name: "added ninth", category: "Sixths & adds", tones: [[0, 1], [4, 3], [7, 5], [14, 9]], optional: [7] },
   { suffix: "madd9", name: "minor added ninth", category: "Sixths & adds", tones: [[0, 1], [3, 3], [7, 5], [14, 9]], optional: [7] },
   { suffix: "add11", name: "added eleventh", category: "Sixths & adds", tones: [[0, 1], [4, 3], [7, 5], [17, 11]], optional: [7] },
+  { suffix: "madd11", name: "minor added eleventh", category: "Sixths & adds", tones: [[0, 1], [3, 3], [7, 5], [17, 11]], optional: [7] },
   { suffix: "add13", name: "added thirteenth", category: "Sixths & adds", tones: [[0, 1], [4, 3], [7, 5], [21, 13]], optional: [7] },
   // Sevenths
   { suffix: "7", name: "dominant seventh", category: "Sevenths", tones: [[0, 1], [4, 3], [7, 5], [10, 7]], optional: [7] },
@@ -54,11 +65,16 @@ export const CHORD_QUALITIES: QualityDef[] = [
   { suffix: "mMaj7", name: "minor-major seventh", category: "Sevenths", tones: [[0, 1], [3, 3], [7, 5], [11, 7]], optional: [7], aliases: ["mmaj7", "m(maj7)"] },
   { suffix: "m7b5", name: "half-diminished", category: "Sevenths", tones: [[0, 1], [3, 3], [6, 5], [10, 7]], optional: [], aliases: ["ø", "ø7"] },
   { suffix: "dim7", name: "diminished seventh", category: "Sevenths", tones: [[0, 1], [3, 3], [6, 5], [9, 7]], optional: [], aliases: ["°7", "o7"] },
+  { suffix: "dimMaj7", name: "diminished major seventh", category: "Sevenths", tones: [[0, 1], [3, 3], [6, 5], [11, 7]], optional: [], aliases: ["dim(maj7)", "°maj7", "oMaj7"] },
   { suffix: "7sus4", name: "dominant seventh sus4", category: "Sevenths", tones: [[0, 1], [5, 4], [7, 5], [10, 7]], optional: [7], aliases: ["7sus"] },
+  { suffix: "7sus2", name: "dominant seventh sus2", category: "Sevenths", tones: [[0, 1], [2, 2], [7, 5], [10, 7]], optional: [7] },
+  { suffix: "7#5", name: "augmented seventh", category: "Sevenths", tones: [[0, 1], [4, 3], [8, 5], [10, 7]], optional: [], aliases: ["aug7", "+7"] },
+  { suffix: "maj7#5", name: "augmented major seventh", category: "Sevenths", tones: [[0, 1], [4, 3], [8, 5], [11, 7]], optional: [], aliases: ["+maj7", "maj7+5", "augMaj7"] },
   // Extended
   { suffix: "9", name: "dominant ninth", category: "Extended", tones: [[0, 1], [4, 3], [7, 5], [10, 7], [14, 9]], optional: [7] },
   { suffix: "maj9", name: "major ninth", category: "Extended", tones: [[0, 1], [4, 3], [7, 5], [11, 7], [14, 9]], optional: [7], aliases: ["M9"] },
   { suffix: "m9", name: "minor ninth", category: "Extended", tones: [[0, 1], [3, 3], [7, 5], [10, 7], [14, 9]], optional: [7], aliases: ["min9", "-9"] },
+  { suffix: "mMaj9", name: "minor-major ninth", category: "Extended", tones: [[0, 1], [3, 3], [7, 5], [11, 7], [14, 9]], optional: [7], aliases: ["mmaj9", "m(maj9)"] },
   { suffix: "9sus4", name: "ninth sus4", category: "Extended", tones: [[0, 1], [5, 4], [7, 5], [10, 7], [14, 9]], optional: [7] },
   { suffix: "11", name: "dominant eleventh", category: "Extended", tones: [[0, 1], [4, 3], [7, 5], [10, 7], [14, 9], [17, 11]], optional: [4, 7, 14] },
   { suffix: "maj11", name: "major eleventh", category: "Extended", tones: [[0, 1], [4, 3], [7, 5], [11, 7], [14, 9], [17, 11]], optional: [7, 14], aliases: ["M11"] },
@@ -66,24 +82,27 @@ export const CHORD_QUALITIES: QualityDef[] = [
   { suffix: "13", name: "dominant thirteenth", category: "Extended", tones: [[0, 1], [4, 3], [7, 5], [10, 7], [14, 9], [21, 13]], optional: [7, 14] },
   { suffix: "maj13", name: "major thirteenth", category: "Extended", tones: [[0, 1], [4, 3], [7, 5], [11, 7], [14, 9], [21, 13]], optional: [7, 14], aliases: ["M13"] },
   { suffix: "m13", name: "minor thirteenth", category: "Extended", tones: [[0, 1], [3, 3], [7, 5], [10, 7], [14, 9], [21, 13]], optional: [7, 14], aliases: ["min13", "-13"] },
-  // Altered
-  { suffix: "7#5", name: "augmented seventh", category: "Altered", tones: [[0, 1], [4, 3], [8, 5], [10, 7]], optional: [], aliases: ["aug7", "+7"] },
+  { suffix: "13sus4", name: "thirteenth sus4", category: "Extended", tones: [[0, 1], [5, 4], [7, 5], [10, 7], [14, 9], [21, 13]], optional: [7, 14], aliases: ["13sus"] },
+  // Altered & Jazz
   { suffix: "7b5", name: "seventh flat five", category: "Altered", tones: [[0, 1], [4, 3], [6, 5], [10, 7]], optional: [] },
   { suffix: "7b9", name: "seventh flat nine", category: "Altered", tones: [[0, 1], [4, 3], [7, 5], [10, 7], [13, 9]], optional: [7] },
   { suffix: "7#9", name: "seventh sharp nine", category: "Altered", tones: [[0, 1], [4, 3], [7, 5], [10, 7], [15, 9]], optional: [7] },
   { suffix: "7#11", name: "seventh sharp eleven", category: "Altered", tones: [[0, 1], [4, 3], [7, 5], [10, 7], [18, 11]], optional: [7] },
   { suffix: "7b13", name: "seventh flat thirteen", category: "Altered", tones: [[0, 1], [4, 3], [7, 5], [10, 7], [20, 13]], optional: [7] },
+  { suffix: "7alt", name: "altered dominant", category: "Altered", tones: [[0, 1], [4, 3], [10, 7], [13, 9], [15, 9]], optional: [7], aliases: ["alt", "alt7"] },
+  { suffix: "7b9b5", name: "seventh flat nine flat five", category: "Altered", tones: [[0, 1], [4, 3], [6, 5], [10, 7], [13, 9]], optional: [], aliases: ["7b5b9"] },
+  { suffix: "7#5b9", name: "seventh sharp five flat nine", category: "Altered", tones: [[0, 1], [4, 3], [8, 5], [10, 7], [13, 9]], optional: [], aliases: ["7b9#5"] },
+  { suffix: "7#9b5", name: "seventh sharp nine flat five", category: "Altered", tones: [[0, 1], [4, 3], [6, 5], [10, 7], [15, 9]], optional: [] },
+  { suffix: "7#5#9", name: "seventh sharp five sharp nine", category: "Altered", tones: [[0, 1], [4, 3], [8, 5], [10, 7], [15, 9]], optional: [], aliases: ["7#9#5"] },
+  { suffix: "7b9#11", name: "seventh flat nine sharp eleven", category: "Altered", tones: [[0, 1], [4, 3], [7, 5], [10, 7], [13, 9], [18, 11]], optional: [7] },
+  { suffix: "7#9b13", name: "seventh sharp nine flat thirteen", category: "Altered", tones: [[0, 1], [4, 3], [7, 5], [10, 7], [15, 9], [20, 13]], optional: [7] },
   { suffix: "maj7#11", name: "major seventh sharp eleven", category: "Altered", tones: [[0, 1], [4, 3], [7, 5], [11, 7], [18, 11]], optional: [7] },
-  { suffix: "maj7#5", name: "augmented major seventh", category: "Altered", tones: [[0, 1], [4, 3], [8, 5], [11, 7]], optional: [], aliases: ["+maj7", "maj7+5"] },
-  { suffix: "7b5b9", name: "seventh flat five flat nine", category: "Altered", tones: [[0, 1], [4, 3], [6, 5], [10, 7], [13, 9]], optional: [] },
-  { suffix: "7#5b9", name: "seventh sharp five flat nine", category: "Altered", tones: [[0, 1], [4, 3], [8, 5], [10, 7], [13, 9]], optional: [] },
-  { suffix: "7#5#9", name: "seventh sharp five sharp nine", category: "Altered", tones: [[0, 1], [4, 3], [8, 5], [10, 7], [15, 9]], optional: [] },
+  { suffix: "maj7b5", name: "major seventh flat five", category: "Altered", tones: [[0, 1], [4, 3], [6, 5], [11, 7]], optional: [] },
+  { suffix: "m7b9", name: "minor seventh flat nine", category: "Altered", tones: [[0, 1], [3, 3], [7, 5], [10, 7], [13, 9]], optional: [7] },
+  { suffix: "m11b5", name: "minor eleventh flat five", category: "Altered", tones: [[0, 1], [3, 3], [6, 5], [10, 7], [14, 9], [17, 11]], optional: [14], aliases: ["m11(b5)", "m7b5(11)"] },
   { suffix: "9#11", name: "ninth sharp eleven", category: "Altered", tones: [[0, 1], [4, 3], [7, 5], [10, 7], [14, 9], [18, 11]], optional: [7, 14] },
   { suffix: "13b9", name: "thirteenth flat nine", category: "Altered", tones: [[0, 1], [4, 3], [7, 5], [10, 7], [13, 9], [21, 13]], optional: [7] },
   { suffix: "maj9#11", name: "major ninth sharp eleven", category: "Altered", tones: [[0, 1], [4, 3], [7, 5], [11, 7], [14, 9], [18, 11]], optional: [7, 14] },
-  // Extra sevenths and adds
-  { suffix: "7sus2", name: "dominant seventh sus2", category: "Sevenths", tones: [[0, 1], [2, 2], [7, 5], [10, 7]], optional: [7] },
-  { suffix: "madd11", name: "minor added eleventh", category: "Sixths & adds", tones: [[0, 1], [3, 3], [7, 5], [17, 11]], optional: [7] },
 ];
 
 export const CHORD_CATEGORIES: ChordCategory[] = ["Triads", "Sixths & adds", "Sevenths", "Extended", "Altered"];
@@ -222,6 +241,60 @@ export function chordMidiNotes(chord: ParsedChord, baseOctaveMidi = 60): number[
 }
 
 /* ─── Guitar ─── */
+
+
+/**
+ * Beginner-friendly open & mini-barre shapes for chords that are traditionally barre-only,
+ * so beginners can immediately play F, Bm, Bb, Gm, etc. without needing full 6-string barres.
+ */
+export const BEGINNER_EASY_GUITAR_SHAPES: Record<string, { name: string; frets: (number | null)[] }> = {
+  F: { name: "Easy Mini-Barre · Beginner", frets: [null, null, 3, 2, 1, 1] },
+  Fm: { name: "Easy Mini-Barre · Beginner", frets: [null, null, 3, 1, 1, 1] },
+  Bm: { name: "Easy 4-String · Beginner", frets: [null, null, 4, 4, 3, 2] },
+  "A#": { name: "Easy 4-String · Beginner", frets: [null, null, 3, 3, 3, 1] },
+  B: { name: "Easy 4-String · Beginner", frets: [null, null, 4, 4, 4, 2] },
+  "F#": { name: "Easy Mini-Barre · Beginner", frets: [null, null, 4, 3, 2, 2] },
+  "F#m": { name: "Easy Mini-Barre · Beginner", frets: [null, null, 4, 2, 2, 2] },
+  Gm: { name: "Open · Easy Gm", frets: [null, null, 0, 3, 3, 3] },
+  "G#m": { name: "Easy Mini-Barre", frets: [null, null, 6, 4, 4, 4] },
+  "C#": { name: "Easy Mini-Barre", frets: [null, null, 3, 1, 2, 1] },
+  "C#m": { name: "Open · Easy C#m7 Sub", frets: [null, null, 2, 1, 2, 0] },
+  Cm: { name: "Easy 4-String Cm", frets: [null, null, 5, 5, 4, 3] },
+  "D#m": { name: "Easy 4-String D#m", frets: [null, null, 1, 3, 4, 2] },
+};
+
+export interface VoicingBadgeInfo {
+  type: "open" | "easy" | "barre-e" | "barre-a" | "drop2" | "shell" | "movable";
+  label: string;
+}
+
+export function getVoicingBadge(name: string, frets: (number | null)[]): VoicingBadgeInfo {
+  const lower = name.toLowerCase();
+  const fretted = frets.filter((f): f is number => f !== null && f > 0);
+  const minFret = fretted.length ? Math.min(...fretted) : 0;
+  const maxFret = fretted.length ? Math.max(...fretted) : 0;
+  const hasOpen = frets.some((f) => f === 0);
+
+  if (lower.includes("easy") || lower.includes("mini-barre")) {
+    return { type: "easy", label: name };
+  }
+  if (lower.includes("e-shape") || lower.includes("e shape")) {
+    return { type: "barre-e", label: `Barre · E-Shape (Fret ${minFret})` };
+  }
+  if (lower.includes("a-shape") || lower.includes("a shape")) {
+    return { type: "barre-a", label: `Barre · A-Shape (Fret ${minFret})` };
+  }
+  if (hasOpen && maxFret <= 4) {
+    return { type: "open", label: "Open · Beginner" };
+  }
+  if (frets.filter((f) => f !== null).length <= 4 && minFret >= 3) {
+    return { type: "shell", label: `Shell / Drop (Fret ${minFret})` };
+  }
+  if (minFret > 0) {
+    return { type: "movable", label: `Barre · Pos ${minFret}` };
+  }
+  return { type: "open", label: "Open Position" };
+}
 
 export interface GuitarVoicing {
   name: string;
@@ -465,23 +538,28 @@ export function getGuitarVoicings(chord: ParsedChord): GuitarVoicing[] {
 
   if (isTriad) {
     const openKey = `${NOTE_NAMES[chord.root]}${chord.quality.suffix}`;
-    // Several "first" shapes (F, C#, G#m…) are barres with no open strings —
-    // name them by position rather than calling them open chords.
-    if (OPEN_GUITAR_CHORDS[openKey]) voicings.push({ name: voicingName(OPEN_GUITAR_CHORDS[openKey]), frets: OPEN_GUITAR_CHORDS[openKey] });
+    // If a beginner open / easy mini-barre shape exists, insert it first
+    if (BEGINNER_EASY_GUITAR_SHAPES[openKey]) {
+      voicings.push(BEGINNER_EASY_GUITAR_SHAPES[openKey]);
+    }
+    if (OPEN_GUITAR_CHORDS[openKey]) {
+      const isBarre = !OPEN_GUITAR_CHORDS[openKey].some((f) => f === 0);
+      const name = isBarre ? `Barre · Full Shape (Fret ${shapePosition(OPEN_GUITAR_CHORDS[openKey])})` : "Open position";
+      voicings.push({ name, frets: OPEN_GUITAR_CHORDS[openKey] });
+    }
     voicings.push(eShapeBarre(chord));
     voicings.push(aShapeBarre(chord));
   } else if (chord.quality.suffix === "5" && !slash) {
-    // Power chords: the standard root–fifth–octave shapes on the E and A strings.
     const e = distanceFromE(chord.root);
     const a = distanceFromA(chord.root);
-    voicings.push({ name: e === 0 ? "Open (E-string root)" : `E-string root (fret ${e})`, frets: [e, e + 2, e + 2, null, null, null] });
-    voicings.push({ name: a === 0 ? "Open (A-string root)" : `A-string root (fret ${a})`, frets: [null, a, a + 2, a + 2, null, null] });
+    voicings.push({ name: e === 0 ? "Open (E-string root)" : `Power · Fret ${e}`, frets: [e, e + 2, e + 2, null, null, null] });
+    voicings.push({ name: a === 0 ? "Open (A-string root)" : `Power · Fret ${a}`, frets: [null, a, a + 2, a + 2, null, null] });
   } else {
-    const found = pickSpread(searchShapes(chord, GUITAR_TUNING, { bassIsRoot: true, allStrings: false, maxPosition: 12 }), 3);
+    const found = pickSpread(searchShapes(chord, GUITAR_TUNING, { bassIsRoot: true, allStrings: false, maxPosition: 12 }), 4);
     found.forEach((c) => voicings.push({ name: voicingName(c.frets), frets: c.frets }));
   }
 
-  // De-duplicate identical shapes (e.g. E major's open shape IS the E-shape barre at fret 0)
+  // De-duplicate identical shapes
   const seen = new Set<string>();
   const unique = voicings.filter((v) => {
     const key = v.frets.join(",");
@@ -489,8 +567,15 @@ export function getGuitarVoicings(chord: ParsedChord): GuitarVoicing[] {
     seen.add(key);
     return true;
   });
-  // Neck order: open position first, then ascending (stable, so equal positions keep their quality order).
-  unique.sort((a, b) => shapePosition(a.frets) - shapePosition(b.frets));
+
+  // Sort: Beginner Open / Easy shapes FIRST, then ascending neck position
+  unique.sort((a, b) => {
+    const aEasy = a.name.includes("Beginner") || a.name.includes("Easy") || a.name.includes("Open") ? 0 : 1;
+    const bEasy = b.name.includes("Beginner") || b.name.includes("Easy") || b.name.includes("Open") ? 0 : 1;
+    if (aEasy !== bEasy) return aEasy - bEasy;
+    return shapePosition(a.frets) - shapePosition(b.frets);
+  });
+
   guitarCache.set(cacheKey, unique);
   return unique;
 }

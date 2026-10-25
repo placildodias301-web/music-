@@ -454,7 +454,8 @@ export function Practice() {
     currentChordLabel;
 
   return (
-    <div className="mx-auto flex min-h-[calc(100vh-140px)] max-w-4xl flex-col justify-center px-4 py-8 sm:px-6 sm:py-10 md:px-8">
+    <div className="mx-auto flex min-h-[calc(100vh-140px)] max-w-6xl flex-col px-4 py-6 sm:px-6 md:px-8">
+
       {/* Confirmation Modal for differing audio filename */}
       {pendingReattachFile && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
@@ -491,7 +492,7 @@ export function Practice() {
       {/* Header */}
       <div className="mb-6 flex flex-col justify-between gap-4 sm:mb-8 sm:flex-row sm:items-center">
         <div>
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-0.5">
             <span className="inline-flex items-center rounded-md border border-[var(--color-ns-amber)]/30 bg-[var(--color-ns-amber)]/10 px-2.5 py-0.5 text-[0.6875rem] font-semibold text-[var(--color-ns-amber)]">
               Practice Studio
             </span>
@@ -515,7 +516,7 @@ export function Practice() {
               </span>
             )}
           </div>
-          <h1 className="mt-2 font-heading text-2xl font-bold tracking-tight text-[var(--color-ns-text)] sm:text-3xl">
+          <h1 className="mt-1.5 font-heading text-lg sm:text-2xl font-bold tracking-tight text-[var(--color-ns-text)]">
             Interactive Practice Studio
           </h1>
           <p className="mt-1 text-sm text-[var(--color-ns-muted)]">
@@ -544,7 +545,7 @@ export function Practice() {
 
       {/* Mode B Card / Audio Absent State with Re-attach Button */}
       {!audioUrl && (
-        <div className="mb-6 flex flex-col items-center gap-4 rounded-2xl border border-[var(--color-ns-border)] bg-[var(--color-ns-card)] p-8 text-center sm:p-10">
+        <div className="mb-6 flex flex-col items-center gap-4 rounded-2xl border border-[var(--color-ns-border)] bg-[var(--color-ns-card)] p-4 sm:p-6 text-center">
           <div className="flex h-14 w-14 items-center justify-center rounded-2xl border border-[var(--color-ns-border)] bg-[var(--color-ns-raised)] text-[var(--color-ns-blue)] shadow-lg">
             <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <path d="M9 18V5l12-2v13" />
@@ -579,7 +580,7 @@ export function Practice() {
             className="hidden"
             onChange={handleReattachChange}
           />
-          <div className="mt-2 flex flex-wrap justify-center gap-3">
+          <div className="mt-2 grid w-full max-w-sm grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:justify-center sm:gap-3">
             {effectiveAnalysis && (
               <button
                 type="button"

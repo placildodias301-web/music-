@@ -5,11 +5,10 @@ import { summariseLugs, type LugReading, type TimpaniDrum } from "../../lib/tune
 import type { PianoReference } from "../../lib/tuner/percussionPitch";
 import type { TunerSnapshot } from "../../lib/tuner/engine";
 import type { TuningPreset } from "../../lib/tuner/types";
+import { CustomSelect } from "../CustomSelect";
 
 const card = "relative mb-3 rounded-xl border border-[var(--color-ns-border)] bg-[var(--color-ns-bg)] px-3.5 py-3 text-xs text-[var(--color-ns-muted)]";
 const label = "text-[0.625rem] font-bold uppercase tracking-wider text-[var(--color-ns-dim)]";
-const select =
-  "w-full rounded-lg border border-[var(--color-ns-border-strong)] bg-[var(--color-ns-raised)] px-2.5 py-1.5 text-sm text-[var(--color-ns-text)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ns-purple-light)]";
 const btn =
   "rounded-lg border border-[var(--color-ns-border-strong)] bg-[var(--color-ns-raised)] px-3 py-1.5 text-xs font-bold text-[var(--color-ns-text)] transition-colors hover:border-[var(--color-ns-purple-light)] disabled:cursor-not-allowed disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ns-purple-light)]";
 
@@ -69,13 +68,15 @@ export function ReferenceBar({
     <div className={card} role="group" aria-label={title}>
       <p className={label}>{title}</p>
       <div className="mt-1.5 flex items-center gap-2">
-        <select className={select} aria-label="Reference note" value={value} onChange={(e) => onChange(Number(e.target.value))}>
-          {notes.map((n) => (
-            <option key={n.midi} value={n.midi}>
-              {format(n.note)}
-            </option>
-          ))}
-        </select>
+        <CustomSelect
+          value={value}
+          onChange={(v) => onChange(Number(v))}
+          className="flex-1"
+          options={notes.map((n) => ({
+            value: n.midi,
+            label: format(n.note),
+          }))}
+        />
         <button type="button" className={btn} onClick={onPlay} aria-label="Play reference tone">
           ▶ Play
         </button>
@@ -182,16 +183,15 @@ export function LugPanel({
     <div className={card} role="group" aria-label="Drum lugs">
       <div className="flex items-center justify-between">
         <p className={label}>Lugs</p>
-        <label className="flex items-center gap-1.5">
+        <div className="flex items-center gap-1.5">
           <span className="text-[var(--color-ns-dim)]">Lugs</span>
-          <select className="rounded-md border border-[var(--color-ns-border-strong)] bg-[var(--color-ns-raised)] px-1.5 py-0.5 text-xs text-[var(--color-ns-text)]" value={lugs.length} onChange={(e) => onCount(Number(e.target.value))} aria-label="Number of lugs">
-            {[4, 5, 6, 8, 10].map((n) => (
-              <option key={n} value={n}>
-                {n}
-              </option>
-            ))}
-          </select>
-        </label>
+          <CustomSelect
+            value={lugs.length}
+            onChange={(v) => onCount(Number(v))}
+            width="75px"
+            options={[4, 5, 6, 8, 10].map((n) => ({ value: n, label: String(n) }))}
+          />
+        </div>
       </div>
       <ul className="mt-2 grid grid-cols-2 gap-1.5 sm:grid-cols-5">
         {lugs.map((l, i) => {
@@ -262,16 +262,16 @@ export function DroneRelations({ preset, letters }: { preset: TuningPreset; lett
 export function TransposeControl({ options, value, onChange }: { options: TransposeOption[]; value: TransposeOption | null; onChange: (label: string) => void }) {
   if (options.length < 2) return null;
   return (
-    <label className="relative mb-3 flex items-center gap-2 text-xs text-[var(--color-ns-muted)]">
+    <div className="relative mb-3 flex items-center gap-2 text-xs text-[var(--color-ns-muted)]">
       <span className={label}>Instrument in</span>
-      <select className="rounded-md border border-[var(--color-ns-border-strong)] bg-[var(--color-ns-raised)] px-2 py-1 text-xs text-[var(--color-ns-text)]" value={value?.label ?? options[0].label} onChange={(e) => onChange(e.target.value)} aria-label="Instrument transposition">
-        {options.map((o) => (
-          <option key={o.label} value={o.label}>
-            {o.label}
-          </option>
-        ))}
-      </select>
-    </label>
+      <CustomSelect
+        label="Instrument transposition"
+        value={value?.label ?? options[0].label}
+        onChange={(v) => onChange(String(v))}
+        width="140px"
+        options={options.map((o) => ({ value: o.label, label: o.label }))}
+      />
+    </div>
   );
 }
 

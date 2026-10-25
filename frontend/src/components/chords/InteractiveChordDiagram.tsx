@@ -16,6 +16,7 @@ export interface InteractiveChordDiagramProps {
   /** No frets (violin family): a plain fingerboard, finger dots placed by pitch, no fret lines or barres. */
   fretless?: boolean;
   dotDisplayMode?: "fingers" | "notes" | "intervals";
+  capo?: number;
 }
 
 export function InteractiveChordDiagram({
@@ -29,6 +30,7 @@ export function InteractiveChordDiagram({
   courses,
   fretless = false,
   dotDisplayMode = "fingers",
+  capo = 0,
 }: InteractiveChordDiagramProps) {
   const { settings } = useSettings();
   const n = stringNames.length;
@@ -37,13 +39,14 @@ export function InteractiveChordDiagram({
   const frettedVals = frets.filter((f): f is number => f !== null && f > 0);
   const minFret = frettedVals.length ? Math.min(...frettedVals) : 0;
   const maxFret = frettedVals.length ? Math.max(...frettedVals) : 0;
+  const hasCapo = typeof capo === "number" && capo > 0;
   const startFret = !fretless && maxFret > 4 ? minFret - 1 : 0;
   const fretCount = fretless ? 5 : Math.min(8, Math.max(4, maxFret - startFret));
 
   const spacing = n <= 4 ? 32 : n <= 6 ? 26 : 22;
   const fretSpacing = 32;
   const left = 32;
-  const top = 44;
+  const top = hasCapo ? 52 : 44;
   const width = left * 2 + spacing * (n - 1);
   const height = top + fretSpacing * fretCount + 28;
 
@@ -68,8 +71,49 @@ export function InteractiveChordDiagram({
         aria-label={caption || "Interactive chord diagram"}
         className="select-none"
       >
-        {/* Nut or Start Fret Indicator */}
-        {startFret > 0 ? (
+        {/* Nut, Capo Bar, or Start Fret Indicator */}
+        {hasCapo ? (
+          <g>
+            {/* Sleek pill badge ABOVE the X / O row */}
+            <rect
+              x={left + (spacing * (n - 1)) / 2 - 32}
+              y={4}
+              width={64}
+              height={16}
+              rx={8}
+              fill="var(--color-ns-amber)"
+            />
+            <text
+              x={left + (spacing * (n - 1)) / 2}
+              y={15}
+              fontSize="9.5"
+              fontWeight="bold"
+              fill="#000"
+              textAnchor="middle"
+            >
+              CAPO {capo}
+            </text>
+            <text
+              x={left - 18}
+              y={top + fretSpacing / 2 + 5}
+              fontSize="11"
+              fontWeight="bold"
+              fill="var(--color-ns-amber)"
+              textAnchor="middle"
+            >
+              +{capo}fr
+            </text>
+            <rect
+              x={left - 4}
+              y={top - 5}
+              width={spacing * (n - 1) + 8}
+              height={8}
+              rx={3}
+              fill="var(--color-ns-amber)"
+              opacity={0.95}
+            />
+          </g>
+        ) : startFret > 0 ? (
           <text
             x={left - 18}
             y={top + fretSpacing / 2 + 5}

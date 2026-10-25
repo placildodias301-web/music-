@@ -4,7 +4,7 @@
  * and `rendererFor` (lib/instruments/definitions.ts) decides which one an instrument gets — no if/else per instrument.
  */
 
-import { chordIntervals, NOTE_NAMES, slashToneIndex, spellChord, type ParsedChord } from "../chordTheory";
+import { ALL_CHORD_SYMBOLS, chordIntervals, NOTE_NAMES, parseChordSymbol, slashToneIndex, spellChord, type ParsedChord } from "../chordTheory";
 import { findDefinition, rendererFor, type ChordRenderer, type InstrumentDefinition } from "../instruments/definitions";
 import { harpNeedsForNotes, harpStrings, LEVER_HARP_RANGE, NATURAL_STATE, PEDAL_HARP_RANGE, type HarpAccidentals, type HarpLetter, type HarpNeed } from "../tuner/harp";
 import { noteToMidi } from "../tuner/notes";
@@ -109,6 +109,8 @@ interface Base {
   inversion: number;
   inversionLabel: string;
   inversionCount: number;
+  capo?: number;
+  leftHanded?: boolean;
 }
 
 export interface FrettedModel extends Base {
@@ -194,12 +196,47 @@ export interface HarmonicaModel extends Base {
   groups: HarmonicaGroup[];
 }
 
-export type ChordModel = FrettedModel | BassModel | KeyboardModel | MalletModel | HarpModel | AccordionModel | WindModel | HarmonicaModel;
+export interface ModalTone {
+  syllable: string;
+  note: string;
+  role: string;
+  midi: number;
+}
+
+export interface ModalDrone {
+  name: string;
+  role: string;
+  midi: number;
+}
+
+export interface ModalModel extends Base {
+  kind: "modal";
+  tradition: "indian" | "middle-eastern";
+  droneNotes: ModalDrone[];
+  sargamOrMaqamTones: ModalTone[];
+  melodicMovement: string;
+  resonantRagasOrMaqams: string[];
+}
+
+export type ChordModel =
+  | FrettedModel
+  | BassModel
+  | KeyboardModel
+  | MalletModel
+  | HarpModel
+  | AccordionModel
+  | WindModel
+  | HarmonicaModel
+  | ModalModel;
 
 export interface ChordSettings {
   definitionId: string;
   tuningId?: string;
   inversion: number;
+  capo?: number;
+  leftHanded?: boolean;
+  voicingFilter?: "all" | "open" | "barre" | "jazz";
+  audioMode?: "samples" | "physical";
 }
 
 /* ─── Accordion left hand (standard Stradella) ─── */
@@ -302,11 +339,106 @@ function buildHarmonica(b: Base, tuningId: string | undefined): HarmonicaModel {
   return { ...b, kind: "harmonica", harpKey: key.id, holes, groups };
 }
 
+/* ─── Modal / Non-Western Drone Instruments (Sitar, Veena, Oud, Saz) ─── */
+
+const INDIAN_SWARAS: Record<number, { syllable: string; role: string }> = {
+  0: { syllable: "Sa", role: "Shadja (Tonic)" },
+  1: { syllable: "re", role: "Komal Rishabh (Minor 2nd)" },
+  2: { syllable: "Re", role: "Shuddha Rishabh (Major 2nd)" },
+  3: { syllable: "ga", role: "Komal Gandhar (Minor 3rd)" },
+  4: { syllable: "Ga", role: "Shuddha Gandhar (Major 3rd)" },
+  5: { syllable: "ma", role: "Shuddha Madhyam (Perfect 4th)" },
+  6: { syllable: "Ma", role: "Tivra Madhyam (Augmented 4th)" },
+  7: { syllable: "Pa", role: "Pancham (Perfect 5th)" },
+  8: { syllable: "dha", role: "Komal Dhaivat (Minor 6th)" },
+  9: { syllable: "Dha", role: "Shuddha Dhaivat (Major 6th)" },
+  10: { syllable: "ni", role: "Komal Nishad (Minor 7th)" },
+  11: { syllable: "Ni", role: "Shuddha Nishad (Major 7th)" },
+};
+
+const MAQAM_DEGREES: Record<number, { syllable: string; role: string }> = {
+  0: { syllable: "Rast / Qarar", role: "Root Ground (Tonic)" },
+  1: { syllable: "Kurd", role: "Minor 2nd degree" },
+  2: { syllable: "Dukah", role: "Major 2nd degree" },
+  3: { syllable: "Sikah / Buslik", role: "Minor 3rd degree" },
+  4: { syllable: "Jiharkah", role: "Major 3rd degree" },
+  5: { syllable: "Jaharkah", role: "Subdominant (4th)" },
+  6: { syllable: "Kawash / Hijaz", role: "Altered 4th" },
+  7: { syllable: "Nawa", role: "Dominant Ghammaz (5th)" },
+  8: { syllable: "Husseini", role: "Minor 6th degree" },
+  9: { syllable: "Ajam", role: "Major 6th degree" },
+  10: { syllable: "Awj", role: "Minor 7th degree" },
+  11: { syllable: "Mahur", role: "Leading tone" },
+};
+
+function buildModal(b: Base): ModalModel {
+  const isIndian = b.definition.meta?.region === "South Asia" || b.definition.id === "sitar" || b.definition.id === "veena";
+  const tradition: "indian" | "middle-eastern" = isIndian ? "indian" : "middle-eastern";
+  const root = b.chord.root;
+  const rootName = NOTE_NAMES[root].replace("#", "♯");
+  const fifthPc = (root + 7) % 12;
+  const fifthName = NOTE_NAMES[fifthPc].replace("#", "♯");
+
+  const droneNotes: ModalDrone[] = isIndian
+    ? [
+        { name: `${rootName}3 (Sa)`, role: "Mandrachara Sa (Tonic Drone)", midi: 48 + root },
+        { name: `${fifthName}3 (Pa)`, role: "Pancham (Fifth Drone)", midi: 48 + fifthPc },
+        { name: `${rootName}4 (Sa)`, role: "Chikari (High Sa Pulse)", midi: 60 + root },
+      ]
+    : [
+        { name: `${rootName}3 (Qarar)`, role: "Qarar (Tonic Ground)", midi: 48 + root },
+        { name: `${fifthName}3 (Nawa)`, role: "Nawa (Dominant Fifth)", midi: 48 + fifthPc },
+      ];
+
+  const offsets = chordIntervals(b.chord);
+  const sargamOrMaqamTones: ModalTone[] = offsets.map((off, i) => {
+    const pc = (root + off) % 12;
+    const info = isIndian ? INDIAN_SWARAS[off % 12] : MAQAM_DEGREES[off % 12];
+    return {
+      syllable: info?.syllable ?? "Svara",
+      note: b.notes[i] ?? NOTE_NAMES[pc].replace("#", "♯"),
+      role: info?.role ?? "Chord Tone",
+      midi: 60 + root + off,
+    };
+  });
+
+  const isMinor = b.chord.quality.suffix.includes("m") && !b.chord.quality.suffix.includes("maj");
+  const isDom7 = b.chord.quality.suffix === "7" || b.chord.quality.suffix === "9";
+
+  const resonantRagasOrMaqams = isIndian
+    ? isMinor
+      ? ["Raga Kafi (Midnight)", "Raga Asavari (Pathos)", "Raga Bhairavi (Universal Mode)"]
+      : isDom7
+        ? ["Raga Khamaj (Romantic/Semi-classical)", "Raga Desh (Rain season)", "Raga Tilak Kamod"]
+        : ["Raga Bilawal (Natural Major)", "Raga Yaman (Evening Kalyana)", "Raga Bhupali (Pentatonic)"]
+    : isMinor
+      ? ["Maqam Bayati (Meditative / Traditional)", "Maqam Kurd (Deep lyricism)", "Maqam Hijaz (Spiritual)"]
+      : isDom7
+        ? ["Maqam Suznak (Rast with Hijaz upper jins)", "Maqam Nahawand Murassah"]
+        : ["Maqam Rast (Master Maqam)", "Maqam Ajam (Direct Major)", "Maqam Nahawand (Lyrical)"];
+
+  const melodicMovement = isIndian
+    ? isMinor
+      ? "Arohana: S R g M P D n Ṡ · Avarohana: Ṡ n D P M g R S (Emphasizing Komal Gandhar & Nishad)"
+      : "Arohana: S R G M P D N Ṡ · Avarohana: Ṡ N D P M G R S (Emphasizing Vadi and Samvadi balance)"
+    : "Sayr: Melodic movement explores the lower jins (Qarar), establishes the ghammaz (Nawa), and ascends toward jawad before resolving.";
+
+  return {
+    ...b,
+    kind: "modal",
+    tradition,
+    droneNotes,
+    sargamOrMaqamTones,
+    melodicMovement,
+    resonantRagasOrMaqams,
+  };
+}
+
 /* ─── Builder ─── */
 
-function base(chord: ParsedChord, definition: InstrumentDefinition, inversion: number): Base {
+function base(chord: ParsedChord, definition: InstrumentDefinition, inversion: number, capo?: number, leftHanded?: boolean): Base {
   const inv = clampInversion(chord, inversion);
-  return { chord, definition, notes: spellChord(chord), formula: formulaText(chord), inversion: inv, inversionLabel: inversionName(inv), inversionCount: inversionCount(chord) };
+  return { chord, definition, notes: spellChord(chord), formula: formulaText(chord), inversion: inv, inversionLabel: inversionName(inv), inversionCount: inversionCount(chord), capo, leftHanded };
 }
 
 const HARP_RANGES = { lever: LEVER_HARP_RANGE, pedal: PEDAL_HARP_RANGE };
@@ -354,12 +486,18 @@ function frettedFor(renderer: ChordRenderer, chord: ParsedChord, tuning: ChordTu
 /** Renderers whose strings come in pairs (12-string, mandolin, bouzouki, charango, tres). */
 const COURSE_RENDERERS = new Set<ChordRenderer>(["guitar12", "mandolin", "bouzouki", "charango", "tres"]);
 
-export function buildChordModel(chord: ParsedChord, definition: InstrumentDefinition, settings: Pick<ChordSettings, "tuningId" | "inversion">): ChordModel | null {
+export function buildChordModel(chord: ParsedChord, definition: InstrumentDefinition, settings: Partial<ChordSettings>): ChordModel | null {
   const renderer = rendererFor(definition);
   if (!renderer) return null;
   // A slash chord (C/E) IS an inversion when its bass is a chord tone; otherwise the bass is an extra low note.
   const toneIndex = slashToneIndex(chord);
-  const b = base(chord, definition, chord.slashBass !== undefined && toneIndex >= 0 ? toneIndex : settings.inversion);
+  const b = base(
+    chord,
+    definition,
+    chord.slashBass !== undefined && toneIndex >= 0 ? toneIndex : (settings.inversion ?? 0),
+    settings.capo,
+    settings.leftHanded
+  );
   const keysFor = (): KeyedNote[] => {
     const keys = invertedNotes(chord, b.inversion, 60);
     if (chord.slashBass !== undefined && toneIndex < 0) return [{ midi: 48 + chord.slashBass, name: NOTE_NAMES[chord.slashBass].replace("#", "♯") }, ...keys];
@@ -378,6 +516,8 @@ export function buildChordModel(chord: ParsedChord, definition: InstrumentDefini
       return buildWind(b);
     case "harmonica":
       return buildHarmonica(b, settings.tuningId);
+    case "modal":
+      return buildModal(b);
     default: {
       const tuning = findChordTuning(definition, settings.tuningId);
       if (!tuning) return null;
@@ -385,7 +525,20 @@ export function buildChordModel(chord: ParsedChord, definition: InstrumentDefini
       if (renderer === "bass") {
         return { ...b, kind: "bass", tuning, stringNames, dyads: bassDyads(chord, tuning.midi), shapes: bassChordShapes(chord, tuning.midi), arpeggio: bassArpeggio(chord, tuning.midi) };
       }
-      return { ...b, kind: "fretted", tuning, stringNames, shapes: frettedFor(renderer, chord, tuning), courses: COURSE_RENDERERS.has(renderer) };
+      let shapes = frettedFor(renderer, chord, tuning);
+      if (settings.voicingFilter && settings.voicingFilter !== "all") {
+        if (settings.voicingFilter === "open") {
+          const openShapes = shapes.filter((s) => s.frets.some((f) => f === 0) || Math.max(...s.frets.filter((f): f is number => f !== null)) <= 3);
+          if (openShapes.length) shapes = openShapes;
+        } else if (settings.voicingFilter === "barre") {
+          const barreShapes = shapes.filter((s) => s.name.toLowerCase().includes("barre") || !s.frets.some((f) => f === 0));
+          if (barreShapes.length) shapes = barreShapes;
+        } else if (settings.voicingFilter === "jazz") {
+          const jazzShapes = shapes.filter((s) => s.name.toLowerCase().includes("drop") || s.name.toLowerCase().includes("shell") || s.frets.filter((f) => f !== null).length <= 4);
+          if (jazzShapes.length) shapes = jazzShapes;
+        }
+      }
+      return { ...b, kind: "fretted", tuning, stringNames, shapes, courses: COURSE_RENDERERS.has(renderer) };
     }
   }
 }
@@ -397,11 +550,21 @@ export function loadChordSettings(): ChordSettings {
   try {
     const v = JSON.parse(localStorage.getItem(KEY) ?? "null") as Partial<ChordSettings> | null;
     const def = findDefinition(v?.definitionId);
-    if (v && def && def.chordDisplayMode !== "none") return { definitionId: def.id, tuningId: typeof v.tuningId === "string" ? v.tuningId : undefined, inversion: typeof v.inversion === "number" ? v.inversion : 0 };
+    if (v && def && def.chordDisplayMode !== "none") {
+      return {
+        definitionId: def.id,
+        tuningId: typeof v.tuningId === "string" ? v.tuningId : undefined,
+        inversion: typeof v.inversion === "number" ? v.inversion : 0,
+        capo: typeof v.capo === "number" ? v.capo : 0,
+        leftHanded: typeof v.leftHanded === "boolean" ? v.leftHanded : false,
+        voicingFilter: v.voicingFilter ?? "all",
+        audioMode: v.audioMode ?? "samples",
+      };
+    }
   } catch {
     // fall through
   }
-  return { definitionId: "guitar", inversion: 0 };
+  return { definitionId: "guitar", inversion: 0, capo: 0, leftHanded: false, voicingFilter: "all", audioMode: "samples" };
 }
 
 export function saveChordSettings(s: ChordSettings) {
@@ -433,21 +596,102 @@ export function modelMidi(model: ChordModel, shapeIndex = 0): number[] {
       return model.groups[0]?.notes.map((k) => k.midi) ?? [];
     case "harp":
       return model.strings.filter((s) => s.inChord).map((s) => s.midi).filter((m) => m >= 48 && m <= 84).slice(0, 6);
+    case "modal":
+      return model.sargamOrMaqamTones.map((k) => k.midi);
     case "bass": {
       const opts = bassOptions(model);
       const o = opts[shapeIndex % Math.max(opts.length, 1)];
-      return o ? o.frets.flatMap((f, i) => (f === null ? [] : [model.tuning.midi[i] + f])) : [];
+      const capoOffset = model.capo ?? 0;
+      return o ? o.frets.flatMap((f, i) => (f === null ? [] : [model.tuning.midi[i] + f + capoOffset])) : [];
     }
     case "fretted": {
       const shape = model.shapes[shapeIndex % Math.max(model.shapes.length, 1)];
       if (!shape) return [];
+      const capoOffset = model.capo ?? 0;
       // Paired courses (12-string octaves, mandolin unisons) sound every string of the course.
-      return shape.frets.flatMap((f, i) => (f === null ? [] : model.tuning.offsets[i].map((o) => model.tuning.midi[i] + f + o)));
+      return shape.frets.flatMap((f, i) => (f === null ? [] : model.tuning.offsets[i].map((o) => model.tuning.midi[i] + f + capoOffset + o)));
     }
   }
 }
 
 /** The bass arpeggio's notes in playing order. */
 export function arpeggioMidi(model: BassModel): number[] {
-  return model.arpeggio.map((a) => model.tuning.midi[a.string] + a.fret);
+  const capoOffset = model.capo ?? 0;
+  return model.arpeggio.map((a) => model.tuning.midi[a.string] + a.fret + capoOffset);
+}
+
+/* ─── Instrument Authentic Playable Chords Matrix ─── */
+
+export const ALL_PARSED_CHORDS: ParsedChord[] = ALL_CHORD_SYMBOLS.map(parseChordSymbol);
+
+const BASS_ALLOWED_SUFFIXES = new Set([
+  // Triads
+  "", "m", "5", "dim", "aug", "sus2", "sus4", "b5",
+  // Sixths & adds
+  "6", "m6", "6/9", "m6/9", "add9", "madd9", "add11", "madd11", "add2", "add4", "add13",
+  // Sevenths
+  "7", "maj7", "m7", "mMaj7", "m7b5", "dim7", "7sus4", "7sus2", "aug7",
+  // Extensions
+  "9", "maj9", "m9", "11", "m11", "13",
+  // Altered & Jazz
+  "7b5", "7#5", "7b9", "7#9"
+]);
+
+const FOLK_3STRINGS_SUFFIXES = new Set([
+  "", "m", "5", "dim", "aug", "sus2", "sus4", "b5",
+  "6", "m6", "add9", "madd9",
+  "7", "maj7", "m7", "m7b5", "dim7"
+]);
+
+const FOLK_4STRINGS_SUFFIXES = new Set([
+  "", "m", "5", "dim", "aug", "sus2", "sus4", "b5",
+  "6", "m6", "6/9", "m6/9", "add2", "add4", "add9", "madd9", "add11",
+  "7", "maj7", "m7", "mMaj7", "m7b5", "dim7", "7sus4", "7sus2", "aug7",
+  "9", "maj9", "m9",
+  "7b5", "7#5", "7b9", "7#9"
+]);
+
+const PLAYABLE_CACHE = new Map<string, ParsedChord[]>();
+
+export function getPlayableChordsForInstrument(def: InstrumentDefinition, tuningId?: string): ParsedChord[] {
+  const cacheKey = `${def.id}:${tuningId ?? "default"}`;
+  const cached = PLAYABLE_CACHE.get(cacheKey);
+  if (cached) return cached;
+
+  const renderer = rendererFor(def);
+  let result: ParsedChord[];
+
+  if (def.category === "bass" || def.id === "bass" || def.id === "double-bass") {
+    result = ALL_PARSED_CHORDS.filter((c) => BASS_ALLOWED_SUFFIXES.has(c.quality.suffix));
+  } else if (def.id === "balalaika" || def.stringCount === 3) {
+    result = ALL_PARSED_CHORDS.filter((c) => FOLK_3STRINGS_SUFFIXES.has(c.quality.suffix));
+  } else if (def.id === "harmonica") {
+    const key = HARMONICA_KEYS.find((k) => k.id === tuningId) ?? HARMONICA_KEYS[0];
+    const keySemitone = (key.semitone + 12) % 12;
+    const diatonicPcs = new Set([0, 2, 4, 5, 7, 9, 11].map((step) => (keySemitone + step) % 12));
+    result = ALL_PARSED_CHORDS.filter((c) => {
+      const hModel = buildHarmonica(base(c, def, 0), tuningId);
+      if (hModel.groups.length > 0) return true;
+      const intervals = chordIntervals(c);
+      const pcs = intervals.map((i) => (c.root + i) % 12);
+      return pcs.every((pc) => diatonicPcs.has(pc));
+    });
+  } else if (renderer === "wind") {
+    const low = noteToMidi(def.range?.low ?? "C4") ?? 60;
+    const high = noteToMidi(def.range?.high ?? "C6") ?? 84;
+    result = ALL_PARSED_CHORDS.filter((c) => {
+      const offsets = chordIntervals(c);
+      let start = low + (((c.root - low) % 12) + 12) % 12;
+      while (start - 12 >= low && Math.max(...offsets) + start > high) start -= 12;
+      const sounding = offsets.map((o) => start + o).filter((m) => m >= low && m <= high);
+      return sounding.length >= Math.min(3, offsets.length);
+    });
+  } else if (def.stringCount === 4 && def.category === "folk") {
+    result = ALL_PARSED_CHORDS.filter((c) => FOLK_4STRINGS_SUFFIXES.has(c.quality.suffix));
+  } else {
+    result = ALL_PARSED_CHORDS;
+  }
+
+  PLAYABLE_CACHE.set(cacheKey, result);
+  return result;
 }

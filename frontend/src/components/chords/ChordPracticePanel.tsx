@@ -15,6 +15,7 @@ export interface ChordPracticePanelProps {
   fingering: FingeringResult;
   guidance: PracticeGuidance;
   instrument?: string;
+  capo?: number;
 }
 
 export function ChordPracticePanel({
@@ -25,6 +26,7 @@ export function ChordPracticePanel({
   fingering,
   guidance,
   instrument = "guitar",
+  capo,
 }: ChordPracticePanelProps) {
   const [arpeggioSpeed, setArpeggioSpeed] = useState<"slow" | "normal" | "fast">("normal");
   const [mode, setMode] = useState<"strum" | "arpeggio">("strum");
@@ -35,12 +37,12 @@ export function ChordPracticePanel({
   // The shape on screen, played with the instrument's own sound (strummed strings, or a bowed/blown/struck model).
   const handlePlayChord = () => {
     setMode("strum");
-    playback.run(() => playShape({ instrumentId: instrument, frets, tuningMidi, courses, mode: "chord" }));
+    playback.run(() => playShape({ instrumentId: instrument, frets, tuningMidi, courses, mode: "chord", capo }));
   };
 
   const handlePlayArpeggio = () => {
     setMode("arpeggio");
-    playback.run(() => playShape({ instrumentId: instrument, frets, tuningMidi, courses, mode: "arpeggio", speed: arpeggioSpeed }));
+    playback.run(() => playShape({ instrumentId: instrument, frets, tuningMidi, courses, mode: "arpeggio", speed: arpeggioSpeed, capo }));
   };
 
   const difficultyColor =
@@ -60,7 +62,7 @@ export function ChordPracticePanel({
               Interactive Audio Reference
             </h4>
             <p className="text-[0.6875rem] text-[var(--color-ns-muted)]">
-              A sound model of the instrument playing exactly the notes in this voicing — not a recording.
+              Authentic studio sampled audio and physical synthesis playing exactly the notes in this voicing.
             </p>
           </div>
 
@@ -84,7 +86,7 @@ export function ChordPracticePanel({
             type="button"
             onClick={handlePlayChord}
             aria-label={`Play strummed ${chord.label} chord`}
-            className={`flex h-10 w-52 items-center justify-center gap-2 rounded-xl border text-xs font-bold transition-colors ${
+            className={`flex h-10 w-52 items-center justify-center gap-2 rounded-full border text-xs font-bold transition-colors ${
               isPlayingStrum
                 ? "border-[var(--color-ns-amber)] bg-[var(--color-ns-amber)] text-[var(--color-ns-ink)] shadow-md"
                 : "border-[var(--color-ns-amber)] bg-[var(--color-ns-amber)] text-[var(--color-ns-ink)] shadow-md hover:brightness-110"
@@ -126,7 +128,7 @@ export function ChordPracticePanel({
           </button>
 
           {/* Arpeggio Speed Selector */}
-          <div className="flex items-center gap-1 rounded-xl border border-[var(--color-ns-border)] bg-[var(--color-ns-bg)] p-1 text-xs">
+          <div className="flex items-center gap-1 rounded-full border border-[var(--color-ns-border)] bg-[var(--color-ns-bg)] p-1 text-xs">
             {(["slow", "normal", "fast"] as const).map((sp) => (
               <button
                 key={sp}
@@ -148,7 +150,7 @@ export function ChordPracticePanel({
             onClick={playback.stop}
             disabled={!playback.playing}
             aria-label="Stop audio"
-            className="flex h-10 items-center justify-center gap-2 rounded-xl border border-[var(--color-ns-border)] bg-[var(--color-ns-bg)] px-4 text-xs font-bold text-[var(--color-ns-text)] transition-shadow hover:shadow-[0_0_14px_rgba(255,176,32,0.45)] disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:shadow-none"
+            className="flex h-10 items-center justify-center gap-2 rounded-full border border-[var(--color-ns-border)] bg-[var(--color-ns-bg)] px-4 text-xs font-bold text-[var(--color-ns-text)] transition-shadow hover:shadow-[0_0_14px_rgba(255,176,32,0.45)] disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:shadow-none"
           >
             <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
               <rect x="5" y="5" width="14" height="14" rx="2" />
@@ -159,7 +161,7 @@ export function ChordPracticePanel({
           {/* Practice Mode Link */}
           <Link
             to={`/practice?target=${encodeURIComponent(chord.label)}`}
-            className="ml-auto flex items-center gap-1.5 rounded-xl border border-[var(--color-ns-border)] bg-[var(--color-ns-raised)] px-3 py-2 text-xs font-semibold text-[var(--color-ns-text)] transition-all hover:border-[var(--color-ns-amber)]"
+            className="ml-auto flex items-center gap-1.5 rounded-full border border-[var(--color-ns-border)] bg-[var(--color-ns-raised)] px-3 py-2 text-xs font-semibold text-[var(--color-ns-text)] transition-all hover:border-[var(--color-ns-amber)]"
           >
             <span>Mic Pitch Practice →</span>
           </Link>
@@ -179,7 +181,7 @@ export function ChordPracticePanel({
           {guidance.steps.map((st) => (
             <div
               key={st.stepNumber}
-              className="flex items-start gap-3 rounded-xl border border-[var(--color-ns-border)]/60 bg-[var(--color-ns-bg)]/40 p-3"
+              className="flex items-start gap-3 rounded-full border border-[var(--color-ns-border)]/60 bg-[var(--color-ns-bg)]/40 p-3"
             >
               <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[var(--color-ns-amber)]/20 text-xs font-bold text-[var(--color-ns-amber)]">
                 {st.stepNumber}
@@ -201,7 +203,7 @@ export function ChordPracticePanel({
           {guidance.commonMistakes.map((cm, idx) => (
             <div
               key={idx}
-              className="rounded-xl border border-[var(--color-ns-border)] bg-[var(--color-ns-bg)]/50 p-3"
+              className="rounded-full border border-[var(--color-ns-border)] bg-[var(--color-ns-bg)]/50 p-3"
             >
               <h5 className="font-heading text-xs font-bold text-rose-400">
                 ⚠ {cm.title}

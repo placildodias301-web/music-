@@ -1,12 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import { SwitchTrack } from "../components/settings/SettingsRows";
 import { CalibrationControl } from "../components/tuner/CalibrationControl";
 import { CustomTuningModal } from "../components/tuner/CustomTuningModal";
-import { Headstock } from "../components/tuner/Headstock";
 import { HarpSettings } from "../components/tuner/HarpSettings";
-import { HarpStrings } from "../components/tuner/HarpStrings";
 import { InstrumentSelector } from "../components/tuner/InstrumentSelector";
+import { InstrumentVisualizer } from "../components/tuner/InstrumentVisualizer";
 import { ConcertWritten, DroneRelations, HistoryPanel, LugPanel, PianoNotes, ReadoutBar, ReferenceBar, TimpaniDrumPicker, TransposeControl, TunerTypeBanner } from "../components/tuner/ProfilePanels";
 import { StabilityWindow, TuningHistory, type HistoryEntry, type Stability } from "../lib/tuner/history";
 import { notesBetween, resolveTransposition, targetWindow, tunerProfileFor, writtenMidi, type InstrumentTunerProfile } from "../lib/tuner/instrumentProfile";
@@ -116,6 +114,33 @@ export function Tuner() {
     [variant, isHarp, harpRange.lowest, harpRange.count, harpRange.fixedNatural, selection.tuningId, harpSaved.accidentals, allCustoms], // eslint-disable-line react-hooks/exhaustive-deps
   );
   const targets = useMemo(() => (isTargetMode && pickedTarget ? [pickedTarget] : preset ? targetsFor(preset, a4) : []), [isTargetMode, pickedTarget, preset, a4]);
+  const visualizerTargets = useMemo<TargetString[]>(() => {
+    if (targets.length > 0) return targets;
+    if (targetNotes.length > 0) {
+      return targetNotes.slice(0, 24).map((n, i) => ({
+        id: `target-${i}`,
+        displayNumber: i + 1,
+        note: n.note,
+        octave: Math.floor(n.midi / 12) - 1,
+        midi: n.midi,
+        course: 1,
+        frequency: midiToFrequency(n.midi, a4),
+      }));
+    }
+    const base = definition.range ? notesBetween(definition.range).slice(0, 12) : [];
+    if (base.length > 0) {
+      return base.map((n, i) => ({
+        id: `range-${i}`,
+        displayNumber: i + 1,
+        note: n.note,
+        octave: Math.floor(n.midi / 12) - 1,
+        midi: n.midi,
+        course: 1,
+        frequency: midiToFrequency(n.midi, a4),
+      }));
+    }
+    return [];
+  }, [targets, targetNotes, definition.range, a4]);
   const units = useMemo(() => (preset ? tuningUnits(preset) : []), [preset]);
   const range = useMemo(
     () => (isTargetMode && pickedTarget ? targetWindow(pickedTarget.frequency) : chromaticOverride ? CHROMATIC_RANGE : preset ? detectionRange(preset, a4) : isChromatic ? detectionWindow(definition, a4) : CHROMATIC_RANGE),
@@ -158,7 +183,6 @@ export function Tuner() {
   const tunedSet = useMemo(() => new Set(snap.tunedIndexes), [snap.tunedIndexes]);
   const tunedCount = targets.filter((_, i) => tunedSet.has(i)).length;
   const allTuned = targets.length > 0 && tunedCount === targets.length;
-  const unitTuned = (u: number) => units[u]?.stringIndexes.every((i) => tunedSet.has(i)) ?? false;
   const unitOfString = (si: number) => units.findIndex((u) => u.stringIndexes.includes(si));
   const activeStringIndex = chromaticLike || isTargetMode ? null : snap.targetIndex ?? (isAuto ? null : selectedString);
   const activeUnit = activeStringIndex !== null ? unitOfString(activeStringIndex) : -1;
@@ -255,6 +279,18 @@ export function Tuner() {
     tuner.playTone(targets[index].frequency, tp.referenceTone);
   }
 
+  function handleVisualizerSelect(index: number) {
+    if (units.length > 0 && index < units.length) {
+      selectUnit(index);
+    } else if (targets[index]) {
+      selectString(index);
+    } else if (visualizerTargets[index]) {
+      setIsAuto(false);
+      setSelectedString(index);
+      tuner.playTone(visualizerTargets[index].frequency, tp.referenceTone);
+    }
+  }
+
   const tuningName = isTargetMode
     ? `Target ${spoken(pickedTarget?.note ?? null)}`
     : chromaticLike
@@ -311,53 +347,109 @@ export function Tuner() {
   const stringCountLabel = variant && variant.courseCount !== variant.stringCount ? `strings (${variant.courseCount} courses)` : "strings";
   const harpTunings = useMemo(() => (isHarp ? [...presets, resolveHarpPreset(harpRange, CUSTOM_POSITIONS_ID, harpSaved.accidentals)] : presets), [isHarp, presets, harpRange.lowest, harpRange.count, harpSaved.accidentals]); // eslint-disable-line react-hooks/exhaustive-deps
   const harpBlurb = (id: string) => (id === CUSTOM_POSITIONS_ID ? "Set each letter yourself" : HARP_STATES.find((st) => st.id === id)?.blurb ?? "Major key setting");
-  const headUnits = units.map((u) => ({ note: targets[u.stringIndexes[0]].note, freq: targets[u.stringIndexes[0]].frequency }));
 
   return (
-    <div className={`mx-auto w-full px-4 py-6 sm:px-6 sm:py-10 ${!showPegs ? "max-w-xl" : "max-w-3xl"}`}>
-      <div className="mb-5 text-center sm:mb-7">
-        <h1 className="font-heading text-3xl font-bold tracking-tight text-[var(--color-ns-text)] sm:text-4xl">Tuner</h1>
-        <p className="mx-auto mt-1.5 max-w-md text-sm text-[var(--color-ns-muted)]">
-          {showPegs ? "Play one string at a time. Wilsify lights up the peg to turn, and which way." : tp.ui.headline}
-        </p>
+    <div className="mx-auto w-full max-w-6xl px-4 py-6 sm:px-6 md:px-8">
+      {/* Workspace Header */}
+      <div className="mb-6 flex flex-col justify-between gap-3 border-b border-[var(--color-ns-border)] pb-5 sm:flex-row sm:items-center">
+        <div>
+          <h1 className="font-heading text-xl sm:text-2xl font-semibold tracking-tight text-[var(--color-ns-text)]">
+            Professional Instrument Tuner
+          </h1>
+          <p className="mt-0.5 text-xs sm:text-sm text-[var(--color-ns-muted)]">
+            {showPegs ? "Real-time polyphonic and pitch detection with dynamic string pegs and reference tones." : tp.ui.headline}
+          </p>
+        </div>
       </div>
 
-      <div className="relative overflow-hidden rounded-2xl border border-[var(--color-ns-border)] bg-[var(--color-ns-card)] p-5 shadow-xl sm:p-7">
+      <div className="relative overflow-hidden rounded-2xl border border-[var(--color-ns-border)] bg-[var(--color-ns-surface)] p-5 sm:p-7 shadow-xl">
         <div
           aria-hidden="true"
           className="pointer-events-none absolute left-1/2 top-[38%] h-72 w-72 -translate-x-1/2 -translate-y-1/2 rounded-full blur-3xl transition-all duration-500 motion-reduce:transition-none"
           style={{ background: toneColor, opacity: hasReading ? (locked ? 0.2 : 0.08) : 0 }}
         />
 
-        <div className="relative mb-4 flex items-start justify-between gap-3">
+        {/* ─── HEADER: Instrument Picker & Sleek Segmented Mode Pill Bar ─── */}
+        <div className="relative mb-5 flex flex-wrap items-center justify-between gap-4 border-b border-[var(--color-ns-border)]/60 pb-5">
           <div className="min-w-0">
             <InstrumentSelector value={definition.id} description={subtitle} onChange={selectInstrument} />
           </div>
-          {tp.supportsAutomaticDetection && !chromaticLike && (
-            <button
-              type="button"
-              role="switch"
-              aria-checked={isAuto}
-              onClick={() => setIsAuto((v) => !v)}
-              title={isAuto ? "Auto: Wilsify finds which string you play" : "Manual: tap a peg to pick the string"}
-              className="mt-0.5 flex flex-shrink-0 items-center gap-2 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ns-purple-light)]"
-            >
-              <span className="text-xs font-semibold uppercase tracking-wider text-[var(--color-ns-muted)]">Auto</span>
-              <SwitchTrack checked={isAuto} tone="mint" />
-            </button>
-          )}
-          {tp.supportsChromaticMode && !isChromatic && (
-            <button
-              type="button"
-              role="switch"
-              aria-checked={chromaticOverride}
-              onClick={() => setChromaticOverride((v) => !v)}
-              title="Chromatic: show whatever note you play, not a string's target"
-              className="mt-0.5 flex flex-shrink-0 items-center gap-2 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ns-purple-light)]"
-            >
-              <span className="text-xs font-semibold uppercase tracking-wider text-[var(--color-ns-muted)]">Chromatic</span>
-              <SwitchTrack checked={chromaticOverride} tone="mint" />
-            </button>
+
+          {/* Segmented Mode Pill Bar (for string / fretted instruments) */}
+          {showPegs && (
+            <div className="flex h-9 items-center rounded-full border border-[var(--color-ns-border)] bg-[var(--color-ns-bg)] p-1 text-xs">
+              <button
+                type="button"
+                role="switch"
+                aria-checked={isAuto && !chromaticLike}
+                aria-label="Auto string detection"
+                onClick={() => {
+                  setIsAuto(true);
+                  setChromaticOverride(false);
+                }}
+                className={`flex h-7 items-center gap-1.5 rounded-full px-3 text-xs font-semibold transition-all ${
+                  isAuto && !chromaticLike
+                    ? "bg-[var(--color-ns-amber)] text-[var(--color-ns-ink)] font-bold shadow-sm"
+                    : "text-[var(--color-ns-muted)] hover:text-[var(--color-ns-text)]"
+                }`}
+                title="Auto: Wilsify detects which string or target you play"
+              >
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <circle cx="12" cy="12" r="10" />
+                  <circle cx="12" cy="12" r="6" />
+                  <circle cx="12" cy="12" r="2" />
+                </svg>
+                <span>Auto String</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setIsAuto(false);
+                  setChromaticOverride(false);
+                }}
+                className={`flex h-7 items-center gap-1.5 rounded-full px-3 text-xs font-semibold transition-all ${
+                  !isAuto && !chromaticLike
+                    ? "bg-[var(--color-ns-amber)] text-[var(--color-ns-ink)] font-bold shadow-sm"
+                    : "text-[var(--color-ns-muted)] hover:text-[var(--color-ns-text)]"
+                }`}
+                title="Manual: Tap a string or peg to focus and tune that specific pitch"
+              >
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <rect x="3" y="11" width="18" height="10" rx="2" />
+                  <circle cx="12" cy="5" r="2" />
+                  <path d="M12 7v4" />
+                </svg>
+                <span>Manual</span>
+              </button>
+
+              {tp.supportsChromaticMode && (
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={chromaticLike}
+                  aria-label="Chromatic mode"
+                  onClick={() => {
+                    setChromaticOverride(true);
+                  }}
+                  className={`flex h-7 items-center gap-1.5 rounded-full px-3 text-xs font-semibold transition-all ${
+                    chromaticLike
+                      ? "bg-[var(--color-ns-amber)] text-[var(--color-ns-ink)] font-bold shadow-sm"
+                      : "text-[var(--color-ns-muted)] hover:text-[var(--color-ns-text)]"
+                  }`}
+                  title="Chromatic: Tune any free pitch across all 12 semitones"
+                >
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <path d="M2 12h20" />
+                    <path d="M6 6v12" />
+                    <path d="M10 4v16" />
+                    <path d="M14 8v8" />
+                    <path d="M18 5v14" />
+                  </svg>
+                  <span>Chromatic</span>
+                </button>
+              )}
+            </div>
           )}
         </div>
 
@@ -452,49 +544,75 @@ export function Tuner() {
           </p>
         )}
 
-        <div className={`relative grid items-center gap-6 ${showPegs ? "md:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]" : ""}`}>
-          {showPegs && variant && (
-            <div className="order-2 md:order-1">
-              {isHarp ? (
-                <HarpStrings
-                  targets={targets}
-                  activeIndex={activeStringIndex !== null && (!isAuto || hasReading) ? activeStringIndex : null}
-                  tuned={tunedSet}
-                  ringing={hasReading && !snap.held}
-                  color={toneColor}
-                  locked={locked}
-                  label={letters}
-                  onSelect={selectString}
-                />
-              ) : (
-                <Headstock
-                  kind={variant.head}
-                  strings={headUnits}
-                  label={letters}
-                  activeIndex={activeUnit >= 0 && (!isAuto || hasReading) ? activeUnit : null}
-                  ringing={hasReading && !snap.held}
-                  color={toneColor}
-                  turn={isFlat ? "tighten" : isSharp ? "loosen" : null}
-                  locked={locked}
-                  tuned={unitTuned}
-                  onSelect={selectUnit}
-                />
-              )}
-              <div className="mt-2 flex items-center justify-center gap-2 text-xs">
-                <span className={allTuned ? "font-bold text-[var(--color-ns-mint)]" : "text-[var(--color-ns-muted)]"}>
-                  {allTuned ? `✓ All ${stringCountLabel} tuned` : `${tunedCount} of ${targets.length} ${stringCountLabel} tuned`}
+        {/* ─── BALANCED 2-COLUMN WORKBENCH GRID ─── */}
+        <div className="relative mt-6 grid grid-cols-1 items-center gap-8 lg:grid-cols-2 lg:gap-10">
+          {/* LEFT COLUMN: Interactive Animated Instrument Visualizer (50% width on desktop, stacked below needle on mobile) */}
+          <div className="order-2 lg:order-1 flex flex-col items-center justify-between rounded-2xl border border-[var(--color-ns-border)]/80 bg-[var(--color-ns-bg)]/60 p-4 sm:p-6 shadow-inner min-h-0 sm:min-h-[400px]">
+            <div className="w-full flex-1 flex items-center justify-center">
+              <InstrumentVisualizer
+                instrumentId={definition.id}
+                category={definition.category}
+                targets={visualizerTargets}
+                selectedIndex={selectedString}
+                activeStringIndex={activeUnit >= 0 ? activeUnit : activeStringIndex}
+                ringing={hasReading && !snap.held}
+                color={toneColor}
+                turn={isFlat ? "tighten" : isSharp ? "loosen" : null}
+                locked={locked}
+                tunedSet={tunedSet}
+                label={letters}
+                onSelect={handleVisualizerSelect}
+                frequency={snap.frequency}
+                isListening={isListening}
+                cents={cents}
+                variantHead={variant?.head}
+                isAuto={isAuto}
+              />
+            </div>
+
+            {/* Tuning Progress & String Count Status */}
+            <div className="mt-4 w-full max-w-sm space-y-2 text-center pt-3 border-t border-[var(--color-ns-border)]/50">
+              <div className="flex items-center justify-between text-xs">
+                <span className={allTuned ? "font-bold text-[var(--color-ns-mint)]" : "font-medium text-[var(--color-ns-muted)]"}>
+                  {allTuned
+                    ? `✓ All ${stringCountLabel} tuned`
+                    : targets.length > 0
+                    ? `${tunedCount} of ${targets.length} ${stringCountLabel} tuned`
+                    : `${definition.name} ready to tune`}
                 </span>
                 {tunedCount > 0 && (
-                  <button type="button" onClick={resetTuned} className="font-semibold text-[var(--color-ns-purple-light)] hover:underline">
+                  <button
+                    type="button"
+                    onClick={resetTuned}
+                    className="font-bold text-[var(--color-ns-purple-light)] hover:underline"
+                  >
                     Reset
                   </button>
                 )}
               </div>
-              <p className="mt-1 text-center text-[0.6875rem] text-[var(--color-ns-dim)]">{isAuto ? (isHarp ? "Tap a string to hear its note" : "Tap a peg to hear its note") : isHarp ? "Manual: tuning the string you tapped" : "Manual: tuning the peg you tapped"}</p>
-            </div>
-          )}
 
-          <div className="order-1 md:order-2">
+              {/* Visual Progress Bar */}
+              {targets.length > 0 && (
+                <div className="h-2 w-full overflow-hidden rounded-full border border-[var(--color-ns-border)] bg-[var(--color-ns-raised)]">
+                  <div
+                    className={`h-full transition-all duration-300 ${
+                      allTuned ? "bg-[var(--color-ns-mint)]" : "bg-[var(--color-ns-amber)]"
+                    }`}
+                    style={{ width: `${(tunedCount / Math.max(1, targets.length)) * 100}%` }}
+                  />
+                </div>
+              )}
+
+              <p className="text-[0.6875rem] text-[var(--color-ns-dim)]">
+                {isAuto
+                  ? (isHarp ? "Auto: tap a string to hear its note" : "Auto: play any string/note, or click illustration to hear reference")
+                  : (isHarp ? "Manual: tuning the string you tapped" : "Manual: tuning the selected string / note")}
+              </p>
+            </div>
+          </div>
+
+          {/* RIGHT COLUMN: Needle Gauge + Pitch Readout + Mic Start Button (50% width) */}
+          <div className="flex flex-col items-center justify-center space-y-4">
             <TunerMeter cents={cents} active={hasReading} held={snap.held} color={toneColor} isFlat={isFlat} isSharp={isSharp} outOfRange={side} />
             <TunerDisplay snap={snap} toneColor={toneColor} locked={locked} letters={letters} octaveOf={octaveOf} isListening={isListening} showTarget />
             {tp.ui.showWrittenPitch && transposition && hasReading && snap.detectedMidi !== null && (
@@ -508,7 +626,7 @@ export function Tuner() {
             <p
               role="status"
               aria-live="polite"
-              className={`relative mx-auto mt-4 flex min-h-[2.75rem] max-w-sm items-center justify-center rounded-xl px-3 text-center text-sm font-semibold ${
+              className={`relative mx-auto mt-2 flex min-h-[2.75rem] max-w-sm items-center justify-center rounded-xl px-3 text-center text-sm font-semibold ${
                 locked ? "bg-[var(--color-ns-mint)]/12 text-[var(--color-ns-mint)]" : "text-[var(--color-ns-text)]"
               }`}
             >
@@ -523,8 +641,13 @@ export function Tuner() {
             {isListening && <MicLevel level={snap.rms} quiet={tooQuiet} />}
             {isListening && <ReadoutBar snap={snap} stability={stability.verdict} stabilityDeviation={stability.deviation} />}
             {tp.supportsPitchHistory && (
-              <div className="relative mt-3 text-center">
-                <button type="button" onClick={() => setShowHistory((v) => !v)} aria-pressed={showHistory} className="text-xs font-semibold text-[var(--color-ns-purple-light)] hover:underline">
+              <div className="relative mt-2 text-center">
+                <button
+                  type="button"
+                  onClick={() => setShowHistory((v) => !v)}
+                  aria-pressed={showHistory}
+                  className="text-xs font-semibold text-[var(--color-ns-purple-light)] hover:underline"
+                >
                   {showHistory ? "Hide" : "Show"} tuning history
                 </button>
                 {showHistory && <HistoryPanel rows={historyRows} letters={letters} onClear={() => { historyRef.current.clear(); setHistoryRows([]); }} />}
@@ -533,7 +656,7 @@ export function Tuner() {
             {debug && <TunerDebugPanel snap={snap} mode={mode} micInfo={tuner.micInfo} />}
 
             {tuner.error && (
-              <div role="alert" className="relative mt-4 rounded-xl border border-[var(--color-ns-red)]/30 bg-[var(--color-ns-red)]/10 p-3.5 text-center text-sm text-[var(--color-ns-text)]">
+              <div role="alert" className="relative mt-3 rounded-xl border border-[var(--color-ns-red)]/30 bg-[var(--color-ns-red)]/10 p-3.5 text-center text-sm text-[var(--color-ns-text)]">
                 {tuner.error}
               </div>
             )}
@@ -541,7 +664,7 @@ export function Tuner() {
             <button
               type="button"
               onClick={isListening ? tuner.stop : tuner.start}
-              className={`relative mt-5 w-full py-3 text-sm font-bold transition-all ${
+              className={`relative mt-4 w-full py-3.5 text-sm font-bold transition-all ${
                 isListening
                   ? "rounded-xl border border-[var(--color-ns-border-strong)] bg-[var(--color-ns-raised)] text-[var(--color-ns-text)] hover:border-[var(--color-ns-red)]/50 hover:text-[var(--color-ns-red)]"
                   : "btn-primary shadow-lg"

@@ -21,7 +21,7 @@ export type InstrumentCategory = "guitars" | "bass" | "folk" | "world" | "keys" 
 export type TunerKind = "stringed" | "coursed" | "harp" | "chromatic" | "mallet" | "reed";
 
 /** How chords are drawn. `none` = the instrument is Tuner-only (violin, viola, cello). */
-export type ChordDisplayMode = "fretboard" | "strings" | "keyboard" | "harp" | "accordion" | "mallet" | "wind" | "harmonica" | "none";
+export type ChordDisplayMode = "fretboard" | "strings" | "keyboard" | "harp" | "accordion" | "mallet" | "wind" | "harmonica" | "modal" | "none";
 
 /** Which renderer draws and plays the chord. Several instruments share one. */
 export type ChordRenderer =
@@ -45,7 +45,8 @@ export type ChordRenderer =
   | "accordion"
   | "mallet"
   | "wind"
-  | "harmonica";
+  | "harmonica"
+  | "modal";
 
 /** Signal-processing profile for chromatic-style detection (see lib/tuner/profiles.ts). */
 export type DetectionProfile = "default" | "keys" | "mallet" | "reed" | "harp" | "bowed" | "brass" | "wind" | "drum";
@@ -54,6 +55,32 @@ export interface NoteRange {
   /** Scientific pitch names, e.g. "A0". */
   low: string;
   high: string;
+}
+
+export type ChordCapability = "polyphonic" | "dyads_only" | "arpeggio_only" | "monophonic" | "none";
+export type NotationType = "standard" | "tab" | "both" | "solfège" | "sargam" | "none";
+export type AudioProvider = "physical-string" | "synth-recipe" | "sample" | "none";
+export type AudioStatus =
+  | "professional_sample"
+  | "licensed_sample"
+  | "open_sample"
+  | "physical_model"
+  | "synthesized"
+  | "unavailable";
+
+export interface MidiMapping {
+  defaultChannel: number;
+  programNumber: number;
+}
+
+export interface PhysicalConstraints {
+  maxFretSpan: number;
+  stringCount?: number;
+  courseCount?: number;
+  fretless?: boolean;
+  reentrant?: boolean;
+  openStringsPlayable: boolean;
+  keysCount?: number;
 }
 
 export interface RawInstrumentDefinition {
@@ -83,6 +110,15 @@ export interface RawInstrumentDefinition {
   reentrant?: boolean;
   /** Transposing instrument: the written note is `semitones` above the note that sounds (B♭ clarinet: 2). `label` names the pitch ("B♭"). */
   transposition?: { semitones: number; label: string };
+  aliases?: string[];
+  polyphony?: number;
+  chordCapability?: ChordCapability;
+  notationType?: NotationType;
+  physicalConstraints?: Partial<PhysicalConstraints>;
+  audioProvider?: AudioProvider;
+  audioStatus?: AudioStatus;
+  midiMapping?: MidiMapping;
+  microtonalCapability?: boolean;
   /** Overrides for the derived metadata below, for the few instruments that differ from their family. */
   meta?: Partial<InstrumentMeta>;
 }
@@ -114,6 +150,15 @@ export interface InstrumentMeta {
   tunerSupported: boolean;
   fretboardSupported: boolean;
   audioSupported: boolean;
+  aliases: string[];
+  polyphony: number;
+  chordCapability: ChordCapability;
+  notationType: NotationType;
+  physicalConstraints: PhysicalConstraints;
+  audioProvider: AudioProvider;
+  audioStatus: AudioStatus;
+  midiMapping: MidiMapping;
+  microtonalCapability: boolean;
 }
 
 export type InstrumentDefinition = RawInstrumentDefinition & InstrumentMeta;
@@ -121,17 +166,28 @@ export type InstrumentDefinition = RawInstrumentDefinition & InstrumentMeta;
 export const CATEGORY_LABEL: Record<InstrumentCategory, string> = {
   guitars: "Guitars",
   bass: "Bass",
-  folk: "Folk / string",
-  world: "World / traditional",
-  keys: "Keys",
-  mallet: "Mallet",
+  folk: "Fretted Folk & World",
+  keys: "Keyboards & Accordion",
+  orchestral: "Bowed Strings & Harp",
+  wind: "Winds & Brass",
+  mallet: "Mallets",
+  world: "Modal / Eastern",
   percussion: "Percussion",
-  wind: "Wind",
-  orchestral: "Orchestral strings",
   chromatic: "Chromatic",
 };
 
-export const CATEGORY_ORDER: InstrumentCategory[] = ["guitars", "bass", "folk", "world", "keys", "mallet", "percussion", "wind", "orchestral", "chromatic"];
+export const CATEGORY_ORDER: InstrumentCategory[] = [
+  "guitars",
+  "bass",
+  "folk",
+  "keys",
+  "orchestral",
+  "wind",
+  "mallet",
+  "world",
+  "percussion",
+  "chromatic",
+];
 
 const PIANO_CAVEAT = "A pitch-checking aid. Pianos are tuned with a stretched temperament; Wilsify compares against equal temperament and does not replace a professional piano tuner.";
 
@@ -151,7 +207,7 @@ const RAW_INSTRUMENTS: RawInstrumentDefinition[] = [
   { id: "cavaquinho", name: "Cavaquinho", category: "folk", blurb: "D G B D", tunerMode: "stringed", chordDisplayMode: "strings", chordRenderer: "cavaquinho", tuner: { instrumentId: "cavaquinho" }, stringCount: 4 },
   { id: "balalaika", name: "Balalaika", category: "folk", blurb: "Prima and other sizes", tunerMode: "stringed", chordDisplayMode: "strings", chordRenderer: "balalaika", tuner: { instrumentId: "balalaika", variantId: "balalaika-3" }, stringCount: 3 },
   {
-    id: "harp", name: "Harp", category: "folk", blurb: "Lever, pedal or custom", tunerMode: "harp", chordDisplayMode: "harp", chordRenderer: "harp", tuner: { instrumentId: "harp" }, profile: "harp",
+    id: "harp", name: "Harp", category: "orchestral", blurb: "Lever, pedal or custom", tunerMode: "harp", chordDisplayMode: "harp", chordRenderer: "harp", tuner: { instrumentId: "harp" }, profile: "harp",
     range: { low: "C1", high: "G7" },
     caveat: "Harp tuning depends on the lever or pedal position. Tuning the lowest octaves by microphone needs a quiet room and has not been validated on a real harp.",
   },
@@ -207,15 +263,15 @@ const RAW_INSTRUMENTS: RawInstrumentDefinition[] = [
   { id: "cuatro", name: "Cuatro", category: "folk", blurb: "Venezuelan, re-entrant", tunerMode: "stringed", chordDisplayMode: "strings", chordRenderer: "cuatro", tuner: { instrumentId: "cuatro", variantId: "cuatro-4" }, stringCount: 4, reentrant: true, meta: { region: "Venezuela" } },
   { id: "tres", name: "Tres", category: "folk", blurb: "Cuban · 3 courses", tunerMode: "coursed", chordDisplayMode: "strings", chordRenderer: "tres", tuner: { instrumentId: "tres", variantId: "tres-6" }, stringCount: 6, courseCount: 3, meta: { region: "Cuba" } },
   {
-    id: "oud", name: "Oud", category: "world", fretless: true, blurb: "Arabic · fretless, 11 strings", tunerMode: "coursed", chordDisplayMode: "wind", chordRenderer: "wind", tuner: { instrumentId: "oud", variantId: "oud-11" }, stringCount: 11, courseCount: 6, range: { low: "C2", high: "C5" },
+    id: "oud", name: "Oud", category: "world", fretless: true, blurb: "Arabic · fretless, 11 strings", tunerMode: "coursed", chordDisplayMode: "modal", chordRenderer: "modal", tuner: { instrumentId: "oud", variantId: "oud-11" }, stringCount: 11, courseCount: 6, range: { low: "C2", high: "C5" },
     caveat: "The tuning is pitch-relative: players tune the whole set to the singer or ensemble.",
-    chordCaveat: "The oud is fretless and played melodically in maqam, not in chord shapes, so chords are shown as the notes to play one at a time.",
+    chordCaveat: "The oud is fretless and played melodically in maqam, not in chord shapes. Melodic notes, Jins, and drone relationships are shown.",
     meta: { region: "Middle East", temperament: "traditional", chordSupport: "specialized", audioSupport: "model" },
   },
   {
-    id: "sitar", name: "Sitar", category: "world", blurb: "Sa-based · playing strings", tunerMode: "stringed", chordDisplayMode: "wind", chordRenderer: "wind", tuner: { instrumentId: "sitar", variantId: "sitar-7" }, stringCount: 7, range: { low: "C2", high: "C6" },
+    id: "sitar", name: "Sitar", category: "world", blurb: "Sa-based · playing strings", tunerMode: "stringed", chordDisplayMode: "modal", chordRenderer: "modal", tuner: { instrumentId: "sitar", variantId: "sitar-7" }, stringCount: 7, range: { low: "C2", high: "C6" },
     caveat: "The tuning shown is a Western equal-temperament approximation of a Sa-based layout; players adjust it by ear and by raga.",
-    chordCaveat: "The sitar is not played in chords: it is a melodic and drone instrument with movable frets. Chords are shown as the notes to play one at a time.",
+    chordCaveat: "The sitar is not played in chords: it is a melodic and drone instrument. Sargam swaras, ragas, and drone relationships are shown.",
     meta: { region: "South Asia", temperament: "traditional", chordSupport: "specialized", fretboardSupport: "specialized", audioSupport: "model" },
   },
   { id: "tanpura", name: "Tanpura", category: "world", blurb: "Drone · tuned to Sa", tunerMode: "stringed", chordDisplayMode: "none", tuner: { instrumentId: "tanpura", variantId: "tanpura-pa" }, stringCount: 4, meta: { region: "South Asia", tuningType: "drone", temperament: "traditional" } },
@@ -280,6 +336,104 @@ function withMeta(raw: RawInstrumentDefinition): InstrumentDefinition {
     : (raw.chordDisplayMode === "fretboard" || raw.chordDisplayMode === "strings") && raw.fretless ? "specialized"
     : "none";
 
+  const chordCapability: ChordCapability =
+    raw.chordCapability ??
+    (raw.chordDisplayMode === "none" ? "none"
+    : raw.category === "wind" ? "monophonic"
+    : raw.category === "bass" ? "dyads_only"
+    : raw.chordDisplayMode === "wind" ? "arpeggio_only"
+    : "polyphonic");
+
+  const polyphony: number =
+    raw.polyphony ??
+    (raw.category === "wind" ? 1
+    : raw.category === "keys" ? 88
+    : raw.stringCount ?? (raw.category === "mallet" ? 4 : 6));
+
+  const effectiveRegion = raw.meta?.region ?? REGIONS[raw.id] ?? "Western";
+  const isIndianTrad = effectiveRegion.includes("India") || effectiveRegion.includes("South Asia");
+
+  const notationType: NotationType =
+    raw.notationType ??
+    (isIndianTrad ? "sargam"
+    : raw.category === "guitars" || raw.category === "bass" || raw.category === "folk" ? "both"
+    : raw.category === "percussion" ? "none"
+    : "standard");
+
+  const isPlucked = raw.category === "guitars" || raw.category === "bass" || (raw.category === "folk" && raw.id !== "harp");
+  const audioProvider: AudioProvider =
+    raw.audioProvider ??
+    (isPlucked ? "physical-string"
+    : raw.chordDisplayMode !== "none" ? "synth-recipe"
+    : "none");
+
+  const audioStatus: AudioStatus =
+    raw.audioStatus ??
+    (audioProvider === "none"
+      ? "unavailable"
+      : audioProvider === "physical-string"
+      ? "physical_model"
+      : "synthesized");
+
+  const midiProgram =
+    raw.midiMapping?.programNumber ??
+    (raw.id === "acoustic-guitar" || raw.id === "guitar" ? 25
+    : raw.id === "electric-guitar" ? 27
+    : raw.id === "classical-guitar" ? 24
+    : raw.category === "bass" ? 33
+    : raw.id === "violin" ? 40
+    : raw.id === "viola" ? 41
+    : raw.id === "cello" ? 42
+    : raw.id === "double-bass" ? 43
+    : raw.id === "harp" ? 46
+    : raw.id === "piano" ? 0
+    : raw.id === "keyboard" || raw.id === "synthesizer" ? 4
+    : raw.id === "organ" ? 19
+    : raw.id === "accordion" ? 21
+    : raw.id === "harmonica" ? 22
+    : raw.id === "flute" || raw.id === "bansuri" ? 73
+    : raw.id === "piccolo" ? 72
+    : raw.id === "recorder" ? 74
+    : raw.id === "oboe" ? 68
+    : raw.id === "clarinet" ? 71
+    : raw.id === "bassoon" ? 70
+    : raw.id === "trumpet" || raw.id === "cornet" ? 56
+    : raw.id === "french-horn" ? 60
+    : raw.id === "trombone" ? 57
+    : raw.id === "tuba" || raw.id === "euphonium" ? 58
+    : raw.id === "alto-sax" ? 65
+    : raw.id === "tenor-sax" ? 66
+    : raw.id === "soprano-sax" ? 64
+    : raw.id === "baritone-sax" ? 67
+    : raw.id === "marimba" ? 12
+    : raw.id === "xylophone" ? 13
+    : raw.id === "vibraphone" ? 11
+    : raw.id === "sitar" ? 104
+    : raw.id === "banjo" ? 105
+    : 0);
+
+  const midiMapping: MidiMapping = raw.midiMapping ?? {
+    defaultChannel: raw.category === "bass" ? 2 : raw.category === "percussion" ? 10 : 1,
+    programNumber: midiProgram,
+  };
+
+  const microtonalCapability: boolean =
+    raw.microtonalCapability ??
+    Boolean(raw.fretless || raw.meta?.temperament === "traditional" || raw.category === "wind");
+
+  const physicalConstraints: PhysicalConstraints = {
+    maxFretSpan: raw.physicalConstraints?.maxFretSpan ?? (raw.category === "bass" ? 3 : 4),
+    stringCount: raw.stringCount,
+    courseCount: raw.courseCount,
+    fretless: raw.fretless ?? false,
+    reentrant: raw.reentrant ?? false,
+    openStringsPlayable: strings,
+    keysCount: raw.id === "piano" ? 88 : raw.category === "keys" ? 61 : undefined,
+    ...raw.physicalConstraints,
+  };
+
+  const aliases: string[] = raw.aliases ?? [];
+
   const derived: Omit<InstrumentMeta, "chordSupported" | "tunerSupported" | "fretboardSupported" | "audioSupported"> = {
     region: REGIONS[raw.id] ?? "Western",
     // Winds are "tuned" by the player's intonation; mallets and keys are set by the maker/technician.
@@ -290,6 +444,15 @@ function withMeta(raw: RawInstrumentDefinition): InstrumentDefinition {
     tunerSupport,
     fretboardSupport,
     audioSupport: chordSupport !== "none" ? "model" : tunerSupport !== "none" || hasTunerData ? "reference-tone" : "none",
+    aliases,
+    polyphony,
+    chordCapability,
+    notationType,
+    physicalConstraints,
+    audioProvider,
+    audioStatus,
+    midiMapping,
+    microtonalCapability,
   };
   const m = { ...derived, ...raw.meta };
   return {
@@ -345,7 +508,7 @@ export function detectionWindow(def: InstrumentDefinition, a4 = 440): { fmin: nu
 export function matchesInstrument(def: InstrumentDefinition, query: string): boolean {
   const q = query.trim().toLowerCase();
   if (!q) return true;
-  return [def.name, def.blurb, CATEGORY_LABEL[def.category]].some((t) => t.toLowerCase().includes(q));
+  return [def.name, def.blurb, CATEGORY_LABEL[def.category], ...def.aliases].some((t) => t.toLowerCase().includes(q));
 }
 
 

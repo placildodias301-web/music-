@@ -20,6 +20,8 @@ export function FretboardDiagram({
   ariaLabel,
   courses,
   fretless = false,
+  capo = 0,
+  leftHanded: leftHandedProp,
 }: {
   stringNames: string[];
   /** Chord-shape mode: one entry per string. */
@@ -34,28 +36,34 @@ export function FretboardDiagram({
   courses?: number[][];
   /** No frets (violin family): plain fingerboard, notes spaced by pitch. */
   fretless?: boolean;
+  capo?: number;
+  leftHanded?: boolean;
 }) {
   const { settings } = useSettings();
+  const isLeftHanded = leftHandedProp ?? settings.display.leftHanded;
   const n = stringNames.length;
   const dots: FretDot[] = dotsProp ?? (frets ?? []).flatMap((f, i) => (f !== null && f > 0 ? [{ string: i, fret: f }] : []));
   const states = frets ?? stringNames.map(() => null as number | null);
 
+  const isCapoActive = capo > 0 && !fretless;
   const fretted = dots.map((d) => d.fret).filter((f) => f > 0);
   const minFret = fretted.length ? Math.min(...fretted) : 0;
   const maxFret = fretted.length ? Math.max(...fretted) : 0;
+
+  // When capo is active, the chord shape is relative to the capo as the new nut
   const startFret = !fretless && maxFret > 4 ? minFret - 1 : 0;
   const fretCount = Math.min(8, Math.max(4, maxFret - startFret));
 
   const spacing = n <= 4 ? 24 : n <= 6 ? 20 : 17;
   const fretSpacing = 26;
-  const left = 22;
-  const top = 34;
+  const left = 24;
+  const top = isCapoActive ? 42 : 34;
   const width = left * 2 + spacing * (n - 1);
   const height = top + fretSpacing * fretCount + 18;
   // Left-handed: mirror so the lowest string is on the right.
   const reach = Math.max(6, maxFret + 2);
   const fingerboardY = (n: number) => top + fretSpacing * fretCount * ((1 - Math.pow(2, -n / 12)) / (1 - Math.pow(2, -reach / 12)));
-  const xOf = (s: number) => left + (settings.display.leftHanded ? n - 1 - s : s) * spacing;
+  const xOf = (s: number) => left + (isLeftHanded ? n - 1 - s : s) * spacing;
   const strandX = (s: number) => {
     const k = courses?.[s]?.length ?? 1;
     return Array.from({ length: k }, (_, j) => xOf(s) + (j - (k - 1) / 2) * 5);
@@ -64,12 +72,52 @@ export function FretboardDiagram({
   return (
     <div className="flex flex-col items-center gap-1">
       <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`} role="img" aria-label={ariaLabel ?? caption ?? "Chord diagram"}>
-        {startFret > 0 && (
-          <text x={2} y={top + fretSpacing / 2 + 4} fontSize="10" fill="var(--color-content-dim)">
-            {startFret + 1}fr
-          </text>
+        {/* Nut Line or Capo Bar across top */}
+        {isCapoActive ? (
+          <g>
+            {/* Sleek pill badge ABOVE the X / O row so it never overlaps */}
+            <rect
+              x={left + (spacing * (n - 1)) / 2 - 26}
+              y={3}
+              width={52}
+              height={14}
+              rx={7}
+              fill="var(--color-ns-amber, #e5a93c)"
+            />
+            <text
+              x={left + (spacing * (n - 1)) / 2}
+              y={13}
+              fontSize="8"
+              fontWeight="bold"
+              textAnchor="middle"
+              fill="#000000"
+            >
+              CAPO {capo}
+            </text>
+            <text x={2} y={top + fretSpacing / 2 + 4} fontSize="9" fontWeight="bold" fill="var(--color-ns-amber, #e5a93c)">
+              +{capo}fr
+            </text>
+            <rect
+              x={left - 3}
+              y={top - 3}
+              width={spacing * (n - 1) + 6}
+              height={6}
+              rx={3}
+              fill="var(--color-ns-amber, #e5a93c)"
+              opacity={0.95}
+            />
+          </g>
+        ) : (
+          <>
+            {startFret > 0 && (
+              <text x={2} y={top + fretSpacing / 2 + 4} fontSize="10" fill="var(--color-content-dim)">
+                {startFret + 1}fr
+              </text>
+            )}
+            <rect x={left} y={top} width={spacing * (n - 1)} height={startFret === 0 ? 3 : 1} fill="var(--color-content-muted)" />
+          </>
         )}
-        <rect x={left} y={top} width={spacing * (n - 1)} height={startFret === 0 ? 3 : 1} fill="var(--color-content-muted)" />
+
         {!fretless && Array.from({ length: fretCount + 1 }).map((_, i) => (
           <line key={i} x1={left} x2={left + spacing * (n - 1)} y1={top + i * fretSpacing} y2={top + i * fretSpacing} stroke="var(--color-content-dim)" strokeWidth={1} />
         ))}
