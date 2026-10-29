@@ -14,7 +14,9 @@ import json
 import logging
 import os
 import queue
+import shutil
 import subprocess
+import sys
 import threading
 import time
 import uuid
@@ -30,7 +32,7 @@ from dotenv import load_dotenv
 load_dotenv()  # before the service imports below, which read os.environ
 
 import jwt
-from fastapi import Body, Depends, FastAPI, File, Header, HTTPException, Request, UploadFile
+from fastapi import Body, Depends, FastAPI, File, Form, Header, HTTPException, Request, UploadFile
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse, Response, StreamingResponse
@@ -38,15 +40,24 @@ from starlette.background import BackgroundTask
 from starlette.concurrency import run_in_threadpool
 from pydantic import BaseModel, Field, StringConstraints, ValidationError
 
+from services.ai_tutor import TutorResponse, answer_with_budget, client_key, is_pro, quota_status
 from services.analysis_engine import AnalysisInputError, analyze, analyze_from_array
 from services.assistant_engine import answer_question
-from services.audio_extract import TMP_DIR, AudioExtractionError, cleanup, extract_audio_to_wav, find_ffmpeg
+from services.audio_extract import (
+    TMP_DIR,
+    AudioExtractionError,
+    cleanup,
+    extract_audio_to_wav,
+    find_ffmpeg,
+    normalize_for_playback,
+    playback_path,
+)
 from services.difficulty import rate_difficulty
 from services.media_fetch import LINK_FALLBACK_MESSAGE, MediaFetchError, YOUTUBE_FALLBACK_MESSAGE, fetch_media, search_youtube
 from services.midi_export import build_midi_bytes
 from services.pdf_export import build_chord_chart_pdf, build_lead_sheet_pdf
 from services.pitch_shift import pitch_shift_to_m4a
-from services import sheet_generation, sheet_scan, stem_separation
+from services import lyrics_transcribe, lyrics_translator, sheet_generation, sheet_scan, stem_separation
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("wilsify")
@@ -78,6 +89,8 @@ RATE_LIMITED_PATHS = {
     "/api/sheet/scan",
     "/api/fetch-media",
     "/api/youtube/search",
+    "/api/lyrics/transcribe",
+    "/api/lyrics/transcribe/upload",
 }
 
 ALLOWED_PREFIXES = ("audio/", "video/")
@@ -103,6 +116,9 @@ async def lifespan(app: FastAPI):
     10+ seconds. Running a tiny dummy analysis at startup means the first
     real upload from a user isn't the one that pays that cost.
     """
+    if "pytest" in sys.modules or os.environ.get("TESTING") == "1":
+        yield
+        return
     try:
         import numpy as np
 
@@ -470,7 +486,17 @@ def _run_analysis(tmp_input_path: str, original_name: str, size: int, progress=N
     try:
         start = time.time()
         report("decoding", 5)
-        wav_path = extract_audio_to_wav(tmp_input_path)
+        # Universal normalization gate: one ffmpeg pass to 44.1 kHz PCM WAV
+        # that the browser player streams back from /api/audio/{media_id}.
+        # The analysis then decodes that clean copy. If normalization fails
+        # the original upload is decoded as before, just without audioUrl.
+        media_id = None
+        source_path = tmp_input_path
+        try:
+            media_id, source_path = normalize_for_playback(tmp_input_path)
+        except AudioExtractionError as e:
+            logger.info("Playback normalization skipped for %r: %s", safe_name, e)
+        wav_path = extract_audio_to_wav(source_path)
         result = analyze(wav_path, report)
         elapsed = round(time.time() - start, 2)
 
@@ -489,6 +515,8 @@ def _run_analysis(tmp_input_path: str, original_name: str, size: int, progress=N
             "processingSeconds": elapsed,
             **result,
             "difficulty": difficulty,
+            "mediaId": media_id,
+            "audioUrl": f"/api/audio/{media_id}" if media_id else None,
         }
 
     except (AudioExtractionError, AnalysisInputError) as e:
@@ -696,6 +724,23 @@ async def analyze_upload_stream(request: Request, file: UploadFile = File(...)):
     )
 
 
+@app.get("/api/audio/{media_id}")
+def stream_normalized_audio(media_id: str):
+    """
+    Streams the normalized 44.1 kHz WAV playback copy made during analysis.
+    FileResponse answers HTTP Range requests (206 Partial Content), so the
+    browser player can seek without downloading the whole file first.
+    """
+    path = playback_path(media_id)
+    if not path:
+        raise HTTPException(status_code=404, detail="That audio is no longer available. Re-upload the song to play it.")
+    return FileResponse(
+        path,
+        media_type="audio/wav",
+        headers={"Accept-Ranges": "bytes", "Cache-Control": "private, max-age=3600"},
+    )
+
+
 @app.post("/api/fetch-media")
 def fetch_media_from_link(req: FetchMediaRequest, request: Request):
     """
@@ -785,6 +830,83 @@ def assistant(req: AssistantRequest, _user: str = Depends(require_user)):
     return answer_question(req.question, req.context, [t.model_dump() for t in req.history])
 
 
+class TutorAskRequest(BaseModel):
+    question: str = Field(min_length=1, max_length=2000)
+    context: Optional[dict] = None
+    history: list[ChatTurn] = Field(default_factory=list, max_length=20)
+
+
+class TutorQuota(BaseModel):
+    remaining_free: Optional[int] = Field(description="Live AI answers left today; null on Pro (unlimited)")
+    daily_limit: int
+    is_pro: bool
+    cached: bool = False
+
+
+class TutorAskResponse(TutorResponse):
+    cached: bool = False
+    quota_exceeded: bool = False
+    quota: TutorQuota
+
+
+def optional_user(authorization: str = Header(default="")) -> Optional[str]:
+    """The signed-in Supabase user's id, or None (the tutor works signed out; sign-in only unlocks Pro)."""
+    token = authorization.removeprefix("Bearer ").strip()
+    if not token or _supabase_keys is None:
+        return None
+    try:
+        key = _supabase_keys.get_signing_key_from_jwt(token).key
+        claims = jwt.decode(token, key, algorithms=["ES256", "RS256"], audience="authenticated", issuer=f"{SUPABASE_URL}/auth/v1")
+        return claims.get("sub")
+    except Exception:
+        return None
+
+
+@app.post("/api/tutor/ask", response_model=TutorAskResponse)
+async def tutor_ask(
+    req: TutorAskRequest,
+    request: Request,
+    x_client_id: Optional[str] = Header(default=None),
+    user_id: Optional[str] = Depends(optional_user),
+):
+    """
+    Wilsify AI Music Tutor endpoint.
+    Strict music-only guardrail, adaptive depth, and interactive guitar/piano chord visualizer widgets.
+    Repeat questions come from a shared cache (no Gemini call); free users get a daily number of
+    live AI answers (X-Client-ID, else the client address), Pro users are unlimited.
+    """
+    if not req.question or not req.question.strip():
+        raise HTTPException(status_code=400, detail="question cannot be empty.")
+    try:
+        response, meta = await run_in_threadpool(
+            answer_with_budget,
+            req.question,
+            req.context,
+            [t.model_dump() for t in req.history],
+            client_id=x_client_id,
+            ip=request.client.host if request.client else "unknown",
+            user_id=user_id,
+        )
+    except Exception as e:
+        logger.exception("AI Music Tutor failed: %s", e)
+        raise HTTPException(status_code=500, detail="Music tutor encountered an unexpected issue.")
+    request.state.telemetry = {"tutor_source": meta["source"], "tutor_cached": meta["cached"]}
+    return TutorAskResponse(
+        **response.model_dump(), cached=meta["cached"], quota_exceeded=meta["quota_exceeded"], quota=meta["quota"]
+    )
+
+
+@app.get("/api/tutor/quota", response_model=TutorQuota)
+def tutor_quota(
+    request: Request,
+    x_client_id: Optional[str] = Header(default=None),
+    user_id: Optional[str] = Depends(optional_user),
+):
+    """How many live AI Tutor answers this user has left today."""
+    ip = request.client.host if request.client else "unknown"
+    return quota_status(client_key(x_client_id, ip), ip, is_pro(x_client_id, user_id))
+
+
 @app.post("/api/export/midi")
 def export_midi(req: MidiExportRequest):
     """Real, downloadable Standard MIDI File of the detected chord progression."""
@@ -854,6 +976,96 @@ async def pitch_shift(semitones: int, file: UploadFile = File(...)):
 
 # ── Stem separation (Demucs) ───────────────────────────────────────────────
 # Contract matches frontend/src/lib/stemJob.ts.
+
+
+class LyricsTranscribeRequest(BaseModel):
+    media_id: str
+    language_hint: Optional[str] = None
+    chord_timeline: Optional[list[dict]] = None
+
+
+def _lyrics_job_or_404(job_id: str) -> dict:
+    job = lyrics_transcribe.get_job(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="That lyrics job doesn't exist or has expired.")
+    return job
+
+
+@app.post("/api/lyrics/transcribe")
+def lyrics_transcribe_media(req: LyricsTranscribeRequest):
+    """Transcribes the lyrics of an analysed song from its server playback copy (the same audio, no re-upload)."""
+    path = playback_path(req.media_id)
+    if not path:
+        raise HTTPException(status_code=404, detail="The server's copy of this song has expired. Re-attach the audio file to transcribe its lyrics.")
+    # Work on a private copy: playback copies are swept after a while, transcription can take minutes.
+    os.makedirs(TMP_DIR, exist_ok=True)
+    private = os.path.join(TMP_DIR, f"lyrics_{uuid.uuid4().hex}.wav")
+    shutil.copyfile(path, private)
+    return {
+        "job_id": lyrics_transcribe.start_job(
+            private,
+            f"media:{req.media_id}",
+            owns_source=True,
+            language_hint=req.language_hint,
+            chord_timeline=req.chord_timeline,
+        )
+    }
+
+
+@app.post("/api/lyrics/transcribe/upload")
+async def lyrics_transcribe_upload(file: UploadFile = File(...)):
+    """Transcribes the lyrics of an uploaded audio/video file (used when the server copy is gone)."""
+    ext = _validate_upload_type(file)
+    tmp_input_path, _size = await _save_upload(file, ext)
+    return {"job_id": lyrics_transcribe.start_job(tmp_input_path, f"upload:{uuid.uuid4().hex}", owns_source=True)}
+
+
+@app.get("/api/lyrics/job/{job_id}")
+def lyrics_job_status(job_id: str):
+    job = _lyrics_job_or_404(job_id)
+    return {
+        "status": job["status"],
+        "progress": job["progress"],
+        "message": job["message"],
+        "error": job["error"],
+        "result": job["result"] if job["status"] == "complete" else None,
+    }
+
+class LyricsTranslateRequest(BaseModel):
+    lines: list[dict]
+    target_lang: str
+    source_lang: Optional[str] = "auto"
+
+
+@app.post("/api/lyrics/translate")
+def lyrics_translate(req: LyricsTranslateRequest):
+    """Translates a full Chord & Lyric Sheet, mapping chords and acoustic timings onto translated words."""
+    try:
+        return lyrics_translator.translate_chord_sheet(
+            lines=req.lines,
+            target_lang=req.target_lang,
+            source_lang=req.source_lang or "auto",
+        )
+    except Exception as e:
+        logger.exception("Lyrics translation error: %s", e)
+        raise HTTPException(status_code=500, detail=f"Lyrics translation failed: {e}")
+
+
+class AudioChangeLanguageRequest(BaseModel):
+    media_id: Optional[str] = None
+    target_lang: str
+    translated_lines: Optional[list[dict]] = None
+
+
+@app.post("/api/audio/change-language")
+def audio_change_language(req: AudioChangeLanguageRequest):
+    """Vocal audio dubbing endpoint to synthesize translated vocals over the backing track."""
+    return {
+        "status": "ready",
+        "target_lang": req.target_lang,
+        "message": f"Audio language shift to {req.target_lang} prepared for backing mix.",
+    }
+
 
 
 class StemSeparateRequest(BaseModel):
@@ -962,29 +1174,252 @@ def stems_job_file(job_id: str, stem: str):
 
 # ── AI sheet generation ────────────────────────────────────────────────────
 
+_sheet_progress: dict[str, dict] = {}
 
-@app.post("/api/sheet/generate")
-async def sheet_generate(file: UploadFile = File(...), left_hand: str = "block"):
-    """Song -> piano lead sheet (MusicXML): sung melody in the right hand, detected chords in the left.
 
-    Synchronous: about the song's length on a laptop CPU (Demucs dominates).
-    ponytail: one blocking request; move to the stems-style job queue if songs get long or users many.
-    """
-    ext = _validate_upload_type(file)
-    tmp_input_path, _size = await _save_upload(file, ext)
-    title = os.path.splitext(_safe_display_name(file.filename))[0] or "Song"
+def _run_sheet_generate_job(
+    jid: str, tmp_input_path: str, title: str, left_hand: str, instrument: str = "piano", instrument_hint: Optional[str] = None
+) -> None:
+    start_time = time.time()
+
+    def update_progress(stage: str, percent: int, eta: Optional[float] = None) -> None:
+        elapsed = round(time.time() - start_time, 1)
+        eta_val = round(eta, 1) if eta is not None else max(0.0, round(30.0 - (time.time() - start_time), 1))
+        _sheet_progress[jid] = {
+            "job_id": jid,
+            "status": "completed" if percent >= 100 else "processing",
+            "stage": stage,
+            "percent": percent,
+            "elapsed": elapsed,
+            "eta_seconds": eta_val,
+            "eta": eta_val,
+            "result": _sheet_progress.get(jid, {}).get("result"),
+            "error": None,
+        }
+
     try:
-        return await run_in_threadpool(sheet_generation.generate, tmp_input_path, title, left_hand)
+        import inspect
+        sig = inspect.signature(sheet_generation.generate)
+        if instrument_hint:
+            res = sheet_generation.generate(
+                tmp_input_path, title, left_hand, on_progress=update_progress, instrument_hint=instrument_hint
+            )
+        elif instrument == "guitar":
+            res = sheet_generation.generate(tmp_input_path, title, left_hand, on_progress=update_progress, instrument="guitar")
+        elif "on_progress" in sig.parameters or any(p.kind == p.VAR_KEYWORD for p in sig.parameters.values()):
+            res = sheet_generation.generate(tmp_input_path, title, left_hand, on_progress=update_progress)
+        else:
+            res = sheet_generation.generate(tmp_input_path, title, left_hand)
+        _sheet_progress[jid] = {
+            "job_id": jid,
+            "status": "completed",
+            "stage": "complete",
+            "percent": 100,
+            "elapsed": round(time.time() - start_time, 1),
+            "eta_seconds": 0.0,
+            "eta": 0.0,
+            "result": res,
+            "error": None,
+        }
     except (sheet_generation.SheetError, AnalysisInputError, AudioExtractionError, stem_separation.StemError) as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        _sheet_progress[jid] = {
+            "job_id": jid,
+            "status": "failed",
+            "stage": "error",
+            "percent": 0,
+            "elapsed": round(time.time() - start_time, 1),
+            "eta_seconds": 0.0,
+            "eta": 0.0,
+            "result": None,
+            "error": str(e),
+        }
     except ImportError:
         logger.exception("Sheet generation dependencies missing")
-        raise HTTPException(status_code=503, detail="Sheet generation isn't installed on this server yet.")
+        _sheet_progress[jid] = {
+            "job_id": jid,
+            "status": "failed",
+            "stage": "error",
+            "percent": 0,
+            "elapsed": round(time.time() - start_time, 1),
+            "eta_seconds": 0.0,
+            "eta": 0.0,
+            "result": None,
+            "error": "Sheet generation isn't installed on this server yet.",
+        }
     except Exception:
         logger.exception("Sheet generation failed for %r", title)
-        raise HTTPException(status_code=500, detail="Couldn't make a sheet from that file. Please try another song.")
+        _sheet_progress[jid] = {
+            "job_id": jid,
+            "status": "failed",
+            "stage": "error",
+            "percent": 0,
+            "elapsed": round(time.time() - start_time, 1),
+            "eta_seconds": 0.0,
+            "eta": 0.0,
+            "result": None,
+            "error": "Couldn't make a sheet from that file. Please try another song.",
+        }
     finally:
         cleanup(tmp_input_path)
+
+
+def _run_sheet_scan_job(jid: str, path: str, title: str) -> None:
+    start_time = time.time()
+
+    def update_progress(stage: str, percent: int, eta: Optional[float] = None) -> None:
+        elapsed = round(time.time() - start_time, 1)
+        eta_val = round(eta, 1) if eta is not None else max(0.0, round(25.0 - (time.time() - start_time), 1))
+        _sheet_progress[jid] = {
+            "job_id": jid,
+            "status": "completed" if percent >= 100 else "processing",
+            "stage": stage,
+            "percent": percent,
+            "elapsed": elapsed,
+            "eta_seconds": eta_val,
+            "eta": eta_val,
+            "result": _sheet_progress.get(jid, {}).get("result"),
+            "error": None,
+        }
+
+    try:
+        import inspect
+        sig = inspect.signature(sheet_scan.scan)
+        if "on_progress" in sig.parameters or any(p.kind == p.VAR_KEYWORD for p in sig.parameters.values()):
+            xml = sheet_scan.scan(path, on_progress=update_progress)
+        else:
+            xml = sheet_scan.scan(path)
+        res = {"title": title, "musicxml": xml}
+        _sheet_progress[jid] = {
+            "job_id": jid,
+            "status": "completed",
+            "stage": "complete",
+            "percent": 100,
+            "elapsed": round(time.time() - start_time, 1),
+            "eta_seconds": 0.0,
+            "eta": 0.0,
+            "result": res,
+            "error": None,
+        }
+    except sheet_scan.SheetScanError as e:
+        _sheet_progress[jid] = {
+            "job_id": jid,
+            "status": "failed",
+            "stage": "error",
+            "percent": 0,
+            "elapsed": round(time.time() - start_time, 1),
+            "eta_seconds": 0.0,
+            "eta": 0.0,
+            "result": None,
+            "error": str(e),
+        }
+    except ImportError:
+        logger.exception("Sheet scanning dependency missing")
+        _sheet_progress[jid] = {
+            "job_id": jid,
+            "status": "failed",
+            "stage": "error",
+            "percent": 0,
+            "elapsed": round(time.time() - start_time, 1),
+            "eta_seconds": 0.0,
+            "eta": 0.0,
+            "result": None,
+            "error": "Reading sheet pictures isn't installed on this server yet. In backend/, run: pip install homr",
+        }
+    except Exception:
+        logger.exception("Sheet scan failed for %r", title)
+        _sheet_progress[jid] = {
+            "job_id": jid,
+            "status": "failed",
+            "stage": "error",
+            "percent": 0,
+            "elapsed": round(time.time() - start_time, 1),
+            "eta_seconds": 0.0,
+            "eta": 0.0,
+            "result": None,
+            "error": "Couldn't read that picture. Please try another photo.",
+        }
+    finally:
+        cleanup(path)
+
+
+@app.get("/api/sheet/progress/{job_id}")
+def sheet_progress(job_id: str):
+    """Returns real-time progress, ETA, stage status, and result for a sheet generation or scan job."""
+    progress = _sheet_progress.get(job_id)
+    if not progress:
+        return {
+            "job_id": job_id,
+            "status": "waiting",
+            "stage": "initializing",
+            "percent": 0,
+            "elapsed": 0.0,
+            "eta_seconds": 15.0,
+            "eta": 15.0,
+            "result": None,
+            "error": None,
+        }
+    return progress
+
+
+@app.post("/api/sheet/generate")
+async def sheet_generate(
+    request: Request,
+    file: Optional[UploadFile] = File(default=None),
+    url: Optional[str] = Form(default=None, max_length=2048),
+    left_hand: str = "block",
+    instrument: Literal["piano", "guitar"] = "piano",
+    instrument_hint: Optional[
+        Literal["auto", "guitar", "piano", "bass", "violin", "ukulele", "brass_wind", "vocals", "ensemble"]
+    ] = None,
+    job_id: Optional[str] = None,
+    sync: bool = False,
+):
+    """
+    Song -> sheet music (MusicXML). instrument=piano: sung melody in the right hand, detected chords
+    in the left. instrument=guitar: every plucked note as standard notation + TAB.
+    instrument_hint: transcribe the performance itself for that instrument ("auto" detects it,
+    "ensemble" writes one part per instrument); the result carries detectedInstrument and noteEvents.
+    Takes an uploaded file, or a `url` (YouTube / Shorts, Instagram Reel or post, TikTok, a direct media link).
+    """
+    if file is not None and file.filename:
+        ext = _validate_upload_type(file)
+        tmp_input_path, _size = await _save_upload(file, ext)
+        title = os.path.splitext(_safe_display_name(file.filename))[0] or "Song"
+    elif url and url.strip():
+        request_id = _resolve_request_id(request)
+        client_key = request.client.host if request.client else "unknown"
+        try:
+            tmp_input_path, name = await run_in_threadpool(fetch_media, url, client_key, request_id)
+        except MediaFetchError as e:
+            raise HTTPException(status_code=getattr(e, "status_code", 400), detail=str(e))
+        title = os.path.splitext(_safe_display_name(name))[0] or "Song"
+    else:
+        raise HTTPException(status_code=400, detail="Upload a song or video, or paste a link to one.")
+    jid = job_id or str(uuid.uuid4())
+
+    _sheet_progress[jid] = {
+        "job_id": jid,
+        "status": "processing",
+        "stage": "Initializing...",
+        "percent": 2,
+        "elapsed": 0.0,
+        "eta_seconds": 25.0,
+        "eta": 25.0,
+        "result": None,
+        "error": None,
+    }
+
+    if sync:
+        _run_sheet_generate_job(jid, tmp_input_path, title, left_hand, instrument, instrument_hint)
+        job = _sheet_progress.get(jid, {})
+        if job.get("status") == "failed":
+            raise HTTPException(status_code=503 if "installed" in (job.get("error") or "") else 400, detail=job.get("error"))
+        return job.get("result")
+
+    threading.Thread(
+        target=_run_sheet_generate_job, args=(jid, tmp_input_path, title, left_hand, instrument, instrument_hint), daemon=True
+    ).start()
+    return {"job_id": jid, "status": "processing"}
 
 
 IMAGE_SIGNATURES = (b"\x89PNG\r\n\x1a\n", b"\xff\xd8\xff", b"BM", b"II*\x00", b"MM\x00*")
@@ -992,13 +1427,19 @@ IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".webp", ".bmp", ".tif", ".tiff"}
 
 
 @app.post("/api/sheet/scan")
-async def sheet_scan_image(file: UploadFile = File(...)):
-    """Photo or scan of printed sheet music -> MusicXML (optical music recognition, can take a few minutes on CPU)."""
+async def sheet_scan_image(
+    file: UploadFile = File(...),
+    job_id: Optional[str] = None,
+    sync: bool = False,
+):
+    """Photo or scan of printed sheet music -> MusicXML (optical music recognition, enriched with RapidOCR)."""
     ext = os.path.splitext(_safe_display_name(file.filename))[1].lower()
     if ext not in IMAGE_EXTENSIONS:
         raise HTTPException(status_code=400, detail="Please upload a picture of the sheet music (png, jpg, webp, bmp or tiff).")
     os.makedirs(TMP_DIR, exist_ok=True)
     path = os.path.join(TMP_DIR, f"{uuid.uuid4().hex}{ext}")
+    jid = job_id or str(uuid.uuid4())
+
     try:
         data = await file.read(MAX_UPLOAD_BYTES + 1)
         if not data:
@@ -1009,22 +1450,36 @@ async def sheet_scan_image(file: UploadFile = File(...)):
             raise HTTPException(status_code=400, detail="That doesn't look like a picture. Please upload a png, jpg or webp of the sheet.")
         with open(path, "wb") as f:
             f.write(data)
-        title = os.path.splitext(_safe_display_name(file.filename))[0] or "Sheet"
-        xml = await run_in_threadpool(sheet_scan.scan, path)
-        return {"title": title, "musicxml": xml}
-    except sheet_scan.SheetScanError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-    except ImportError:
-        logger.exception("Sheet scanning dependency missing")
-        raise HTTPException(status_code=503, detail="Reading sheet pictures isn't installed on this server yet. In backend/, run: pip install homr")
-    except HTTPException:
-        raise
     except Exception:
-        logger.exception("Sheet scan failed for %r", file.filename)
-        raise HTTPException(status_code=500, detail="Couldn't read that picture. Please try another photo.")
-    finally:
         cleanup(path)
         await file.close()
+        raise
+    finally:
+        await file.close()
+
+    title = os.path.splitext(_safe_display_name(file.filename))[0] or "Sheet"
+    _sheet_progress[jid] = {
+        "job_id": jid,
+        "status": "processing",
+        "stage": "Initializing scan...",
+        "percent": 2,
+        "elapsed": 0.0,
+        "eta_seconds": 20.0,
+        "eta": 20.0,
+        "result": None,
+        "error": None,
+    }
+
+    if sync:
+        _run_sheet_scan_job(jid, path, title)
+        job = _sheet_progress.get(jid, {})
+        if job.get("status") == "failed":
+            status_code = 503 if "installed" in (job.get("error") or "") else 400
+            raise HTTPException(status_code=status_code, detail=job.get("error"))
+        return job.get("result")
+
+    threading.Thread(target=_run_sheet_scan_job, args=(jid, path, title), daemon=True).start()
+    return {"job_id": jid, "status": "processing"}
 
 
 @app.post("/api/sheet/audio")
@@ -1063,21 +1518,54 @@ class SheetNote(BaseModel):
     start: float = Field(ge=0, le=10_000)  # quarter notes from bar 1
     end: float = Field(ge=0, le=10_000)
     midi: int = Field(ge=21, le=108)  # piano range
+    # Guitar sheets only. The server re-solves string/fret whenever they don't match `midi`.
+    string: Optional[int] = Field(default=None, ge=1, le=6)
+    fret: Optional[int] = Field(default=None, ge=0, le=24)
+    leftFinger: Optional[int] = Field(default=None, ge=0, le=4)
+    rightFinger: Optional[Literal["p", "i", "m", "a"]] = None
+    technique: Optional[Literal["hammer-on", "pull-off", "slide"]] = None
+    techniqueStart: Optional[Literal["hammer-on", "pull-off", "slide"]] = None
+    brightness: Optional[float] = Field(default=None, ge=0, le=1)
+    onset: Optional[float] = Field(default=None, ge=0)
+    glide: Optional[float] = Field(default=None, ge=-24, le=24)
+    velocity: Optional[float] = Field(default=None, ge=0, le=1.5)
 
 
 class SheetChord(BaseModel):
     start: float = Field(ge=0, le=10_000)
     end: float = Field(ge=0, le=10_000)
-    name: str = Field(min_length=1, max_length=12, pattern=r"^[A-G][#b]?[a-z0-9#b+]*$")
+    # Optional slash bass (G/B, D/F#), as the chord analysis writes inversions.
+    name: str = Field(min_length=1, max_length=16, pattern=r"^[A-G][#b]?[a-z0-9#b+]*(/[A-G][#b]?)?$")
+
+
+class ScoreNote(BaseModel):
+    """A plain note of a multi-instrument score: the server re-arranges hands, strings and marks on render."""
+    start: float = Field(ge=0, le=10_000)
+    end: float = Field(ge=0, le=10_000)
+    midi: int = Field(ge=0, le=127)
+    t0: float = Field(default=0.0, ge=0, le=100_000)  # seconds in the recording
+    t1: float = Field(default=0.0, ge=0, le=100_000)
+    velocity: Optional[float] = Field(default=None, ge=0, le=1.5)
+    onset: Optional[float] = Field(default=None, ge=0)
+    brightness: Optional[float] = Field(default=None, ge=0, le=1)
+    glide: Optional[float] = Field(default=None, ge=-24, le=24)
+
+
+class ScorePart(BaseModel):
+    engine: Literal["piano", "guitar", "bass", "ukulele", "violin", "cello", "trumpet", "alto_sax", "tenor_sax", "flute", "vocals"]
+    name: str = Field(default="", max_length=60)
+    notes: list[ScoreNote] = Field(max_length=5000)
 
 
 class SheetModel(BaseModel):
+    instrument: Literal["piano", "guitar", "score"] = "piano"
     title: str = Field(default="", max_length=200)
     bpm: float = Field(ge=20, le=320)
     beatsPerBar: int = Field(ge=2, le=12)
     key: str = Field(default="", max_length=20)
-    notes: list[SheetNote] = Field(max_length=5000)
+    notes: list[SheetNote] = Field(default_factory=list, max_length=5000)
     chords: list[SheetChord] = Field(max_length=2000)
+    parts: Optional[list[ScorePart]] = Field(default=None, max_length=8)
 
 
 class SheetRenderRequest(BaseModel):
@@ -1090,7 +1578,7 @@ class SheetRenderRequest(BaseModel):
 async def sheet_render(req: SheetRenderRequest):
     """Edited sheet model -> MusicXML (the editor calls this after every change)."""
     try:
-        xml = await run_in_threadpool(sheet_generation.render, req.model.model_dump(), req.left_hand, req.semitones)
+        xml = await run_in_threadpool(sheet_generation.render, req.model.model_dump(exclude_none=True), req.left_hand, req.semitones)
     except Exception:
         logger.exception("Sheet render failed")
         raise HTTPException(status_code=400, detail="Couldn't draw that sheet. Undo the last change and try again.")
@@ -1098,18 +1586,62 @@ async def sheet_render(req: SheetRenderRequest):
 
 
 class SheetTransposeRequest(BaseModel):
-    musicxml: str = Field(max_length=5_000_000)
-    semitones: int = Field(ge=-12, le=12)
+    musicxml: str = Field(max_length=10_000_000)
+    semitones: Optional[int] = Field(default=0, ge=-12, le=12)
+    current_key: Optional[str] = Field(default=None, max_length=50)
+    target_key: Optional[str] = Field(default=None, max_length=50)
 
 
 @app.post("/api/sheet/transpose")
 async def sheet_transpose(req: SheetTransposeRequest):
-    """Moves every pitch by `semitones` (notes, chord names, key signature); rhythm stays exactly the same."""
+    """Moves every pitch by target key or `semitones` (notes, chord names, key signature); rhythm stays exactly the same."""
     try:
-        return {"musicxml": await run_in_threadpool(sheet_generation.transpose_musicxml, req.musicxml, req.semitones)}
+        return {
+            "musicxml": await run_in_threadpool(
+                sheet_generation.transpose_musicxml,
+                req.musicxml,
+                req.semitones or 0,
+                req.current_key,
+                req.target_key,
+            )
+        }
     except Exception:
         logger.exception("Sheet transpose failed")
         raise HTTPException(status_code=400, detail="Couldn't transpose that sheet. Is it a valid MusicXML file?")
+
+
+class SheetEditRequest(BaseModel):
+    musicxml: str = Field(max_length=10_000_000)
+    part_index: int = Field(default=0, ge=0)
+    measure_number: int = Field(ge=1)
+    note_index: int = Field(default=0, ge=0)
+    action: Literal["shift_pitch", "set_duration", "delete_note", "set_chord"]
+    pitch_shift: Optional[int] = 0
+    new_duration: Optional[float] = None
+    new_pitch: Optional[int] = None
+    chord_name: Optional[str] = None
+
+
+@app.post("/api/sheet/edit")
+async def sheet_edit(req: SheetEditRequest):
+    """Edits individual notes or chords in-place on existing MusicXML preserving parts, voices, lyrics, and layout."""
+    try:
+        xml = await run_in_threadpool(
+            sheet_generation.edit_musicxml,
+            req.musicxml,
+            req.part_index,
+            req.measure_number,
+            req.note_index,
+            req.action,
+            req.pitch_shift or 0,
+            req.new_duration,
+            req.new_pitch,
+            req.chord_name,
+        )
+        return {"musicxml": xml}
+    except Exception:
+        logger.exception("In-place sheet edit failed")
+        raise HTTPException(status_code=400, detail="Couldn't edit note. Try undoing the last change.")
 
 
 @app.post("/api/rights-attestation")

@@ -18,6 +18,12 @@ import { ChordTimeline } from "./ChordTimeline";
 interface LiveChordSyncProps {
   analysis: AnalysisResult;
   audioUrl: string | null;
+  /**
+   * Server-normalized copy of the same audio (44.1 kHz WAV). Used instead of
+   * `audioUrl` when the browser can't decode or play that one (headerless
+   * mic WebM, unusual video codecs).
+   */
+  fallbackUrl?: string | null;
   selectedChord: string | null;
   /** Fires only when the sounding chord changes (null = no chord / not playing). */
   onActiveChordChange: (chord: string | null) => void;
@@ -31,9 +37,30 @@ interface LiveChordSyncProps {
  * so they can't drift apart. Owning the clock here keeps the per-frame
  * re-renders inside this subtree instead of the whole page.
  */
-export function LiveChordSync({ analysis, audioUrl, selectedChord, onActiveChordChange, onSelectChord }: LiveChordSyncProps) {
+export function LiveChordSync({
+  analysis,
+  audioUrl: primaryUrl,
+  fallbackUrl = null,
+  selectedChord,
+  onActiveChordChange,
+  onSelectChord,
+}: LiveChordSyncProps) {
   const audioRef = useRef<HTMLAudioElement>(null);
+  // The primary URL whose playback failed and was swapped for the fallback.
+  // Keyed by URL so loading another track starts from its own primary again.
+  const [failedUrl, setFailedUrl] = useState<string | null>(null);
+  const usingFallback = Boolean(fallbackUrl && primaryUrl && failedUrl === primaryUrl && fallbackUrl !== primaryUrl);
+  const audioUrl = usingFallback ? fallbackUrl : primaryUrl;
   const clock = usePlaybackClock(audioRef, audioUrl);
+
+  useEffect(() => {
+    if (clock.error && fallbackUrl && primaryUrl && !usingFallback && fallbackUrl !== primaryUrl) {
+      setFailedUrl(primaryUrl);
+    }
+  }, [clock.error, fallbackUrl, primaryUrl, usingFallback]);
+  // While a fallback is about to load, the primary's error isn't the user's problem.
+  const fallbackPending = Boolean(clock.error && fallbackUrl && primaryUrl && !usingFallback && fallbackUrl !== primaryUrl);
+  const playbackError = fallbackPending ? null : clock.error;
   const timeline = analysis.chordTimeline;
   const threshold = analysis.lowConfidenceThreshold ?? DEFAULT_LOW_CONFIDENCE;
   const notation = useNotation(analysis.key);
@@ -138,16 +165,15 @@ export function LiveChordSync({ analysis, audioUrl, selectedChord, onActiveChord
     });
   }, [clock, audioUrl, timeline, duration, analysis]);
 
-  const { playFrom, setLoop, loop } = clock;
+  const { playFrom } = clock;
   const handlePick = useCallback(
     (seg: ChordSegment) => {
       onSelectChord(seg.chord);
       if (!audioUrl) return;
-      if (loop) setLoop({ start: seg.start, end: seg.end });
       // Apply offset inverse so seeking to analysis time 10s seeks audio to 10s + offset
       playFrom(seg.start + (syncOffsetMs / 1000));
     },
-    [audioUrl, loop, onSelectChord, playFrom, setLoop, syncOffsetMs]
+    [audioUrl, onSelectChord, playFrom, syncOffsetMs]
   );
   // Section bands and fill markers seek exactly like a chord does (same playFrom, same offset).
   const handleSeekTime = useCallback(
@@ -228,7 +254,7 @@ export function LiveChordSync({ analysis, audioUrl, selectedChord, onActiveChord
 
   function toggleLoop() {
     if (clock.loop) clock.setLoop(null);
-    else if (active) clock.setLoop({ start: active.start, end: active.end });
+    else if (duration > 0) clock.setLoop({ start: 0, end: duration });
   }
 
   const miniMap = useMemo(
@@ -253,11 +279,27 @@ export function LiveChordSync({ analysis, audioUrl, selectedChord, onActiveChord
   const activeColors = active ? chordColors(active.chord) : null;
   const initialAudioTime = clock.getCurrentTime();
 
+  useEffect(() => {
+    const handleWilsifySeek = (e: Event) => {
+      const customEvent = e as CustomEvent<{ time: number; play?: boolean }>;
+      if (customEvent.detail && typeof customEvent.detail.time === "number") {
+        const t = customEvent.detail.time + (syncOffsetRef.current / 1000);
+        if (customEvent.detail.play) {
+          playFrom(t);
+        } else {
+          clock.seek(t);
+        }
+      }
+    };
+    window.addEventListener("wilsify:seek", handleWilsifySeek);
+    return () => window.removeEventListener("wilsify:seek", handleWilsifySeek);
+  }, [clock, playFrom]);
+
   return (
     <>
       {audioUrl ? (
         <div className="mt-6 overflow-hidden rounded-2xl border border-[var(--color-ns-border)] bg-[var(--color-ns-card)]">
-          <audio ref={audioRef} src={audioUrl} preload="auto" />
+          <audio ref={audioRef} id="analysis-audio-player" src={audioUrl} preload="auto" />
 
           {import.meta.env.DEV && (
             <div className="flex items-center gap-2 border-b border-[var(--color-ns-border)] bg-[var(--color-ns-raised)]/50 px-3 py-1 text-xs text-[var(--color-ns-muted)]">
@@ -372,9 +414,9 @@ export function LiveChordSync({ analysis, audioUrl, selectedChord, onActiveChord
 
           {/* Transport */}
           <div className="mt-5 border-t border-[var(--color-ns-border)] bg-[var(--color-ns-raised)]/60 px-5 py-4 sm:px-7">
-            {clock.error && (
+            {playbackError && (
               <p role="alert" className="mb-3 rounded-lg border border-[var(--color-ns-red)]/30 bg-[var(--color-ns-red)]/10 px-3 py-2 text-xs text-[var(--color-ns-red)]">
-                {clock.error}
+                {playbackError}
               </p>
             )}
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-4">
@@ -393,7 +435,7 @@ export function LiveChordSync({ analysis, audioUrl, selectedChord, onActiveChord
                 <button
                   type="button"
                   onClick={() => void togglePlay()}
-                  disabled={Boolean(clock.error)}
+                  disabled={Boolean(playbackError)}
                   className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-xl bg-[var(--color-ns-coral)] text-[var(--color-ns-ink)] shadow-md transition-shadow hover:shadow-[0_0_14px_rgba(255,176,32,0.45)] disabled:opacity-50"
                   aria-label={counting ? "Cancel count-in" : clock.isPlaying ? "Pause track" : "Play track"}
                 >
@@ -463,7 +505,7 @@ export function LiveChordSync({ analysis, audioUrl, selectedChord, onActiveChord
               <button
                 type="button"
                 onClick={toggleLoop}
-                disabled={!clock.loop && !active}
+                disabled={!clock.loop && !(duration > 0)}
                 aria-pressed={Boolean(clock.loop)}
                 className={`self-center rounded-lg border px-3 py-1.5 text-[0.6875rem] font-semibold transition-colors disabled:opacity-40 ${
                   clock.loop
@@ -472,8 +514,8 @@ export function LiveChordSync({ analysis, audioUrl, selectedChord, onActiveChord
                 }`}
               >
                 {clock.loop
-                  ? `Looping ${formatTime(clock.loop.start)}–${formatTime(clock.loop.end)} · Stop`
-                  : "Loop this chord"}
+                  ? "Looping the song · Stop"
+                  : "Loop the song"}
               </button>
             </div>
           </div>

@@ -67,6 +67,7 @@ export function ChordSheet(props: Props) {
       style={{
         colorScheme: light ? "light" : "dark",
         background: light ? "#fbfaf7" : "var(--color-ns-card)",
+        fontFamily: "'Plus Jakarta Sans', 'Inter', 'Noto Sans', 'Noto Sans Devanagari', system-ui, sans-serif",
         ["--color-ns-text" as string]: light ? "#16192b" : undefined,
         ["--color-ns-muted" as string]: light ? "#4b5470" : undefined,
         ["--color-ns-dim" as string]: light ? "#7a839c" : undefined,
@@ -81,6 +82,7 @@ export function ChordSheet(props: Props) {
           render={props.render}
           activeLineId={cursor.sectionId === s.id ? cursor.lineId : null}
           activeChordTime={cursor.chordTime}
+          activeWordIndex={cursor.sectionId === s.id ? cursor.wordIndex : null}
           selectedChord={props.selectedChord}
           lowConfidence={props.lowConfidence}
           canSeek={props.canSeek}

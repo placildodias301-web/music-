@@ -527,7 +527,7 @@ export function Practice() {
 
         <div className="flex flex-wrap items-center gap-2">
           {effectiveAnalysis ? (
-            <Link to="/song/current" className="btn-primary text-xs sm:text-sm">
+            <Link to="/analysis" className="btn-primary text-xs sm:text-sm">
               Open Chord & Lyric Sheet
             </Link>
           ) : (

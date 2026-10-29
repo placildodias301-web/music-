@@ -8,16 +8,18 @@ export interface SongCursor {
   sectionId: string | null;
   /** `time` of the chord event sounding now (matches ChordEvent.time). */
   chordTime: number | null;
+  /** Word index in the active line currently being sung (karaoke tracking). */
+  wordIndex: number | null;
   chord: string | null;
   prevChord: string | null;
   nextChord: string | null;
 }
 
-const NONE: SongCursor = { lineId: null, sectionId: null, chordTime: null, chord: null, prevChord: null, nextChord: null };
+const NONE: SongCursor = { lineId: null, sectionId: null, chordTime: null, wordIndex: null, chord: null, prevChord: null, nextChord: null };
 
 /**
- * Follows the playback clock and reports the current line / chord — but only
- * re-renders when one of them changes (not on every animation frame).
+ * Follows the playback clock and reports the current line, chord, and active word —
+ * re-rendering only when line, chord, or active word changes (not on every animation frame).
  */
 export function useSongCursor(clock: PlaybackClock, sections: SongSection[]): SongCursor {
   const [cursor, setCursor] = useState<SongCursor>(NONE);
@@ -31,17 +33,23 @@ export function useSongCursor(clock: PlaybackClock, sections: SongSection[]): So
       if (hit) {
         const chord = [...hit.line.chords].reverse().find((c) => t >= c.time) ?? hit.line.chords[0] ?? null;
         const i = chord ? flat.findIndex((c) => c === chord) : -1;
+        let wordIdx: number | null = null;
+        if (hit.line.words && hit.line.words.length) {
+          const found = hit.line.words.findIndex((w) => t >= w.start - 0.05 && t < w.end + 0.05);
+          wordIdx = found >= 0 ? found : null;
+        }
         next = {
           lineId: hit.line.id,
           sectionId: hit.section.id,
           chordTime: chord?.time ?? null,
+          wordIndex: wordIdx,
           chord: chord?.originalChord ?? null,
           prevChord: i > 0 ? flat[i - 1].originalChord : null,
           nextChord: i >= 0 && i + 1 < flat.length ? flat[i + 1].originalChord : null,
         };
       }
       const p = last.current;
-      if (p.lineId !== next.lineId || p.chordTime !== next.chordTime) {
+      if (p.lineId !== next.lineId || p.chordTime !== next.chordTime || p.wordIndex !== next.wordIndex) {
         last.current = next;
         setCursor(next);
       }

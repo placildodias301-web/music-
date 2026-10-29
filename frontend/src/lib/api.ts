@@ -8,7 +8,13 @@
 import { slugify, type LeadSheet } from "./leadSheet";
 import { supabase } from "./supabase";
 
-export const API_URL = import.meta.env.VITE_API_URL ?? "";
+export const API_URL = import.meta.env.MODE === "test" ? "" : (import.meta.env.VITE_API_URL ?? "");
+
+/** Absolute URL for a server-relative audio path such as an analysis's `audioUrl`. */
+export function resolveServerAudioUrl(path: string | null | undefined): string | null {
+  if (!path || !path.startsWith("/api/audio/")) return null;
+  return `${API_URL}${path}`;
+}
 
 export interface ChordSegment {
   chord: string;
@@ -18,6 +24,8 @@ export interface ChordSegment {
   confidence?: number;
   /** The runner-up chord for this span — shown when the detection is uncertain. */
   alternative?: string;
+  /** Segment harmonic role: structural main chord, short passing bridge, or sus/7th filler embellishment. */
+  role?: "main" | "passing" | "filler";
   /** True for a short connecting chord between two longer ones (analysis v3). */
   passing?: boolean;
   /** True when this chord was held over a stretch with no new chord (never shown as "N.C."). */
@@ -87,6 +95,37 @@ export interface CapoEstimate {
   evidence?: string[];
 }
 
+export interface FingerstyleNote {
+  time: number;
+  duration?: number;
+  chord: string;
+  noteName: string;
+  string: number;
+  stringName: string;
+  fret: number;
+  leftFinger: string;
+  rightFinger: string;
+}
+
+export interface FingerstyleIntro {
+  detected: boolean;
+  patternName: string;
+  startTime: number;
+  endTime: number;
+  notes: FingerstyleNote[];
+}
+
+export interface WilsifyAiBreakdown {
+  verifiedKey: string;
+  verifiedTimeSignature: string;
+  aiSummary: string;
+  strummingOrPickingPattern: string;
+  capoRecommendation: string;
+  playingTips: string[];
+  source?: string;
+  learnedRulesApplied?: number;
+}
+
 export interface AnalysisResult {
   isDemo: boolean;
   demoNotice: string | null;
@@ -132,6 +171,28 @@ export interface AnalysisResult {
   /** Added in analysis v3. */
   capo?: CapoEstimate;
   passingChords?: PassingChord[];
+  fingerstyleIntro?: FingerstyleIntro;
+  stretchRatio?: number;
+  adaptiveSlowdown?: {
+    applied: boolean;
+    stretchRatio: number;
+    originalBpm: number;
+    targetBpm: number;
+  };
+  aiSummary?: string;
+  strummingOrPickingPattern?: string;
+  capoRecommendation?: string;
+  playingTips?: string[];
+  wilsifyAi?: WilsifyAiBreakdown;
+  /** Same breakdown as `wilsifyAi`, under the newer field name. */
+  wilsifyAiInsights?: WilsifyAiBreakdown;
+  /**
+   * Server path of the normalized 44.1 kHz WAV copy (`/api/audio/{mediaId}`).
+   * Temporary on the server: it expires a couple of hours after analysis.
+   * Resolve it with `resolveServerAudioUrl` before handing it to a player.
+   */
+  audioUrl?: string | null;
+  mediaId?: string | null;
   // ── Pipeline analyses (POST /api/pipeline/jobs). All optional: v2 results lack them. ──
   /** Which backend engine produced this analysis; absent means v2. */
   engine?: "v2" | "pipeline";
@@ -263,13 +324,13 @@ export class AnalysisError extends Error {
 }
 
 function classifyFailure(status: number, detail: string): AnalysisError {
-  if (status === 0) return new AnalysisError("network", "The Wilsify analysis server isn't responding. Check your connection, or try again in a minute.");
-  if (status === 413 || /too large|maximum size is 100 mb/i.test(detail)) return new AnalysisError("too-large", detail || "File is too large. Maximum size is 100 MB.", status || 413);
+  if (status === 0) return new AnalysisError("network", "Wilsify isn't responding. Check your internet connection, then press Retry.");
+  if (status === 413 || /too large|maximum size is 100 mb/i.test(detail)) return new AnalysisError("too-large", detail || "Files can be up to 100 MB. Try a shorter clip, or save just the audio (MP3 or M4A).", status || 413);
   if (status === 400 && /upload an audio or video file|unsupported file type/i.test(detail)) return new AnalysisError("unsupported", detail, status);
-  if (status === 400) return new AnalysisError("unreadable", detail || "That file couldn't be analysed.", status);
-  if (status === 408) return new AnalysisError("network", detail || "Upload timed out. Check your connection and try again.", status);
-  if (status === 429) return new AnalysisError("busy", detail || "Too many analyses at once — wait a minute and try again.", status);
-  return new AnalysisError("server", detail || "Something went wrong on the server while analysing.", status);
+  if (status === 400) return new AnalysisError("unreadable", detail || "Check that the file plays and has sound, or try another one.", status);
+  if (status === 408) return new AnalysisError("network", detail || "The upload took too long. Check your connection, then press Retry.", status);
+  if (status === 429) return new AnalysisError("busy", detail || "Too many songs are being analysed at once. Wait a minute, then press Retry.", status);
+  return new AnalysisError("server", detail || "Something went wrong while analysing this song. Press Retry, or try another file.", status);
 }
 
 /** The same checks the server makes, before anything is sent. */
@@ -307,7 +368,7 @@ export function analyzeFile(file: File, options: AnalyzeOptions | ((progress: An
   const opts: AnalyzeOptions = typeof options === "function" ? { onProgress: options } : options;
   return new Promise((resolve, reject) => {
     if (opts.signal?.aborted) {
-      reject(new AnalysisError("cancelled", "Analysis cancelled."));
+      reject(new AnalysisError("cancelled", "You stopped the analysis. Nothing was saved."));
       return;
     }
 
@@ -352,7 +413,7 @@ export function analyzeFile(file: File, options: AnalyzeOptions | ((progress: An
           reject(
             new AnalysisError(
               "network",
-              "Connection to the analysis server was lost (heartbeat timeout). Please retry.",
+              "The connection to Wilsify dropped while analysing. Press Retry to start again.",
               408,
             ),
           );
@@ -403,7 +464,7 @@ export function analyzeFile(file: File, options: AnalyzeOptions | ((progress: An
     xhr.onload = () => {
       if (xhr.status === 200) {
         drain();
-        finish(() => reject(new AnalysisError("network", "The connection closed before analysis finished. Please try again.")));
+        finish(() => reject(new AnalysisError("network", "The connection dropped before the analysis finished. Press Retry to start again.")));
         return;
       }
       let detail = "";
@@ -418,9 +479,9 @@ export function analyzeFile(file: File, options: AnalyzeOptions | ((progress: An
     xhr.onerror = () => finish(() => reject(classifyFailure(0, "")));
     xhr.ontimeout = () =>
       finish(() =>
-        reject(new AnalysisError("network", "The upload or analysis timed out. Check your connection and try again.", 408)),
+        reject(new AnalysisError("network", "The analysis took too long to answer. Check your connection, then press Retry.", 408)),
       );
-    xhr.onabort = () => finish(() => reject(new AnalysisError("cancelled", "Analysis cancelled.")));
+    xhr.onabort = () => finish(() => reject(new AnalysisError("cancelled", "You stopped the analysis. Nothing was saved.")));
 
     armHeartbeatTimer();
     const form = new FormData();
@@ -528,12 +589,12 @@ export function pipelineFailure(error: PipelineJobView["error"]): AnalysisError 
 function waitOrCancel(ms: number, signal?: AbortSignal): Promise<void> {
   return new Promise((resolve, reject) => {
     if (signal?.aborted) {
-      reject(new AnalysisError("cancelled", "Analysis cancelled."));
+      reject(new AnalysisError("cancelled", "You stopped the analysis. Nothing was saved."));
       return;
     }
     const onAbort = () => {
       clearTimeout(timer);
-      reject(new AnalysisError("cancelled", "Analysis cancelled."));
+      reject(new AnalysisError("cancelled", "You stopped the analysis. Nothing was saved."));
     };
     const timer = setTimeout(() => {
       signal?.removeEventListener("abort", onAbort);
@@ -581,8 +642,8 @@ function createPipelineJob(file: File, opts: AnalyzeOptions): Promise<PipelineJo
       finish(() => reject(classifyFailure(xhr.status === 200 || xhr.status === 202 ? 500 : xhr.status, detail)));
     };
     xhr.onerror = () => finish(() => reject(classifyFailure(0, "")));
-    xhr.ontimeout = () => finish(() => reject(new AnalysisError("network", "The upload timed out. Check your connection and try again.", 408)));
-    xhr.onabort = () => finish(() => reject(new AnalysisError("cancelled", "Analysis cancelled.")));
+    xhr.ontimeout = () => finish(() => reject(new AnalysisError("network", "The upload took too long. Check your connection, then press Retry.", 408)));
+    xhr.onabort = () => finish(() => reject(new AnalysisError("cancelled", "You stopped the analysis. Nothing was saved.")));
 
     const form = new FormData();
     form.append("file", file);
@@ -603,7 +664,7 @@ export interface PipelineAnalyzeOptions extends AnalyzeOptions {
  * the polling; a job already running on the server finishes there.
  */
 export async function analyzeWithPipeline(file: File, opts: PipelineAnalyzeOptions = {}): Promise<AnalysisResult> {
-  if (opts.signal?.aborted) throw new AnalysisError("cancelled", "Analysis cancelled.");
+  if (opts.signal?.aborted) throw new AnalysisError("cancelled", "You stopped the analysis. Nothing was saved.");
   const preflight = preflightFailure(file);
   if (preflight) throw preflight;
 
@@ -617,13 +678,13 @@ export async function analyzeWithPipeline(file: File, opts: PipelineAnalyzeOptio
     try {
       const res = await fetch(`${API_URL}/api/pipeline/jobs/${encodeURIComponent(created.job_id)}`, { signal: opts.signal });
       if (res.status === 404) {
-        throw new AnalysisError("server", "The server no longer has this analysis (it may have restarted). Please upload the file again.", 404);
+        throw new AnalysisError("server", "Wilsify restarted and lost this analysis. Upload the file again to start over.", 404);
       }
       if (!res.ok) throw classifyFailure(res.status, "");
       view = (await res.json()) as PipelineJobView;
       failures = 0;
     } catch (err) {
-      if (opts.signal?.aborted) throw new AnalysisError("cancelled", "Analysis cancelled.");
+      if (opts.signal?.aborted) throw new AnalysisError("cancelled", "You stopped the analysis. Nothing was saved.");
       if (err instanceof AnalysisError && err.status === 404) throw err;
       failures += 1;
       if (failures >= PIPELINE_MAX_POLL_FAILURES) throw err instanceof AnalysisError ? err : classifyFailure(0, "");
@@ -659,7 +720,7 @@ const FALLBACK_DIFFICULTY: DifficultyResult = {
  */
 export function mapPipelineResult(view: PipelineJobView, file: Pick<File, "name" | "size">): AnalysisResult {
   const r = view.result;
-  if (!r) throw new AnalysisError("server", "The server finished without a result. Please try again.", 500);
+  if (!r) throw new AnalysisError("server", "The analysis ended without a result. Press Retry to run it again.", 500);
 
   const chordTimeline: ChordSegment[] = (r.chords ?? []).map((c) => ({
     chord: c.type === "no_chord" ? NO_CHORD_SYMBOL : (c.simple ?? c.chord),
@@ -673,7 +734,7 @@ export function mapPipelineResult(view: PipelineJobView, file: Pick<File, "name"
   if (!r.key || chordProgression.length === 0) {
     throw new AnalysisError(
       "unreadable",
-      "No chords could be recognised in this audio — it may be percussion-only, speech, or too quiet for chord detection.",
+      "We couldn't find any chords. The audio may be drums or speech only, or too quiet.",
       422,
     );
   }
@@ -1053,4 +1114,156 @@ function triggerDownload(blob: Blob, fileName: string) {
   a.click();
   a.remove();
   URL.revokeObjectURL(url);
+}
+
+// ─── Lyrics transcribed from the song's own audio ────────────────────────────
+
+export interface TranscribedWord {
+  word: string;
+  start: number;
+  end: number;
+}
+
+export interface TranscribedLine {
+  text: string;
+  start: number;
+  end: number;
+  words: TranscribedWord[];
+  /** Lines separated by a long silence get a new stanza number. */
+  stanza: number;
+}
+
+export interface LyricsTranscription {
+  lines: TranscribedLine[];
+  words: number;
+  /** True when no singing was found (instrumental, or nothing intelligible). */
+  noVocals: boolean;
+  model: string;
+  language?: string;
+  seconds: number;
+}
+
+export interface LyricsJob {
+  status: "queued" | "running" | "complete" | "failed";
+  progress: number;
+  message: string;
+  error: string | null;
+  result: LyricsTranscription | null;
+}
+
+async function lyricsError(res: Response, fallback: string): Promise<Error> {
+  try {
+    const body = await res.json();
+    if (typeof body?.detail === "string") return new Error(body.detail);
+  } catch {
+    // not JSON
+  }
+  return new Error(fallback);
+}
+
+/** Starts transcribing a song's lyrics: from the server's playback copy, or an uploaded file. Returns the job id. */
+export async function startLyricsTranscription(
+  source: { mediaId: string; languageHint?: string; chordTimeline?: ChordSegment[] } | { file: Blob; fileName: string; languageHint?: string; chordTimeline?: ChordSegment[] }
+): Promise<string> {
+  const res =
+    "mediaId" in source
+      ? await fetch(`${API_URL}/api/lyrics/transcribe`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            media_id: source.mediaId,
+            language_hint: source.languageHint,
+            chord_timeline: source.chordTimeline,
+          }),
+        })
+      : await (() => {
+          const form = new FormData();
+          form.append("file", source.file, source.fileName);
+          return fetch(`${API_URL}/api/lyrics/transcribe/upload`, { method: "POST", body: form });
+        })();
+  if (!res.ok) throw await lyricsError(res, "Couldn't start lyrics transcription.");
+  const body = (await res.json()) as { job_id?: string };
+  if (!body.job_id) throw new Error("Couldn't start lyrics transcription.");
+  return body.job_id;
+}
+
+export async function getLyricsJob(jobId: string): Promise<LyricsJob> {
+  const res = await fetch(`${API_URL}/api/lyrics/job/${encodeURIComponent(jobId)}`);
+  if (!res.ok) throw await lyricsError(res, "Lost track of the lyrics transcription.");
+  return (await res.json()) as LyricsJob;
+}
+
+
+export interface TranslateLyricsRequest {
+  lines: Array<{
+    id: string;
+    text: string;
+    chords: Array<{ chord: string; time: number; beatOffset?: number }>;
+    words?: Array<{ word: string; start: number; end: number }>;
+    startTime?: number | null;
+    endTime?: number | null;
+    section?: string;
+  }>;
+  targetLang: string;
+  sourceLang?: string;
+}
+
+export interface TranslatedWord {
+  word: string;
+  start: number;
+  end: number;
+  charStart?: number;
+}
+
+export interface TranslatedLine {
+  id: string;
+  text: string;
+  romanizedText?: string;
+  chords: Array<{ originalChord?: string; chord: string; time: number; endTime?: number; charIndex?: number; confidence?: number }>;
+  words: TranslatedWord[];
+  romanizedWords?: TranslatedWord[];
+  startTime: number | null;
+  endTime: number | null;
+  section?: string;
+  instrumental?: boolean;
+}
+
+export interface TranslateLyricsResponse {
+  detectedSourceLangCode: string;
+  detectedSourceLangName: string;
+  targetLangCode: string;
+  targetLangName: string;
+  translatedLines: TranslatedLine[];
+}
+
+export async function translateLyrics(req: TranslateLyricsRequest): Promise<TranslateLyricsResponse> {
+  const res = await fetch(`${API_URL}/api/lyrics/translate`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      lines: req.lines,
+      target_lang: req.targetLang,
+      source_lang: req.sourceLang || "auto",
+    }),
+  });
+  if (!res.ok) throw await lyricsError(res, "Couldn't translate lyrics.");
+  const data = await res.json();
+  return {
+    detectedSourceLangCode: data.detected_source_lang_code,
+    detectedSourceLangName: data.detected_source_lang_name,
+    targetLangCode: data.target_lang_code,
+    targetLangName: data.target_lang_name,
+    translatedLines: (data.translated_lines || []).map((l: any) => ({
+      id: l.id,
+      text: l.text,
+      romanizedText: l.romanized_text,
+      chords: l.chords || [],
+      words: l.words || [],
+      romanizedWords: l.romanized_words,
+      startTime: l.startTime,
+      endTime: l.endTime,
+      section: l.section,
+      instrumental: l.instrumental,
+    })),
+  };
 }

@@ -13,7 +13,7 @@ import type { ChordEvent, LyricLine, LyricWord, ParsedLyricLine } from "./model"
 
 const EPS = 0.05; // a chord starting this close before a line still counts as "at the start"
 /** A chord's time can sit before a word's start by this much and still belong to it. */
-const WORD_LEAD = 0.18;
+const WORD_LEAD = 0.15;
 
 export function wordsOf(text: string): { word: string; charStart: number }[] {
   const out: { word: string; charStart: number }[] = [];

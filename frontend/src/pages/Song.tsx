@@ -1,18 +1,22 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { useMvp } from "../lib/MvpContext";
 import {
+  loadChordEdits,
   persistActiveSongRef,
   resolveCanonicalSongId,
   resolveLibrarySong,
+  saveChordEdits,
   updateLibrarySongState,
 } from "../lib/library";
-import type { AnalysisResult } from "../lib/api";
+import { resolveServerAudioUrl, type AnalysisResult, type ChordSegment } from "../lib/api";
 import { DEFAULT_LOW_CONFIDENCE, formatTime } from "../lib/chordSync";
-import { capoSuggestions, transposeChord, transposeKey } from "../lib/transpose";
+import { capoSuggestions, transposeAnalysis, transposeChord, transposeKey } from "../lib/transpose";
 import { usePlaybackClock } from "../lib/usePlaybackClock";
 import { simplifyChord } from "../lib/song/simplify";
-import { buildSongSections } from "../lib/song/sections";
+import { lineAt } from "../lib/song/sections";
+import { buildSheet } from "../lib/song/sheetData";
+import type { ChordEdit } from "../lib/song/chordEdits";
 import type { ChordEvent, SongSection } from "../lib/song/model";
 import {
   loadDisplay,
@@ -35,6 +39,30 @@ import { DisplaySettings } from "../components/song/DisplaySettings";
 import { AskWilsify } from "../components/song/AskWilsify";
 import { LyricsEditor } from "../components/song/LyricsEditor";
 import { useSongCursor } from "../components/song/useSongCursor";
+import { useAutoLyrics } from "../components/song/useAutoLyrics";
+import { SectionNav } from "../components/song/SectionNav";
+import { ChordEditor } from "../components/song/ChordEditor";
+import { ChordTimeline } from "../components/analysis/ChordTimeline";
+import type { PlaybackClock } from "../lib/usePlaybackClock";
+
+type SheetView = "sheet" | "timeline" | "practice" | "compact";
+const VIEWS: { id: SheetView; label: string; hint: string }[] = [
+  { id: "sheet", label: "Sheet", hint: "Chords above the lyrics" },
+  { id: "timeline", label: "Timeline", hint: "Chords along the audio timeline" },
+  { id: "practice", label: "Practice", hint: "Large chords and lyrics for playing along" },
+  { id: "compact", label: "Compact", hint: "Smaller text, more of the song on screen" },
+];
+
+/** Index of the timeline chord sounding now; re-renders only when it changes. */
+function useActiveSegment(clock: PlaybackClock, timeline: ChordSegment[]): number {
+  const [index, setIndex] = useState(-1);
+  useEffect(() => {
+    const update = (t: number) => setIndex(timeline.findIndex((s) => t >= s.start && t < s.end));
+    update(clock.getCurrentTime());
+    return clock.subscribe(update);
+  }, [clock, timeline]);
+  return index;
+}
 
 /** /song/current = the song just analysed this session; /song/:id = a saved Library song. */
 function useSong(songId: string | undefined) {
@@ -51,7 +79,8 @@ function useSong(songId: string | undefined) {
         id: canonicalId,
         fileName,
         analysis,
-        audioUrl: mvp.audioUrl,
+        audioUrl: mvp.audioUrl ?? resolveServerAudioUrl(analysis.audioUrl),
+        sessionAudioUrl: mvp.audioUrl,
         savedTranspose: saved?.transpose,
         savedCapo: saved?.capo,
         savedSimplify: saved?.simplify,
@@ -63,12 +92,14 @@ function useSong(songId: string | undefined) {
     const item = resolveLibrarySong(songId);
     if (!item) return null;
     // Saved songs keep the analysis, not the audio: audio is only there if the same file is open this session.
-    const audioUrl = mvp.fileName === item.fileName ? mvp.audioUrl : null;
+    // The server's temporary copy is the fallback while it still exists.
+    const audioUrl = (mvp.fileName === item.fileName ? mvp.audioUrl : null) ?? resolveServerAudioUrl(item.analysis.audioUrl);
     return {
       id: item.id,
       fileName: item.fileName,
       analysis: item.analysis,
       audioUrl,
+      sessionAudioUrl: mvp.fileName === item.fileName ? mvp.audioUrl : null,
       savedTranspose: item.transpose,
       savedCapo: item.capo,
       savedSimplify: item.simplify,
@@ -101,7 +132,7 @@ export function Song() {
               title="Analyze or select a song first to open Practice Studio"
               className="btn-secondary text-xs sm:text-sm"
             >
-              Open Practice Studio
+              Practice This Song
             </button>
           </div>
         </EmptyState>
@@ -115,6 +146,7 @@ export function Song() {
       fileName={song.fileName}
       analysis={song.analysis}
       audioUrl={song.audioUrl}
+      sessionAudioUrl={song.sessionAudioUrl}
       savedTranspose={song.savedTranspose}
       savedCapo={song.savedCapo}
       savedSimplify={song.savedSimplify}
@@ -130,6 +162,7 @@ function SongView({
   fileName,
   analysis,
   audioUrl,
+  sessionAudioUrl,
   savedTranspose,
   savedCapo,
   savedSimplify,
@@ -141,6 +174,8 @@ function SongView({
   fileName: string;
   analysis: AnalysisResult;
   audioUrl: string | null;
+  /** The audio file opened this session (not the server copy), handed on to Practice / Analysis. */
+  sessionAudioUrl: string | null;
   savedTranspose?: number;
   savedCapo?: number;
   savedSimplify?: boolean;
@@ -168,6 +203,15 @@ function SongView({
   const [seed, setSeed] = useState<string | null>(null);
   const [tapIndex, setTapIndex] = useState<number | null>(null);
   const [showSettings, setShowSettings] = useState(false);
+  const [searchParams] = useSearchParams();
+  // User chord corrections, kept apart from the analysis (RAW ANALYSIS + CORRECTIONS = this sheet).
+  const [edits, setEditsState] = useState<ChordEdit[]>(() => loadChordEdits(id, fileName));
+  const [editingChords, setEditingChords] = useState(false);
+  const [view, setView] = useState<SheetView>("sheet");
+  // No lyrics yet: transcribe them from the song's own audio (once per song).
+  const onAutoLyrics = useCallback((l: StoredLyrics) => setStored(l), []);
+  const autoLyrics = useAutoLyrics({ songRef: id, fileName, analysis, sessionAudioUrl, hasLyrics: Boolean(stored), onLyrics: onAutoLyrics });
+  const lyricsState = autoLyrics.state;
 
   // Keep the active song reference synchronized in sessionStorage without duplicating Library entries.
   useEffect(() => {
@@ -204,23 +248,66 @@ function SongView({
     [id, fileName],
   );
 
-  const handleOpenPracticeStudio = useCallback(() => {
-    const libId = id.startsWith("file:") ? null : id;
-    setSong({
-      libraryId: libId,
-      fileName,
-      fileSizeBytes: analysis.fileSizeBytes ?? 0,
-      audioUrl,
-      isSampleAudio: false,
-    });
-    setAnalysis(analysis);
-    navigate("/practice");
-  }, [id, fileName, analysis, audioUrl, setSong, setAnalysis, navigate]);
+  const commitEdits = useCallback(
+    (next: ChordEdit[]) => {
+      setEditsState(next);
+      saveChordEdits(id, fileName, next);
+    },
+    [id, fileName],
+  );
+
+  const applySpeed = useCallback((s: number) => {
+    const a = audioRef.current;
+    if (a) {
+      a.playbackRate = s;
+      (a as HTMLAudioElement & { preservesPitch?: boolean }).preservesPitch = true;
+    }
+    setSpeed(s);
+  }, []);
+
+  // Analysis, Chord Sheet and Practice all open THIS song: make it the session's song first.
+  const openAs = useCallback(
+    (path: string) => {
+      const libId = id.startsWith("file:") ? null : id;
+      setSong({
+        libraryId: libId,
+        fileName,
+        fileSizeBytes: analysis.fileSizeBytes ?? 0,
+        audioUrl: sessionAudioUrl,
+        isSampleAudio: false,
+      });
+      setAnalysis(analysis);
+      navigate(path);
+    },
+    [id, fileName, analysis, sessionAudioUrl, setSong, setAnalysis, navigate],
+  );
+  const handleOpenPracticeStudio = useCallback(() => openAs("/practice"), [openAs]);
 
   const parsed = useMemo(() => (stored ? materializeLyrics(stored) : null), [stored]);
-  const sections = useMemo(() => buildSongSections(analysis, parsed), [analysis, parsed]);
+  const sheet = useMemo(() => buildSheet(analysis, edits, parsed), [analysis, edits, parsed]);
+  const sections = sheet.sections;
   const cursor = useSongCursor(clock, sections);
+  const activeSegment = useActiveSegment(clock, sheet.analysis.chordTimeline);
   const canSeek = Boolean(audioUrl);
+  const timelineAnalysis = useMemo(() => transposeAnalysis(sheet.analysis, shift - capo), [sheet.analysis, shift, capo]);
+
+  // "Play from here" links (/song/:id?t=42.5): scroll to that line and, with audio, play from it.
+  const startedFromLink = useRef(false);
+  useEffect(() => {
+    const t = Number(searchParams.get("t"));
+    if (startedFromLink.current || !searchParams.has("t") || !Number.isFinite(t)) return;
+    startedFromLink.current = true;
+    const hit = lineAt(sections, t);
+    if (hit) document.querySelector<HTMLElement>(`[data-line-id="${CSS.escape(hit.line.id)}"]`)?.scrollIntoView?.({ block: "center" });
+    if (canSeek) clock.playFrom(t);
+  }, [searchParams, sections, canSeek, clock]);
+
+  const jumpToSection = (s: SongSection) => {
+    if (view !== "timeline") {
+      document.querySelector<HTMLElement>(`[data-section-id="${CSS.escape(s.id)}"]`)?.scrollIntoView?.({ behavior: "smooth", block: "start" });
+    }
+    if (canSeek && s.startTime !== null) clock.playFrom(s.startTime);
+  };
 
   const render = useCallback(
     (original: string) => {
@@ -275,11 +362,14 @@ function SongView({
   const flatLines = useMemo(() => (parsed ? parsed.sections.flatMap((s) => s.lines) : []), [parsed]);
   const sectionName = sections.find((s) => s.id === cursor.sectionId)?.name ?? null;
   const key_ = transposeKey(analysis.key, shift);
-  const firstChord = analysis.chordTimeline[0]?.chord;
+  const firstChord = sheet.analysis.chordTimeline[0]?.chord;
+  const lowConfidence = analysis.lowConfidenceThreshold ?? DEFAULT_LOW_CONFIDENCE;
+  // Practice view: big enough to read from a music stand; Compact: more of the song per screen.
+  const scale = view === "practice" ? 1.45 : view === "compact" ? 0.82 : 1;
   const options = {
-    chordSize: display.chordSize,
-    lyricSize: display.lyricSize,
-    lineSpacing: display.lineSpacing,
+    chordSize: Math.round(display.chordSize * scale),
+    lyricSize: Math.round(display.lyricSize * scale),
+    lineSpacing: view === "compact" ? Math.min(display.lineSpacing, 1.5) : display.lineSpacing,
     showChords: display.showChords,
     showLyrics: display.showLyrics,
   };
@@ -299,16 +389,24 @@ function SongView({
             <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
               <polygon points="6 4 19 12 6 20 6 4" />
             </svg>
-            Open Practice Studio
+            Practice This Song
           </button>
-          <Link to="/analysis" className="btn-secondary px-3.5 py-2 text-xs sm:text-sm">
+          <button type="button" onClick={() => openAs("/analysis")} className="btn-secondary px-3.5 py-2 text-xs sm:text-sm">
             Analysis Overview
-          </Link>
+          </button>
         </div>
       </div>
 
       <div className="mb-3 space-y-3">
-        <AudioPlayer audioRef={audioRef} src={audioUrl} clock={clock} fallbackDuration={analysis.durationSeconds} />
+        <AudioPlayer
+          audioRef={audioRef}
+          src={audioUrl}
+          clock={clock}
+          fallbackDuration={analysis.durationSeconds}
+          speed={speed}
+          onSpeed={applySpeed}
+          sectionName={sectionName}
+        />
         {!audioUrl && (
           <div className="flex flex-col justify-between gap-2 rounded-2xl border border-[var(--color-ns-amber)]/35 bg-[var(--color-ns-amber)]/10 px-4 py-2.5 sm:flex-row sm:items-center">
             <p className="text-xs text-[var(--color-ns-text)]">
@@ -351,12 +449,56 @@ function SongView({
             Simplify chords
           </label>
           <span className="text-[11px] text-[var(--color-ns-dim)]">Transpose changes the chord names, not the recording.</span>
+          <div className="ml-auto flex items-center gap-1 rounded-lg border border-[var(--color-ns-border)] bg-[var(--color-ns-surface)] p-0.5">
+            <button
+              type="button"
+              onClick={() => {
+                const next = {
+                  ...display,
+                  lyricSize: Math.max(13, Math.min(28, display.lyricSize - 1)),
+                  chordSize: Math.max(12, Math.min(26, display.chordSize - 1)),
+                };
+                setDisplay(next);
+                saveDisplay(next);
+              }}
+              title="Decrease font size (A-)"
+              className="rounded px-2 py-1 text-xs font-bold text-[var(--color-ns-muted)] hover:bg-white/[0.06] hover:text-[var(--color-ns-text)]"
+            >
+              A-
+            </button>
+            <span className="px-1 text-[11px] tabular-nums text-[var(--color-ns-dim)]">{display.lyricSize}px</span>
+            <button
+              type="button"
+              onClick={() => {
+                const next = {
+                  ...display,
+                  lyricSize: Math.max(13, Math.min(28, display.lyricSize + 1)),
+                  chordSize: Math.max(12, Math.min(26, display.chordSize + 1)),
+                };
+                setDisplay(next);
+                saveDisplay(next);
+              }}
+              title="Increase font size (A+)"
+              className="rounded px-2 py-1 text-xs font-bold text-[var(--color-ns-muted)] hover:bg-white/[0.06] hover:text-[var(--color-ns-text)]"
+            >
+              A+
+            </button>
+          </div>
+          <button
+            type="button"
+            onClick={() => setEditingChords((v) => !v)}
+            aria-expanded={editingChords}
+            className={`rounded-lg border px-3 py-1.5 text-xs font-semibold ${editingChords ? "border-[var(--color-ns-purple-light)] bg-[var(--color-ns-purple)]/20 text-[var(--color-ns-purple-light)]" : "border-[var(--color-ns-border)] text-[var(--color-ns-muted)] hover:text-[var(--color-ns-text)]"}`}
+          >
+            Edit chords{edits.length ? ` (${edits.length})` : ""}
+          </button>
           <button
             type="button"
             onClick={() => setEditing((v) => !v)}
-            className="ml-auto rounded-lg border border-[var(--color-ns-border)] px-3 py-1.5 text-xs font-semibold text-[var(--color-ns-muted)] hover:text-[var(--color-ns-text)]"
+            title="Edit words, split or merge lines, and rename or reorder [Section] headers"
+            className={`rounded-lg border px-3 py-1.5 text-xs font-semibold ${editing ? "border-[var(--color-ns-purple-light)] bg-[var(--color-ns-purple)]/20 text-[var(--color-ns-purple-light)]" : "border-[var(--color-ns-border)] text-[var(--color-ns-muted)] hover:text-[var(--color-ns-text)]"}`}
           >
-            {stored ? "Edit lyrics" : "Add lyrics"}
+            {editing ? "Close edit" : stored ? "Edit lyrics" : "Add lyrics"}
           </button>
           <button
             type="button"
@@ -387,6 +529,33 @@ function SongView({
             }}
             onClose={() => setEditing(false)}
           />
+        )}
+        {editingChords && (
+          <ChordEditor
+            timeline={sheet.analysis.chordTimeline}
+            editCount={edits.length}
+            lowConfidence={lowConfidence}
+            currentTime={clock.getCurrentTime}
+            onEdit={(e) => commitEdits([...edits, e])}
+            onUndo={() => commitEdits(edits.slice(0, -1))}
+            onReset={() => commitEdits([])}
+            onClose={() => setEditingChords(false)}
+          />
+        )}
+        {sheet.analysis.chordTimeline.length === 0 && (
+          <div role="status" className="rounded-2xl border border-[var(--color-ns-amber)]/40 bg-[var(--color-ns-amber)]/10 p-3 text-xs text-[var(--color-ns-text)]">
+            Chord detection wasn&apos;t confident enough for this song. You can add chords yourself with <strong>Edit chords</strong>.
+          </div>
+        )}
+        {sheet.uncertainCount > 0 && !editingChords && (
+          <div className="flex flex-col justify-between gap-2 rounded-2xl border border-[var(--color-ns-amber)]/35 bg-[var(--color-ns-amber)]/10 px-4 py-2.5 sm:flex-row sm:items-center">
+            <p className="text-xs text-[var(--color-ns-text)]">
+              <strong>Some chords may need correction.</strong> {sheet.uncertainCount} chord{sheet.uncertainCount === 1 ? " was" : "s were"} detected with low confidence and {sheet.uncertainCount === 1 ? "is" : "are"} marked <strong>?</strong>.
+            </p>
+            <button type="button" onClick={() => setEditingChords(true)} className="btn-secondary shrink-0 px-3 py-1 text-xs font-semibold">
+              Review chords
+            </button>
+          </div>
         )}
         {needsSync && (
           <div role="status" className="rounded-2xl border border-[var(--color-ns-amber)]/40 bg-[var(--color-ns-amber)]/10 p-3 text-xs text-[var(--color-ns-text)]">
@@ -421,11 +590,45 @@ function SongView({
             )}
           </div>
         )}
-        {!stored && !editing && (
+        {stored?.source === "transcribed" && !editing && (
+          <p className="rounded-2xl border border-[var(--color-ns-border)] bg-[var(--color-ns-card)] px-4 py-2 text-[11px] text-[var(--color-ns-muted)]">
+            Lyrics transcribed automatically from this recording&apos;s vocals — they may contain mistakes. Use <strong>Edit lyrics</strong> to correct words or lines.
+          </p>
+        )}
+        {!stored && !editing && lyricsState.status === "running" && (
+          <div role="status" className="rounded-2xl border border-[var(--color-ns-purple-light)]/35 bg-[var(--color-ns-purple)]/10 px-4 py-3">
+            <p className="text-xs text-[var(--color-ns-text)]">
+              <strong>Transcribing lyrics from the audio…</strong> {lyricsState.message} {Math.round(lyricsState.progress)}%
+            </p>
+            <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-[var(--color-ns-raised)]">
+              <div className="h-full rounded-full bg-[var(--color-ns-purple)] transition-[width]" style={{ width: `${Math.max(3, lyricsState.progress)}%` }} />
+            </div>
+            <p className="mt-1.5 text-[11px] text-[var(--color-ns-dim)]">This takes a few minutes on the first run. The chord sheet below works meanwhile; lyrics appear above the chords when ready.</p>
+          </div>
+        )}
+        {!stored && !editing && lyricsState.status !== "running" && (
           <div className="flex flex-col justify-between gap-3 rounded-2xl border border-[var(--color-ns-border)] bg-[var(--color-ns-card)] px-4 py-3 sm:flex-row sm:items-center">
             <p className="text-xs text-[var(--color-ns-muted)]">
+              {lyricsState.status === "no-vocals" ? (
+                <>
+                  <strong className="text-[var(--color-ns-text)]">No singing detected.</strong> This looks like an instrumental, so the sheet shows chords only.{" "}
+                </>
+              ) : lyricsState.status === "failed" ? (
+                <>
+                  <strong className="text-[var(--color-ns-text)]">Chord analysis is available, but lyrics could not be generated.</strong> {lyricsState.error}{" "}
+                </>
+              ) : (
+                <>
+                  <strong className="text-[var(--color-ns-text)]">Lyrics unavailable for this analysis.</strong> Re-attach the audio file to transcribe them automatically — the chord sheet below works without them.{" "}
+                </>
+              )}
               Add lyrics to see them synced with your chords. Paste or upload lyrics (.txt / .lrc) to align chords directly above the words.
             </p>
+            {lyricsState.status === "failed" && (
+              <button type="button" onClick={autoLyrics.retry} className="btn-secondary shrink-0 px-3 py-1.5 text-xs font-semibold">
+                Try again
+              </button>
+            )}
             <button
               type="button"
               onClick={() => setEditing(true)}
@@ -437,23 +640,66 @@ function SongView({
         )}
       </div>
 
+      <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center">
+        <div role="tablist" aria-label="Sheet view" className="flex shrink-0 gap-1 rounded-xl border border-[var(--color-ns-border)] bg-[var(--color-ns-card)] p-1">
+          {VIEWS.map((v) => (
+            <button
+              key={v.id}
+              type="button"
+              role="tab"
+              aria-selected={view === v.id}
+              title={v.hint}
+              onClick={() => setView(v.id)}
+              className={`rounded-lg px-3 py-1.5 text-xs font-semibold ${view === v.id ? "bg-[var(--color-ns-purple)]/25 text-[var(--color-ns-text)]" : "text-[var(--color-ns-muted)] hover:text-[var(--color-ns-text)]"}`}
+            >
+              {v.label}
+            </button>
+          ))}
+        </div>
+        <div className="min-w-0 flex-1">
+          <SectionNav sections={sections} currentId={cursor.sectionId} onJump={jumpToSection} />
+        </div>
+      </div>
+
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_340px]">
-        <ChordSheet
-          sections={sections}
-          options={options}
-          render={render}
-          cursor={cursor}
-          playing={clock.isPlaying}
-          autoScroll={display.autoScroll}
-          light={display.light}
-          selectedChord={selected}
-          lowConfidence={analysis.lowConfidenceThreshold ?? DEFAULT_LOW_CONFIDENCE}
-          canSeek={canSeek}
-          loopSectionId={loopId}
-          onSeek={clock.playFrom}
-          onChord={onChord}
-          onLoop={onLoop}
-        />
+        {view === "timeline" ? (
+          <div className="min-w-0 rounded-2xl border border-[var(--color-ns-border)] bg-[var(--color-ns-card)] p-4">
+            <ChordTimeline
+              analysis={timelineAnalysis}
+              clock={clock}
+              syncOffsetMs={0}
+              activeIndex={activeSegment}
+              selectedChord={selected ? render(selected) : null}
+              isPlaying={clock.isPlaying}
+              interactive={canSeek}
+              onPickSegment={(seg) => {
+                const original = sheet.analysis.chordTimeline.find((x) => x.start === seg.start);
+                if (original) setSelected(original.chord);
+                if (canSeek) clock.playFrom(seg.start);
+              }}
+              onSeekTime={(t) => {
+                if (canSeek) clock.playFrom(t);
+              }}
+            />
+          </div>
+        ) : (
+          <ChordSheet
+            sections={sections}
+            options={options}
+            render={render}
+            cursor={cursor}
+            playing={clock.isPlaying}
+            autoScroll={display.autoScroll}
+            light={display.light}
+            selectedChord={selected}
+            lowConfidence={lowConfidence}
+            canSeek={canSeek}
+            loopSectionId={loopId}
+            onSeek={clock.playFrom}
+            onChord={onChord}
+            onLoop={onLoop}
+          />
+        )}
         <aside className="space-y-3 lg:sticky lg:top-4 lg:self-start">
           {selected && (
             <div className="fixed inset-x-2 bottom-2 z-30 max-h-[65vh] overflow-auto shadow-2xl lg:static lg:max-h-none lg:shadow-none">

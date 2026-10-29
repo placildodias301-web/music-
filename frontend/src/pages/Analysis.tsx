@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { useMvp } from "../lib/MvpContext";
-import { exportMidi, exportPdf, pitchShiftAudio } from "../lib/api";
+import { exportMidi, exportPdf, pitchShiftAudio, resolveServerAudioUrl } from "../lib/api";
 import type { AnalysisResult } from "../lib/api";
 import { scaleName } from "../lib/chordSync";
 import { useNotation } from "../lib/useNotation";
@@ -15,10 +15,11 @@ import {
   shapeShift,
   soundingShift,
   transposeAnalysis,
+  transposeChord,
+  transposeKey,
   NO_TRANSPOSE,
   type TransposeSettings,
 } from "../lib/transpose";
-import { StemMixer } from "../components/analysis/StemMixer";
 import { saveToLibrary, isSaved, resolveLibrarySong, updateLibrarySongState } from "../lib/library";
 import {
   DEFAULT_DIFFICULTY_BADGE,
@@ -27,12 +28,19 @@ import {
 } from "../lib/analysisDisplay";
 import { buildLeadSheet } from "../lib/leadSheet";
 import { MeterCard, TempoCard } from "../components/analysis/RhythmCards";
+import { SectionBoundary } from "../components/analysis/SectionBoundary";
+import { ChordSheetPreview } from "../components/analysis/ChordSheetPreview";
 
 /** A detected capo is applied by default only when the analysis is at least this sure. */
 const CAPO_AUTO_MIN_CONFIDENCE = 0.4;
 
 export function Analysis() {
-  const { analysis, libraryId, fileName, audioUrl, isSampleAudio, setAnalysis, attachAudioFile } = useMvp();
+  const { analysis, libraryId, fileName, audioUrl: sessionAudioUrl, isSampleAudio, setAnalysis, setSong, attachAudioFile } = useMvp();
+  // The server's normalized WAV copy: a fallback when the browser can't play
+  // the session file, and the source when there is no session file (page
+  // refresh, Library) while the server copy is still around.
+  const serverAudioUrl = resolveServerAudioUrl(analysis?.audioUrl);
+  const audioUrl = sessionAudioUrl ?? serverAudioUrl;
   const reattachInputRef = useRef<HTMLInputElement>(null);
   const [exporting, setExporting] = useState<"midi" | "pdf" | null>(null);
   const [exportError, setExportError] = useState<string | null>(null);
@@ -48,7 +56,7 @@ export function Analysis() {
   const { settings } = useSettings();
   const displayName = fileName ?? analysis?.fileName ?? "Analyzed Track";
   const [transpose, setTranspose] = useState<TransposeSettings>(() => {
-    const saved = resolveLibrarySong(libraryId || displayName);
+    const saved = libraryId ? resolveLibrarySong(libraryId) : null;
     if (saved && (saved.transpose !== undefined || saved.capo !== undefined)) {
       return {
         ...NO_TRANSPOSE,
@@ -73,8 +81,8 @@ export function Analysis() {
   const createdUrls = useRef<string[]>([]);
 
   useEffect(() => {
-    if (displayName) setSavedToLibrary(isSaved(displayName));
-  }, [displayName]);
+    setSavedToLibrary(Boolean(libraryId && isSaved(libraryId)));
+  }, [libraryId, analysis]);
 
   useEffect(() => {
     const urls = createdUrls.current;
@@ -95,13 +103,15 @@ export function Analysis() {
     const target = next.audio;
     // Capo / chords-only apply at once; the audio shift only once its audio is ready.
     setTranspose((t) => ({ ...next, audio: t.audio }));
-    try {
-      updateLibrarySongState(libraryId || displayName, {
-        transpose: Math.max(-12, Math.min(12, Math.round(next.chordsOnly))),
-        capo: Math.max(0, Math.min(7, Math.round(next.capo))),
-      });
-    } catch {
-      // ignore out-of-range
+    if (savedToLibrary || (libraryId && isSaved(libraryId))) {
+      try {
+        updateLibrarySongState(libraryId || displayName, {
+          transpose: Math.max(-12, Math.min(12, Math.round(next.chordsOnly))),
+          capo: Math.max(0, Math.min(7, Math.round(next.capo))),
+        });
+      } catch {
+        // ignore out-of-range
+      }
     }
     if (target === (audioPending ?? transpose.audio)) return;
 
@@ -135,46 +145,59 @@ export function Analysis() {
       });
   }
 
+  // Unique chords in order of first appearance (in the currently shown key)
+  const uniqueChords = useMemo(() => {
+    if (!shown) return [];
+    const seen = new Set<string>();
+    const out: string[] = [];
+    for (const c of shown.chordProgression) {
+      if (!seen.has(c)) {
+        seen.add(c);
+        out.push(c);
+      }
+    }
+    return out;
+  }, [shown]);
+
   if (!analysis || !shown) {
     return (
       <div className="mx-auto max-w-6xl px-4 py-6 sm:px-6 md:px-8 space-y-6">
         <AnalysisNavSwitcher />
         <div className="mx-auto flex min-h-[calc(100vh-220px)] max-w-xl flex-col items-center justify-center py-12 text-center">
-        <div className="flex h-16 w-16 items-center justify-center rounded-2xl border border-[var(--color-ns-border)] bg-[var(--color-ns-card)] text-[var(--color-ns-blue)] shadow-xl">
-          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M9 18V5l12-2v13" />
-            <circle cx="6" cy="18" r="3" />
-            <circle cx="18" cy="16" r="3" />
-          </svg>
-        </div>
-        <h1 className="mt-6 font-heading text-2xl font-bold tracking-tight text-[var(--color-ns-text)] sm:text-3xl">
-          No Song Analyzed Yet
-        </h1>
-        <p className="mt-3 text-sm leading-relaxed text-[var(--color-ns-muted)]">
-          Upload an audio or video file, or try our built-in sample track in Studio to see key, BPM, harmonic progression, and instrument chord charts.
-        </p>
-        <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
-          <Link to="/upload" className="btn-primary">
-            Upload Audio File
-          </Link>
-          <Link to="/studio" className="btn-secondary">
-            Return to Studio
-          </Link>
-          <button
-            type="button"
-            disabled
-            title="Analyze or select a song first to open the Chord & Lyric Sheet"
-            className="btn-secondary"
-          >
-            Open Chord & Lyric Sheet
-          </button>
+          <div className="flex h-16 w-16 items-center justify-center rounded-2xl border border-[var(--color-ns-border)] bg-[var(--color-ns-card)] text-[var(--color-ns-blue)] shadow-xl">
+            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M9 18V5l12-2v13" />
+              <circle cx="6" cy="18" r="3" />
+              <circle cx="18" cy="16" r="3" />
+            </svg>
+          </div>
+          <h1 className="mt-6 font-heading text-2xl font-bold tracking-tight text-[var(--color-ns-text)] sm:text-3xl">
+            No Song Analyzed Yet
+          </h1>
+          <p className="mt-3 text-sm leading-relaxed text-[var(--color-ns-muted)]">
+            Upload an audio or video file, or try our built-in sample track in Studio to see key, BPM, harmonic progression, and instrument chord charts.
+          </p>
+          <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
+            <Link to="/upload" className="btn-primary">
+              Upload Audio File
+            </Link>
+            <Link to="/studio" className="btn-secondary">
+              Return to Studio
+            </Link>
+            <button
+              type="button"
+              disabled
+              title="Analyze or select a song first to open the Chord & Lyric Sheet"
+              className="btn-secondary"
+            >
+              Open Chord & Lyric Sheet
+            </button>
+          </div>
         </div>
       </div>
-    </div>
     );
   }
 
-  const uniqueChords = Array.from(new Set(shown.chordProgression));
   const isV2 = (analysis.analysisVersion ?? 1) >= 2;
   const keyConfidence = describeKeyConfidence(analysis);
   const diffInfo = analysis.difficulty
@@ -184,13 +207,27 @@ export function Analysis() {
   /** Tempo/meter picked by the user: update this song, and its Library copy if saved. */
   function applyRhythm(next: AnalysisResult) {
     setAnalysis(next);
-    const targetRef = libraryId || displayName;
-    if (isSaved(targetRef)) saveToLibrary(targetRef, next);
+    if (savedToLibrary && (libraryId || displayName)) {
+      const targetRef = libraryId || displayName;
+      if (isSaved(targetRef)) saveToLibrary(targetRef, next);
+    }
   }
 
   function handleSaveToLibrary() {
-    saveToLibrary(libraryId || displayName, analysis!);
+    if (!analysis || savedToLibrary) return;
+    const saved = saveToLibrary(libraryId || displayName, analysis, {
+      transpose: transpose.chordsOnly,
+      capo: transpose.capo,
+    });
     setSavedToLibrary(true);
+    setSong({
+      libraryId: saved.id,
+      fileName: displayName,
+      fileSizeBytes: analysis.fileSizeBytes ?? 0,
+      audioUrl: sessionAudioUrl,
+      isSampleAudio,
+    });
+    setAnalysis(analysis);
   }
 
   async function handleExport(kind: "midi" | "pdf") {
@@ -200,7 +237,7 @@ export function Analysis() {
       if (kind === "midi") {
         const sounding = transposeAnalysis(analysis!, soundingShift(transpose));
         // Chords keep their detected times; without a tempo the file just needs a nominal one.
-      await exportMidi(sounding.chordProgression, analysis!.bpm > 0 ? analysis!.bpm : 120, displayName, sounding.chordTimeline);
+        await exportMidi(sounding.chordProgression, analysis!.bpm > 0 ? analysis!.bpm : 120, displayName, sounding.chordTimeline);
       } else {
         await exportPdf(
           buildLeadSheet({
@@ -223,6 +260,17 @@ export function Analysis() {
       setExporting(null);
     }
   }
+
+  const wilsifyAi = analysis.wilsifyAi ?? analysis.wilsifyAiInsights;
+  const aiSummaryText = wilsifyAi?.aiSummary ?? analysis.aiSummary;
+  const aiPatternText = wilsifyAi?.strummingOrPickingPattern ?? analysis.strummingOrPickingPattern;
+  const aiCapoText = wilsifyAi?.capoRecommendation ?? analysis.capoRecommendation;
+  const aiPlayingTips = Array.isArray(wilsifyAi?.playingTips)
+    ? wilsifyAi.playingTips
+    : Array.isArray(analysis.playingTips)
+      ? analysis.playingTips
+      : [];
+  const fingerstyleNotes = Array.isArray(analysis.fingerstyleIntro?.notes) ? analysis.fingerstyleIntro.notes : [];
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-6 sm:px-6 md:px-8 space-y-6">
@@ -281,12 +329,9 @@ export function Analysis() {
           </div>
         </div>
 
-        {/* Action buttons: the main action on top, two quick actions side by side */}
+        {/* Action buttons: Practice track on top, two quick actions side by side */}
         <div className="grid w-full grid-cols-2 gap-2.5 sm:w-72 sm:flex-shrink-0">
-          <Link to="/song/current" className="btn-primary col-span-2">
-            Open Chord & Lyric Sheet
-          </Link>
-          <Link to="/practice" className="btn-secondary col-span-2">
+          <Link to="/practice" className="btn-primary col-span-2">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor">
               <polygon points="6 4 19 12 6 20 6 4" />
             </svg>
@@ -310,7 +355,7 @@ export function Analysis() {
                 <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
             )}
-            {savedToLibrary ? "Saved" : "Save"}
+            {savedToLibrary ? "✓ Saved" : "Save"}
           </button>
           <Link to="/upload" className="btn-secondary px-3 text-[0.8125rem]" aria-label="Analyze another song">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
@@ -397,10 +442,12 @@ export function Analysis() {
       />
 
       {/* 3–4. PLAYER, NOW-PLAYING CHORD & CHORD TIMELINE (one shared playback clock) */}
-      {!audioUrl && (
+      {!sessionAudioUrl && (
         <div className="mt-6 flex flex-col justify-between gap-3 rounded-xl border border-[var(--color-ns-amber)]/35 bg-[var(--color-ns-amber)]/10 px-4 py-3 sm:flex-row sm:items-center">
           <p className="text-xs text-[var(--color-ns-text)] sm:text-sm">
-            Your saved chord analysis is ready. Re-attach your local audio file (`{displayName}`) to play along with live chord sync.
+            {serverAudioUrl
+              ? `Playing the server's temporary copy of this song. If playback stops working, re-attach your local audio file (${displayName}).`
+              : `Your saved chord analysis is ready. Re-attach your local audio file (${displayName}) to play along with live chord sync.`}
           </p>
           <input
             ref={reattachInputRef}
@@ -422,13 +469,83 @@ export function Analysis() {
           </button>
         </div>
       )}
-      <LiveChordSync
-        analysis={shown}
-        audioUrl={playbackUrl}
-        selectedChord={selectedChord}
-        onActiveChordChange={setPlayingChord}
-        onSelectChord={setSelectedChord}
-      />
+      <SectionBoundary label="player" resetKey={playbackUrl}>
+        <LiveChordSync
+          analysis={shown}
+          audioUrl={playbackUrl}
+          // Only the unshifted audio has a server copy at the same pitch.
+          fallbackUrl={playbackUrl === audioUrl ? serverAudioUrl : null}
+          selectedChord={selectedChord}
+          onActiveChordChange={setPlayingChord}
+          onSelectChord={setSelectedChord}
+        />
+      </SectionBoundary>
+
+      {/* 4b. WILSIFY AI MUSICIAN'S BREAKDOWN CARD (Pillar 4) */}
+      <SectionBoundary label="Wilsify AI breakdown" resetKey={analysis}>
+      {(aiSummaryText || aiPatternText || aiCapoText || aiPlayingTips.length > 0) && (
+        <div className="mt-6 rounded-2xl border border-[var(--color-ns-purple)]/35 bg-[var(--color-ns-card)] p-5 sm:p-6 shadow-sm">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <span className="rounded-md border border-[var(--color-ns-purple)]/40 bg-[var(--color-ns-purple)]/15 px-2.5 py-0.5 text-[0.6875rem] font-semibold text-[var(--color-ns-purple-light)]">
+                ✨ Wilsify AI Musician&apos;s Breakdown
+              </span>
+              {wilsifyAi?.verifiedKey && (
+                <span className="rounded-md border border-[var(--color-ns-border)] bg-[var(--color-ns-raised)] px-2.5 py-0.5 font-mono text-[0.6875rem] text-[var(--color-ns-muted)]">
+                  Verified: {displayKey(wilsifyAi.verifiedKey)} · {wilsifyAi.verifiedTimeSignature || analysis.timeSignature}
+                </span>
+              )}
+            </div>
+          </div>
+
+          {aiSummaryText && (
+            <p className="mt-3 text-xs sm:text-sm leading-relaxed text-[var(--color-ns-text)]">
+              {aiSummaryText}
+            </p>
+          )}
+
+          <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
+            {aiPatternText && (
+              <div className="rounded-xl border border-[var(--color-ns-border)] bg-[var(--color-ns-surface)] p-3.5">
+                <p className="text-[0.6875rem] font-semibold uppercase tracking-wider text-[var(--color-ns-cyan)]">
+                  Strumming / Picking Pattern
+                </p>
+                <p className="mt-1.5 font-mono text-xs sm:text-sm font-semibold text-[var(--color-ns-text)]">
+                  {aiPatternText}
+                </p>
+              </div>
+            )}
+            {aiCapoText && (
+              <div className="rounded-xl border border-[var(--color-ns-border)] bg-[var(--color-ns-surface)] p-3.5">
+                <p className="text-[0.6875rem] font-semibold uppercase tracking-wider text-[var(--color-ns-mint)]">
+                  Capo & Voicing Advice
+                </p>
+                <p className="mt-1.5 text-xs sm:text-sm text-[var(--color-ns-text)]">
+                  {aiCapoText}
+                </p>
+              </div>
+            )}
+          </div>
+
+          {aiPlayingTips.length > 0 && (
+            <div className="mt-4 rounded-xl border border-[var(--color-ns-border)] bg-[var(--color-ns-bg)] p-3.5">
+              <p className="text-[0.6875rem] font-semibold uppercase tracking-wider text-[var(--color-ns-amber)]">
+                Actionable Playing Tips
+              </p>
+              <ul className="mt-2 space-y-1.5 text-xs text-[var(--color-ns-muted)]">
+                {aiPlayingTips.map((tip, idx) => (
+                  <li key={idx} className="flex items-start gap-2">
+                    <span className="mt-0.5 text-[var(--color-ns-purple-light)]">•</span>
+                    <span>{tip}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </div>
+      )}
+
+      </SectionBoundary>
 
       {/* 5. INTERACTIVE INSTRUMENT VOICINGS */}
       <InstrumentVoicings
@@ -439,31 +556,108 @@ export function Analysis() {
         onSelectChord={setSelectedChord}
       />
 
-      {/* 6. STEM SEPARATION */}
-      <div className="mt-6 rounded-2xl border border-[var(--color-ns-border)] bg-[var(--color-ns-card)] p-5 sm:p-6">
-        <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
-          <div>
-            <div className="flex items-center gap-2">
-              <span className="rounded-md border border-[var(--color-ns-blue)]/30 bg-[var(--color-ns-blue)]/10 px-2 py-0.5 text-[0.625rem] font-semibold text-[var(--color-ns-blue)]">
-                AI
-              </span>
-              <h2 className="font-heading text-lg font-bold text-[var(--color-ns-text)]">Audio Stems Separation</h2>
+      {/* 5b. FINGERSTYLE / PLUCKED INTRO TAB & DUAL-HAND FINGER GUIDE (Pillar 3) */}
+      <SectionBoundary label="fingerstyle guide" resetKey={analysis}>
+      {analysis.fingerstyleIntro?.detected && fingerstyleNotes.length > 0 && (
+        <div className="mt-6 rounded-2xl border border-[var(--color-ns-border)] bg-[var(--color-ns-card)] p-5 sm:p-6">
+          <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
+            <div>
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="rounded-md border border-[var(--color-ns-purple)]/30 bg-[var(--color-ns-purple)]/10 px-2.5 py-0.5 text-[0.6875rem] font-semibold text-[var(--color-ns-purple-light)]">
+                  🎸 Fingerstyle Intro & Finger Guide
+                </span>
+                <span className="rounded-md border border-[var(--color-ns-border)] bg-[var(--color-ns-raised)] px-2.5 py-0.5 font-mono text-[0.6875rem] text-[var(--color-ns-muted)]">
+                  {analysis.fingerstyleIntro.patternName}
+                </span>
+              </div>
+              <h2 className="mt-2 font-heading text-lg font-bold text-[var(--color-ns-text)]">
+                Plucked Intro Tab & Dual-Hand Finger Assignment
+              </h2>
+              <p className="mt-0.5 text-xs text-[var(--color-ns-muted)]">
+                Exact guitar string, fret, Left-Hand fretting finger (1–4 / Open), and Right-Hand plucking finger (p–i–m–a) for the intro arpeggio ({Number(analysis.fingerstyleIntro.startTime ?? 0).toFixed(1)}s – {Number(analysis.fingerstyleIntro.endTime ?? 0).toFixed(1)}s).
+              </p>
             </div>
-            <p className="mt-1 text-xs text-[var(--color-ns-muted)]">
-              Splits this song into vocals and music, or vocals, drums, bass and other. Same engine as the Stem Splitter, no need to upload again.
-            </p>
+          </div>
+
+          {/* 6-String Tab Strip */}
+          <div className="mt-4 overflow-x-auto rounded-xl border border-[var(--color-ns-border)] bg-[var(--color-ns-bg)] p-3.5 font-mono text-xs leading-relaxed text-[var(--color-ns-text)]">
+            {[
+              { s: 1, name: "e" },
+              { s: 2, name: "B" },
+              { s: 3, name: "G" },
+              { s: 4, name: "D" },
+              { s: 5, name: "A" },
+              { s: 6, name: "E" },
+            ].map(({ s, name }) => {
+              const row = fingerstyleNotes
+                .slice(0, 16)
+                .map((n) => (n.string === s ? String(n.fret).padEnd(2, "-") : "--"))
+                .join("-");
+              return (
+                <div key={s} className="whitespace-pre">
+                  <span className="text-[var(--color-ns-muted)]">{name}</span> |-{row}-|
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Step-by-Step Note & Dual-Hand Finger Assignment Grid */}
+          <div className="mt-4 grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
+            {fingerstyleNotes.slice(0, 12).map((n, idx) => {
+              const isNoteActive = playingChord === n.chord || selectedChord === n.chord;
+              return (
+                <div
+                  key={`${n.time}-${idx}`}
+                  onClick={() => setSelectedChord(n.chord)}
+                  className={`flex cursor-pointer items-center justify-between gap-3 rounded-xl border px-3.5 py-2.5 transition-colors ${
+                    isNoteActive
+                      ? "border-[var(--color-ns-purple-light)] bg-[var(--color-ns-purple)]/15 shadow-sm"
+                      : "border-[var(--color-ns-border)] bg-[var(--color-ns-surface)] hover:border-[var(--color-ns-border-bright)]"
+                  }`}
+                >
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="font-mono text-[0.6875rem] text-[var(--color-ns-muted)]">
+                        {Number(n.time ?? 0).toFixed(2)}s{typeof n.duration === "number" ? ` (${n.duration.toFixed(2)}s)` : ""}
+                      </span>
+                      <span className="rounded bg-[var(--color-ns-purple)]/15 px-1.5 py-0.5 font-heading text-xs font-bold text-[var(--color-ns-purple-light)]">
+                        {n.chord}
+                      </span>
+                      <span className="font-heading text-sm font-bold text-[var(--color-ns-text)]">
+                        {n.noteName}
+                      </span>
+                    </div>
+                    <p className="mt-1 text-xs text-[var(--color-ns-muted)]">
+                      {n.stringName} · <span className="font-semibold text-[var(--color-ns-text)]">Fret {n.fret}</span>
+                    </p>
+                  </div>
+                  <div className="flex flex-col items-end gap-1 text-right text-[0.6875rem]">
+                    <span className="rounded border border-[var(--color-ns-cyan)]/30 bg-[var(--color-ns-cyan)]/10 px-2 py-0.5 font-medium text-[var(--color-ns-cyan)]">
+                      LH: {n.leftFinger}
+                    </span>
+                    <span className="rounded border border-[var(--color-ns-mint)]/30 bg-[var(--color-ns-mint)]/10 px-2 py-0.5 font-medium text-[var(--color-ns-mint)]">
+                      RH: {n.rightFinger}
+                    </span>
+                  </div>
+                </div>
+              );
+            })}
           </div>
         </div>
+      )}
 
-        {!audioUrl && (
-          <p className="mt-3 text-xs text-[var(--color-ns-muted)]">
-            Stems separation requires live audio from the current session.
-          </p>
-        )}
+      </SectionBoundary>
 
-        {/* key: a new song starts a fresh separator instead of showing the old stems */}
-        {audioUrl && <StemMixer key={audioUrl} audioUrl={audioUrl} fileName={fileName ?? undefined} />}
-      </div>
+      {/* 6. CHORD & LYRIC SHEET — synchronized with analysis timeline & audio player */}
+      <ChordSheetPreview
+        analysis={analysis}
+        libraryId={libraryId}
+        fileName={displayName}
+        sessionAudioUrl={sessionAudioUrl}
+        render={(c) => transposeChord(c, shapeShift(transpose))}
+        shownKey={transposeKey(analysis.key, shapeShift(transpose))}
+        version={savedToLibrary}
+      />
 
       {/* 7. EXPORT SECTION */}
       <div className="mt-6 rounded-2xl border border-[var(--color-ns-border)] bg-[var(--color-ns-card)] p-5 sm:p-6">
@@ -539,4 +733,3 @@ export function Analysis() {
     </div>
   );
 }
-

@@ -16,7 +16,6 @@ import { Tuner } from "./pages/Tuner";
 import { ChordLibrary } from "./pages/ChordLibrary";
 import { Dashboard } from "./pages/Dashboard";
 import { Library } from "./pages/Library";
-import { Song } from "./pages/Song";
 import { Community } from "./pages/Community";
 import { Tools } from "./pages/Tools";
 import { Stems } from "./pages/Stems";
@@ -154,7 +153,8 @@ const router = createBrowserRouter([
       { path: "/chords", element: <ChordLibrary /> },
       { path: "/dashboard", element: <Dashboard /> },
       { path: "/library", element: <Library /> },
-      { path: "/song/:songId", element: <Song /> },
+      { path: "/song/:songId", element: <Navigate to="/analysis" replace /> },
+      { path: "/song", element: <Navigate to="/analysis" replace /> },
       { path: "/community", element: <Community /> },
       { path: "/stems", element: <Stems /> },
       {

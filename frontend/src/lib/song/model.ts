@@ -32,11 +32,13 @@ export interface LyricWord {
 export interface LyricLine {
   id: string;
   text: string;
+  romanizedText?: string;
   /** null while the line has no timing yet (plain pasted lyrics). */
   startTime: number | null;
   endTime: number | null;
   /** Word-level timing when the lyric source has it. */
   words?: LyricWord[];
+  romanizedWords?: LyricWord[];
   /** Chords with no lyric (intro/solo/instrumental bars). */
   instrumental?: boolean;
   chords: ChordEvent[];

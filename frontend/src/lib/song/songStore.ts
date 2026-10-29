@@ -18,12 +18,12 @@ export interface StoredLyrics {
   /** Start times keyed by flat line index, from tap-sync. Overrides LRC/plain. */
   taps?: Record<number, number>;
   /** Where the lyrics came from — shown on the page so provenance is clear. */
-  source: "pasted" | "uploaded" | "ai";
+  source: "pasted" | "uploaded" | "ai" | "transcribed";
   /** ISO timestamp of the latest edit, used so cloud sync never overwrites newer local lyrics. */
   updatedAt?: string;
 }
 
-const VALID_SOURCES = new Set<StoredLyrics["source"]>(["pasted", "uploaded", "ai"]);
+const VALID_SOURCES = new Set<StoredLyrics["source"]>(["pasted", "uploaded", "ai", "transcribed"]);
 
 export function validateLyrics(value: StoredLyrics | null | undefined): StoredLyrics | null {
   if (value === null || value === undefined) return null;

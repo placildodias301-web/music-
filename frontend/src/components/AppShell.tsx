@@ -4,7 +4,7 @@ import { Link, useLocation, useNavigate } from "react-router-dom";
 import { Logo } from "./Logo";
 
 const CHORD_SYMBOL = /^[A-G][#b♯♭]?(?:maj|min|dim|aug|sus|add|m|M|\+|°|ø|\d|b|#|♭|♯)*(?:\/[A-G][#b♯♭]?)?$/;
-import { getLibrary } from "../lib/library";
+import { getLibrary, LIBRARY_CHANGED_EVENT } from "../lib/library";
 import { clearSyncError, getLastSyncError, subscribeSyncError } from "../lib/cloudSync";
 import { firstNameOf, initialsOf, profileSubtitle } from "../lib/settings/profile";
 import { useSettings } from "../lib/settings/settingsContext";
@@ -123,7 +123,6 @@ const NAV_GROUPS: { label: string | null; items: NavItem[] }[] = [
       { to: "/analysis", label: "Analysis", icon: icon(ICONS.analysis) },
       { to: "/stems", label: "Stem Splitter", icon: icon(ICONS.tools) },
       { to: "/sheet", label: "Sheet Music", icon: icon(ICONS.chords) },
-      { to: "/song/current", label: "Chord Sheet", icon: icon(ICONS.chords) },
       { to: "/library", label: "Library", icon: icon(ICONS.library) },
       { to: "/assistant", label: "AI Assistant", icon: icon(ICONS.assistant) },
     ],
@@ -147,8 +146,7 @@ const FOOTER_ITEMS: NavItem[] = [
 
 const SECTION_META: Record<string, { title: string; subtitle: string }> = {
   "/studio": { title: "", subtitle: "" },
-  "/analysis": { title: "Analysis", subtitle: "Chord timeline, stems and export — everything from one analysis." },
-  "/song/current": { title: "Chord Sheet", subtitle: "Synced chord timeline and lyrics." },
+  "/analysis": { title: "Analysis", subtitle: "Chord timeline, chord & lyric sheet, and export — everything from one analysis." },
   "/sheet": { title: "Sheet Music", subtitle: "Turn a song into sheet music you can play, transpose and export." },
   "/stems": { title: "Stem Splitter", subtitle: "Split a song into the layers detected in it — vocals, drums, bass and more." },
   "/library": { title: "Library", subtitle: "Saved analyses keep their chords, tab and stems together." },
@@ -165,7 +163,6 @@ const SECTION_META: Record<string, { title: string; subtitle: string }> = {
 export function isActiveItem(pathname: string, itemTo: string): boolean {
   if (pathname === itemTo) return true;
   if (itemTo === "/studio" && pathname === "/") return true;
-  if (itemTo === "/song/current" && pathname.startsWith("/song/")) return true;
   return false;
 }
 
@@ -523,6 +520,24 @@ export function AppShell({ children }: { children: ReactNode }) {
     setMobileNavOpen(false);
     setLibraryCount(getLibrary().length);
   }, [location.pathname]);
+
+  // The greeting follows the clock: a page left open from the morning must not still say "Good morning" in the afternoon.
+  const [, setMinute] = useState(0);
+  useEffect(() => {
+    const id = window.setInterval(() => setMinute((m) => m + 1), 60_000);
+    return () => window.clearInterval(id);
+  }, []);
+
+  // Saves and deletes anywhere (also in another tab) update the sidebar count straight away.
+  useEffect(() => {
+    const refresh = () => setLibraryCount(getLibrary().length);
+    window.addEventListener(LIBRARY_CHANGED_EVENT, refresh);
+    window.addEventListener("storage", refresh);
+    return () => {
+      window.removeEventListener(LIBRARY_CHANGED_EVENT, refresh);
+      window.removeEventListener("storage", refresh);
+    };
+  }, []);
 
   useEffect(() => {
     if (!mobileNavOpen) return;
