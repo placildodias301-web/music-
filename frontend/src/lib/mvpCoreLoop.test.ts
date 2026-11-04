@@ -182,7 +182,7 @@ describe("Library persistence", () => {
     updateLibrarySongState(saved.id, { transpose: 2, capo: 1, simplify: true });
     expect(resolveLibrarySong(saved.id)).toMatchObject({ transpose: 2, capo: 1, simplify: true });
     expect(() => updateLibrarySongState(saved.id, { transpose: 13 })).toThrow(RangeError);
-    expect(() => updateLibrarySongState(saved.id, { capo: 8 })).toThrow(RangeError);
+    expect(() => updateLibrarySongState(saved.id, { capo: 13 })).toThrow(RangeError);
     expect(resolveLibrarySong(saved.id)?.transpose).toBe(2);
   });
 

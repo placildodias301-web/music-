@@ -9,6 +9,18 @@ export interface SheetNote {
   start: number;
   end: number;
   midi: number;
+  // Guitar sheets: where the note is played. The server re-solves string/fret
+  // whenever an edit leaves them out of step with `midi`.
+  string?: number;
+  fret?: number;
+  leftFinger?: number;
+  rightFinger?: "p" | "i" | "m" | "a";
+  technique?: "hammer-on" | "pull-off" | "slide" | null;
+  techniqueStart?: "hammer-on" | "pull-off" | "slide" | null;
+  brightness?: number | null;
+  onset?: number | null;
+  glide?: number | null;
+  velocity?: number | null;
 }
 export interface SheetChord {
   start: number;
@@ -16,6 +28,12 @@ export interface SheetChord {
   name: string;
 }
 export interface SheetModel {
+  /**
+   * "guitar": standard notation + TAB; "score": a transcribed performance (one or more
+   * instrument parts in `parts`, re-arranged by the server); absent or "piano": the lead sheet.
+   */
+  instrument?: "piano" | "guitar" | "score";
+  parts?: { engine: string; name: string; notes: unknown[] }[];
   title: string;
   bpm: number;
   beatsPerBar: number;
@@ -33,7 +51,45 @@ const FLATS = ["C", "Db", "D", "Eb", "E", "F", "Gb", "G", "Ab", "A", "Bb", "B"];
 // Tonic pitch class of keys written with flats (F major ... Gb major; D minor ... Eb minor).
 const FLAT_MAJORS = new Set([5, 10, 3, 8, 1, 6]);
 const FLAT_MINORS = new Set([2, 7, 0, 5, 10, 3]);
+export const MAJOR_KEYS = [
+  "C Major", "Db Major", "D Major", "Eb Major", "E Major", "F Major",
+  "F# Major", "G Major", "Ab Major", "A Major", "Bb Major", "B Major"
+] as const;
+
+export const MINOR_KEYS = [
+  "A Minor", "Bb Minor", "B Minor", "C Minor", "C# Minor", "D Minor",
+  "Eb Minor", "E Minor", "F Minor", "F# Minor", "G Minor", "G# Minor"
+] as const;
+
+export const ALL_TARGET_KEYS = [...MAJOR_KEYS, ...MINOR_KEYS];
+
 const CHORD_RE = /^[A-G][#b]?(m|maj7|m7|7|dim|dim7|aug|sus2|sus4|m7b5|6|m6|9|add9)?$/;
+
+export interface InPlaceEditPayload {
+  musicxml: string;
+  part_index?: number;
+  measure_number: number;
+  note_index?: number;
+  action: "shift_pitch" | "set_duration" | "delete_note" | "set_chord";
+  pitch_shift?: number;
+  new_duration?: number;
+  new_pitch?: number;
+  chord_name?: string;
+}
+
+export async function editMusicXmlInPlace(apiUrl: string, payload: InPlaceEditPayload): Promise<string> {
+  const res = await fetch(`${apiUrl}/api/sheet/edit`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => null);
+    throw new Error(data?.detail || "In-place edit failed.");
+  }
+  const data = await res.json();
+  return data.musicxml;
+}
 
 /** Where a clicked beat sits, in quarter notes from bar 1 (every bar has the same length). */
 export function positionOf(barIndex: number, displayStartTicks: number, beatsPerBar: number): number {

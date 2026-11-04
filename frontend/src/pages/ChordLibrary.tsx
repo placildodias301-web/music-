@@ -218,7 +218,7 @@ export function ChordLibrary() {
   }, [enharmonicMode, alphabetical]);
 
   return (
-    <div className="mx-auto max-w-6xl px-4 py-6 sm:px-6 md:px-8">
+    <div className="mx-auto max-w-6xl px-4 pt-8 pb-6 sm:px-6 sm:pt-10 md:px-8">
       {/* Workspace Header */}
       <div className="mb-6 flex flex-col justify-between gap-3 border-b border-[var(--color-ns-border)] pb-5 sm:flex-row sm:items-center">
         <div>
@@ -600,7 +600,7 @@ export function ChordLibrary() {
             />
           ) : (
             <>
-              <p className="mb-4 text-xs text-[var(--color-ns-muted)]" aria-live="polite">
+              <p className="mt-3 mb-4 pt-2 scroll-mt-20 text-xs text-[var(--color-ns-muted)]" aria-live="polite">
                 {searching
                   ? `${filtered.length} ${filtered.length === 1 ? "chord match" : "chords match"} “${query.trim()}”`
                   : category === "slash"

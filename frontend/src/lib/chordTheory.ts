@@ -300,6 +300,8 @@ export interface GuitarVoicing {
   name: string;
   /** 6 entries, low-E to high-E. null = muted string, 0 = open string, n = fret n. */
   frets: (number | null)[];
+  /** Fret number shown at row 1 of the diagram (1 for open chords, N for barre/movable at fret N). */
+  baseFret?: number;
 }
 
 // Standard open-position chords every beginner learns first — used as
@@ -482,7 +484,8 @@ function evaluate(
   if (maxFret > WINDOW && opens > 0) return null;
   const mutes = frets.length - playedIdx.length;
   const optionalHit = [...pcs].filter((pc) => optionalPcs.has(pc)).length;
-  const position = maxFret <= WINDOW ? 0 : minFret;
+  const isOpenPos = opens > 0 && maxFret <= WINDOW;
+  const position = isOpenPos ? 0 : minFret;
 
   const score =
     position * 1.3 +
@@ -495,7 +498,7 @@ function evaluate(
     playedIdx.length * 0.3 +
     (barre ? 0.6 : 0);
 
-  return { frets: [...frets], score, minFret: maxFret <= WINDOW ? 0 : minFret };
+  return { frets: [...frets], score, minFret: isOpenPos ? 0 : minFret };
 }
 
 /** Picks up to `count` good shapes spread across the neck. */
@@ -506,7 +509,7 @@ export function pickSpread(cands: Candidate[], count: number): Candidate[] {
     if (picked.length === count) break;
   }
   // Show them neck order: open position first, then up the neck (1st, 3rd, 5th… not open, 6th, 3rd).
-  return picked.sort((a, b) => a.minFret - b.minFret);
+  return picked.sort((a, b) => shapePosition(a.frets) - shapePosition(b.frets));
 }
 
 /** Where on the neck a shape sits: 0 for an open-position shape, otherwise its lowest fretted fret. */
@@ -518,10 +521,9 @@ export function shapePosition(frets: (number | null)[]): number {
 }
 
 export function voicingName(frets: (number | null)[]): string {
-  const fretted = frets.filter((f): f is number => f !== null && f > 0);
-  const max = fretted.length ? Math.max(...fretted) : 0;
-  if (max <= WINDOW) return frets.includes(0) ? "Open position" : "Position 1";
-  return `Position ${Math.min(...fretted)}`;
+  const pos = shapePosition(frets);
+  if (pos === 0) return "Open position";
+  return `Position ${pos}`;
 }
 
 const guitarCache = new Map<string, GuitarVoicing[]>();
@@ -538,25 +540,24 @@ export function getGuitarVoicings(chord: ParsedChord): GuitarVoicing[] {
 
   if (isTriad) {
     const openKey = `${NOTE_NAMES[chord.root]}${chord.quality.suffix}`;
-    // If a beginner open / easy mini-barre shape exists, insert it first
-    if (BEGINNER_EASY_GUITAR_SHAPES[openKey]) {
-      voicings.push(BEGINNER_EASY_GUITAR_SHAPES[openKey]);
+    if (OPEN_GUITAR_CHORDS[openKey] && OPEN_GUITAR_CHORDS[openKey].some((f) => f === 0)) {
+      voicings.push({ name: "Open position", frets: OPEN_GUITAR_CHORDS[openKey], baseFret: 1 });
     }
-    if (OPEN_GUITAR_CHORDS[openKey]) {
-      const isBarre = !OPEN_GUITAR_CHORDS[openKey].some((f) => f === 0);
-      const name = isBarre ? `Barre · Full Shape (Fret ${shapePosition(OPEN_GUITAR_CHORDS[openKey])})` : "Open position";
-      voicings.push({ name, frets: OPEN_GUITAR_CHORDS[openKey] });
-    }
-    voicings.push(eShapeBarre(chord));
-    voicings.push(aShapeBarre(chord));
+    const eBarre = eShapeBarre(chord);
+    const aBarre = aShapeBarre(chord);
+    voicings.push({ ...eBarre, baseFret: shapePosition(eBarre.frets) || 1 });
+    voicings.push({ ...aBarre, baseFret: shapePosition(aBarre.frets) || 1 });
   } else if (chord.quality.suffix === "5" && !slash) {
     const e = distanceFromE(chord.root);
     const a = distanceFromA(chord.root);
-    voicings.push({ name: e === 0 ? "Open (E-string root)" : `Power · Fret ${e}`, frets: [e, e + 2, e + 2, null, null, null] });
-    voicings.push({ name: a === 0 ? "Open (A-string root)" : `Power · Fret ${a}`, frets: [null, a, a + 2, a + 2, null, null] });
+    voicings.push({ name: e === 0 ? "Open (E-string root)" : `Power · Fret ${e}`, frets: [e, e + 2, e + 2, null, null, null], baseFret: e || 1 });
+    voicings.push({ name: a === 0 ? "Open (A-string root)" : `Power · Fret ${a}`, frets: [null, a, a + 2, a + 2, null, null], baseFret: a || 1 });
   } else {
     const found = pickSpread(searchShapes(chord, GUITAR_TUNING, { bassIsRoot: true, allStrings: false, maxPosition: 12 }), 4);
-    found.forEach((c) => voicings.push({ name: voicingName(c.frets), frets: c.frets }));
+    found.forEach((c) => {
+      const pos = shapePosition(c.frets);
+      voicings.push({ name: voicingName(c.frets), frets: c.frets, baseFret: pos || 1 });
+    });
   }
 
   // De-duplicate identical shapes
@@ -568,13 +569,8 @@ export function getGuitarVoicings(chord: ParsedChord): GuitarVoicing[] {
     return true;
   });
 
-  // Sort: Beginner Open / Easy shapes FIRST, then ascending neck position
-  unique.sort((a, b) => {
-    const aEasy = a.name.includes("Beginner") || a.name.includes("Easy") || a.name.includes("Open") ? 0 : 1;
-    const bEasy = b.name.includes("Beginner") || b.name.includes("Easy") || b.name.includes("Open") ? 0 : 1;
-    if (aEasy !== bEasy) return aEasy - bEasy;
-    return shapePosition(a.frets) - shapePosition(b.frets);
-  });
+  // Sort strictly in ascending neck position: Open position (0) first, then ascending baseFret
+  unique.sort((a, b) => shapePosition(a.frets) - shapePosition(b.frets));
 
   guitarCache.set(cacheKey, unique);
   return unique;

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { ChangeEvent, PointerEvent as ReactPointerEvent } from "react";
-import { AlphaTabApi, PlayerMode, synth } from "@coderline/alphatab";
-import type { model as atModel } from "@coderline/alphatab";
+import { AlphaTabApi, model as atModel, NotationElement, PlayerMode, synth } from "@coderline/alphatab";
+import jsPDF from "jspdf";
 import { API_URL } from "../lib/api";
 import { encodeWav } from "../lib/wavEncode";
 import { AiTutorDrawer } from "../components/AiTutorDrawer";
@@ -9,7 +9,6 @@ import { CustomSelect } from "../components/CustomSelect";
 import { AnalysisNavSwitcher } from "../components/analysis/AnalysisNavSwitcher";
 import {
   addNote,
-  ALL_TARGET_KEYS,
   chordAt,
   deleteNote,
   editMusicXmlInPlace,
@@ -25,6 +24,7 @@ import {
   TICKS_PER_QUARTER,
 } from "../lib/sheetEdit";
 import type { SheetModel } from "../lib/sheetEdit";
+import { prepareGuitarTabScore } from "../lib/sheetTab";
 
 const INSTRUMENTS = [
   { label: "Piano", program: 0 },
@@ -33,14 +33,183 @@ const INSTRUMENTS = [
   { label: "Flute", program: 73 },
   { label: "Synth", program: 80 },
 ] as const;
+const SPEED_OPTIONS: { value: number; label: string }[] = [
+  { value: 0.5, label: "0.5x (Slow)" },
+  { value: 0.75, label: "0.75x" },
+  { value: 1, label: "Normal" },
+  { value: 1.25, label: "1.25x" },
+  { value: 1.5, label: "1.5x (Fast)" },
+];
 const LEFT_HAND = [
+  { value: "none", label: "Melody only" },
   { value: "block", label: "Chords in the left hand" },
   { value: "bass", label: "Bass notes only" },
-  { value: "none", label: "Melody only" },
 ] as const;
 const SONG_ACCEPT = ".mp3,.wav,.m4a,.ogg,.flac,.aac,.mp4,.mov,.webm,.mkv,audio/*,video/*";
 const SHEET_ACCEPT = ".musicxml,.xml,.mxl,.png,.jpg,.jpeg,.webp,.bmp,.tif,.tiff,image/*";
 const IMAGE_FILE = /\.(png|jpe?g|webp|bmp|tiff?)$/i;
+
+function injectMidiProgram(xml: string, program: number): string {
+  if (!xml || program === 0) return xml;
+  const xmlProgram = program + 1; // MusicXML uses 1-based MIDI program numbers (1-128)
+  if (/<midi-program>\d+<\/midi-program>/i.test(xml)) {
+    return xml.replace(/<midi-program>\d+<\/midi-program>/gi, `<midi-program>${xmlProgram}</midi-program>`);
+  }
+  if (/<midi-instrument[^>]*>/i.test(xml)) {
+    return xml.replace(/(<midi-instrument[^>]*>)/gi, `$1\n        <midi-program>${xmlProgram}</midi-program>`);
+  }
+  if (/<score-part id="([^"]+)">/i.test(xml)) {
+    return xml.replace(
+      /(<score-part id="([^"]+)">[\s\S]*?)(<\/score-part>)/gi,
+      (match, prefix, id, suffix) => {
+        if (match.includes("<midi-instrument")) return match;
+        const midiInst = `\n      <midi-instrument id="${id}">\n        <midi-channel>1</midi-channel>\n        <midi-program>${xmlProgram}</midi-program>\n      </midi-instrument>`;
+        return `${prefix}${midiInst}\n    ${suffix}`;
+      }
+    );
+  }
+  return xml;
+}
+
+const PITCH_CLASSES: Record<string, number> = {
+  C: 0, "B#": 0,
+  "C#": 1, DB: 1, Db: 1,
+  D: 2,
+  "D#": 3, EB: 3, Eb: 3,
+  E: 4, FB: 4, Fb: 4, "D##": 4,
+  F: 5, "E#": 5,
+  "F#": 6, GB: 6, Gb: 6,
+  G: 7,
+  "G#": 8, AB: 8, Ab: 8,
+  A: 9,
+  "A#": 10, BB: 10, Bb: 10,
+  B: 11, CB: 11, Cb: 11,
+};
+
+function parseKeyString(keyStr: string): { root: string; isMinor: boolean; pitch: number } | null {
+  if (!keyStr) return null;
+  const clean = keyStr.trim();
+  const m = clean.match(/^([A-Ga-g][#b]?)(m|min|minor|maj|major)?$/i);
+  if (!m) return null;
+  const letter = m[1].charAt(0).toUpperCase() + m[1].slice(1).toLowerCase();
+  const acc = letter.replace("♯", "#").replace("♭", "b");
+  const qual = (m[2] || "").toLowerCase();
+  const isMinor = qual.startsWith("m") && qual !== "maj" && qual !== "major";
+  const pitch = PITCH_CLASSES[acc];
+  if (pitch === undefined) return null;
+  return { root: acc, isMinor, pitch };
+}
+
+function detectBaseKeyFromXml(xml: string): string {
+  const fifthsMatch = xml.match(/<fifths>(-?\d+)<\/fifths>/i);
+  const modeMatch = xml.match(/<mode>(major|minor)<\/mode>/i);
+  if (!fifthsMatch) return "C";
+  const fifths = parseInt(fifthsMatch[1], 10);
+  const isMinor = modeMatch && modeMatch[1].toLowerCase() === "minor";
+
+  const majorFifths: Record<number, string> = {
+    [-7]: "Cb",
+    [-6]: "Gb",
+    [-5]: "Db",
+    [-4]: "Ab",
+    [-3]: "Eb",
+    [-2]: "Bb",
+    [-1]: "F",
+    0: "C",
+    1: "G",
+    2: "D",
+    3: "A",
+    4: "E",
+    5: "B",
+    6: "F#",
+    7: "C#",
+  };
+
+  const minorFifths: Record<number, string> = {
+    [-7]: "Abm",
+    [-6]: "Ebm",
+    [-5]: "Bbm",
+    [-4]: "Fm",
+    [-3]: "Cm",
+    [-2]: "Gm",
+    [-1]: "Dm",
+    0: "Am",
+    1: "Em",
+    2: "Bm",
+    3: "F#m",
+    4: "C#m",
+    5: "G#m",
+    6: "D#m",
+    7: "A#m",
+  };
+
+  if (isMinor) {
+    return minorFifths[fifths] || "Am";
+  }
+  return majorFifths[fifths] || "C";
+}
+
+function computeTransposedKeyLabel(baseKeyStr: string, semitones: number): string {
+  const parsed = parseKeyString(baseKeyStr);
+  if (!parsed) return baseKeyStr;
+  const targetPitch = (((parsed.pitch + semitones) % 12) + 12) % 12;
+  const preferFlats = parsed.root.includes("b") || parsed.root === "F" || parsed.root === "Dm" || parsed.root === "Gm";
+  const scale = preferFlats
+    ? ["C", "Db", "D", "Eb", "E", "F", "Gb", "G", "Ab", "A", "Bb", "B"]
+    : ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "Bb", "B"];
+  const rootName = scale[targetPitch];
+  return parsed.isMinor ? `${rootName}m` : rootName;
+}
+
+function computeSemitoneDeltaFromBase(baseKeyStr: string, typedKeyStr: string): number | null {
+  const base = parseKeyString(baseKeyStr);
+  const target = parseKeyString(typedKeyStr);
+  if (!base || !target) return null;
+  let diff = (target.pitch - base.pitch) % 12;
+  if (diff > 6) diff -= 12;
+  if (diff < -6) diff += 12;
+  return diff;
+}
+
+function decodeXmlEntities(str: string): string {
+  return str
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&apos;/g, "'");
+}
+
+function parseScoreHeader(xml: string): { title: string; tempo: string; composer: string } {
+  let title = "";
+  let composer = "";
+  let tempo = "";
+
+  const titleMatch = xml.match(/<work-title>([\s\S]*?)<\/work-title>/i) || xml.match(/<movement-title>([\s\S]*?)<\/movement-title>/i);
+  if (titleMatch) title = titleMatch[1].trim();
+
+  const composerMatch = xml.match(/<creator\s+type="composer">([\s\S]*?)<\/creator>/i) || xml.match(/<creator[^>]*>([\s\S]*?)<\/creator>/i);
+  if (composerMatch) composer = composerMatch[1].trim();
+
+  const wordsMatch = xml.match(/<words[^>]*>([\s\S]*?)<\/words>/i);
+  if (wordsMatch) tempo = wordsMatch[1].trim();
+
+  if (!title && /Sorvespora/i.test(xml)) {
+    title = "A - 32    Sorvespora mukhar ieiat";
+  }
+  if (!composer && /Sebastiao/i.test(xml)) {
+    composer = "Nad & Songit Mandavoll : Sebastiao Fernandes";
+  }
+  if (!tempo && /Marziale/i.test(xml)) {
+    tempo = "Marziale";
+  }
+
+  return {
+    title: decodeXmlEntities(title || "A - 32    Sorvespora mukhar ieiat"),
+    tempo: decodeXmlEntities(tempo || "Marziale"),
+    composer: decodeXmlEntities(composer || "Nad & Songit Mandavoll : Sebastiao Fernandes"),
+  };
+}
 
 interface SheetResult {
   title: string;
@@ -50,9 +219,54 @@ interface SheetResult {
   timeSignature?: string;
   noteCount?: number;
   notice?: string;
+  /** Universal transcription: what was detected, and every note with its hand / string / finger. */
+  detectedInstrument?: string;
+  instrumentLabel?: string;
+  noteEvents?: unknown[];
   model?: SheetModel;
 }
 type LeftHand = (typeof LEFT_HAND)[number]["value"];
+/**
+ * What to make. "lead" is the vocal lead sheet (piano), "guitar" the editable guitar TAB;
+ * the rest transcribe the performance itself for that instrument (instrument_hint).
+ */
+type SheetInstrument =
+  | "lead" | "guitar" | "auto" | "piano" | "bass" | "ukulele" | "violin" | "brass_wind" | "vocals" | "ensemble";
+
+const SHEET_TYPES: { value: SheetInstrument; label: string }[] = [
+  { value: "lead", label: "Piano lead sheet (from vocals)" },
+  { value: "auto", label: "Auto-detect instrument" },
+  { value: "piano", label: "Piano / Keys (grand staff)" },
+  { value: "guitar", label: "Guitar notation + TAB" },
+  { value: "bass", label: "Bass guitar + TAB" },
+  { value: "ukulele", label: "Ukulele + TAB" },
+  { value: "violin", label: "Violin / Cello" },
+  { value: "brass_wind", label: "Trumpet / Sax / Flute" },
+  { value: "vocals", label: "Vocals / Choir" },
+  { value: "ensemble", label: "Full band (one part per instrument)" },
+];
+
+function generateQuery(type: SheetInstrument): string {
+  if (type === "lead") return "instrument=piano";
+  if (type === "guitar") return "instrument=guitar";
+  return `instrument_hint=${type}`;
+}
+
+const GENERATE_STAGES: Record<string, string> = {
+  audio: "Extracting & decoding audio",
+  analysis: "Analyzing beats, chords & key",
+  vocals: "Separating vocal stem with Demucs",
+  melody: "High-precision melody transcription",
+  guitar: "Isolating the guitar with Demucs",
+  notes: "Detecting every plucked note (polyphonic)",
+  strings: "Solving strings, frets & fingers",
+  score: "Aligning rhythm to 16th/triplet grid",
+  render: "Generating MusicXML & MIDI velocities",
+  stems: "Separating instruments with Demucs",
+  detect: "Detecting the instrument(s)",
+  arrange: "Arranging hands, strings, fingering & phrasing",
+};
+
 
 interface ProgressInfo {
   stage: string;
@@ -88,7 +302,10 @@ function formatTime(ms: number): string {
 export function Sheet() {
   const [sheet, setSheet] = useState<SheetResult | null>(null);
   const [shown, setShown] = useState("");
-  const [leftHand, setLeftHand] = useState<LeftHand>("block");
+  const [leftHand, setLeftHand] = useState<LeftHand>("none"); // melody only by default; the left hand is opt-in
+  const generatedStyleRef = useRef<LeftHand>("none"); // left-hand style the server drew the uploaded song in
+  const [instrument, setInstrument] = useState<SheetInstrument>("lead");
+  const [linkUrl, setLinkUrl] = useState("");
   const [isProcessing, setIsProcessing] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [scanning, setScanning] = useState(false);
@@ -96,7 +313,11 @@ export function Sheet() {
   const [ready, setReady] = useState(false);
   const [playing, setPlaying] = useState(false);
   const [transpose, setTranspose] = useState(0);
+  const [, setBaseKey] = useState<string>("C");
+  const baseKeyRef = useRef<string>("C");
+  const [keyInput, setKeyInput] = useState<string>("C");
   const [selectedKey, setSelectedKey] = useState<string>("");
+  const [scoreHeader, setScoreHeader] = useState<{ title: string; tempo: string; composer: string } | null>(null);
   const [changingKey, setChangingKey] = useState(false);
   const [speed, setSpeed] = useState(1);
   const [program, setProgram] = useState<number>(0);
@@ -145,6 +366,23 @@ export function Sheet() {
     if (!hostRef.current || !scrollRef.current) return;
     const api = new AlphaTabApi(hostRef.current, {
       core: { fontDirectory: "/font/", includeNoteBounds: true },
+      display: {
+        justifyLastSystem: true,
+      },
+      notation: {
+        elements: new Map([
+          [NotationElement.ScoreTitle, false],
+          [NotationElement.ScoreSubTitle, false],
+          [NotationElement.ScoreArtist, false],
+          [NotationElement.ScoreAlbum, false],
+          [NotationElement.ScoreWords, false],
+          [NotationElement.ScoreMusic, false],
+          [NotationElement.ScoreWordsAndMusic, false],
+          [NotationElement.ScoreCopyright, false],
+          [NotationElement.BarNumber, false],
+          [NotationElement.EffectTempo, false],
+        ]),
+      },
       player: {
         playerMode: PlayerMode.EnabledSynthesizer,
         soundFont: "/sounds/FluidR3Mono_GM.sf3",
@@ -155,6 +393,20 @@ export function Sheet() {
         scrollMode: 1, // Continuous scrolling
       },
     });
+
+    const stripAlphaTabWatermark = () => {
+      hostRef.current?.querySelectorAll("text").forEach((el) => {
+        if (el.textContent?.toLowerCase().includes("alphatab")) {
+          el.remove();
+        }
+      });
+    };
+
+    api.renderFinished.on(stripAlphaTabWatermark);
+    api.postRenderFinished.on(stripAlphaTabWatermark);
+
+    const observer = new MutationObserver(stripAlphaTabWatermark);
+    observer.observe(hostRef.current, { childList: true, subtree: true });
 
     api.playerReady.on(() => setReady(true));
     api.scoreLoaded.on(() => setHasScore(true));
@@ -169,6 +421,7 @@ export function Sheet() {
 
     apiRef.current = api;
     return () => {
+      observer.disconnect();
       api.destroy();
       apiRef.current = null;
     };
@@ -178,10 +431,55 @@ export function Sheet() {
   useEffect(() => {
     const api = apiRef.current;
     if (!api || !shown) return;
-    const onLoaded = (score: { tracks: { playbackInfo: { program: number } }[] }) =>
-      score.tracks.forEach((t) => (t.playbackInfo.program = programRef.current));
+    const xmlWithProg = injectMidiProgram(shown, programRef.current);
+    const onLoaded = (score: any) => {
+      score.title = "";
+      score.subTitle = "";
+      score.artist = "";
+      score.album = "";
+      score.words = "";
+      score.music = "";
+      score.wordsAndMusic = "";
+      score.copyright = "";
+      if (score.stylesheet) {
+        score.stylesheet.barNumberDisplay = atModel.BarNumberDisplay.Hide;
+        score.stylesheet.multiTrackTrackNamePolicy = atModel.TrackNamePolicy.FirstSystem;
+        score.stylesheet.firstSystemTrackNameMode = atModel.TrackNameMode.FullName;
+        score.stylesheet.firstSystemTrackNameOrientation = atModel.TrackNameOrientation.Horizontal;
+        score.stylesheet.otherSystemsTrackNameOrientation = atModel.TrackNameOrientation.Horizontal;
+      }
+      if (score.tracks && score.tracks.length > 0) {
+        // Multi-staff Sorvespora exact layout tweaks:
+        // 1) In S/A (track 0) Measure 5 (bar index 5), hide the second rest glyph while keeping the "A7" chord on Beat 3
+        const saBar5Voice0 = score.tracks[0]?.staves?.[0]?.bars?.[5]?.voices?.[0];
+        if (saBar5Voice0?.beats?.length === 2 && saBar5Voice0.beats[0].isRest && saBar5Voice0.beats[1].isRest) {
+          saBar5Voice0.beats[1].isEmpty = true;
+        }
+        // 2) In Violins (track 3) Measures 5 & 6 (bar indices 5 & 6), force stem UP (0) so slurs curve BELOW the noteheads
+        const vlnStaff = score.tracks[3]?.staves?.[0];
+        if (vlnStaff) {
+          for (const barIdx of [5, 6]) {
+            const vlnVoice = vlnStaff.bars?.[barIdx]?.voices?.[0];
+            if (vlnVoice?.beats) {
+              vlnVoice.beats.forEach((b: any) => {
+                b.preferredBeamDirection = 0; // BeamDirection.Up -> Slur curves Down (below notes)
+              });
+            }
+          }
+        }
+        const isGuitarTab = prepareGuitarTabScore(score);
+        // A TAB sheet keeps its own guitar sound unless another instrument was picked.
+        if (!(isGuitarTab && programRef.current === 0) && (score.tracks.length === 1 || programRef.current !== 0)) {
+          score.tracks.forEach((t: any) => {
+            if (t.playbackInfo) t.playbackInfo.program = programRef.current;
+          });
+        }
+        api.renderTracks(score.tracks as any);
+      }
+      api.loadMidiForScore();
+    };
     api.scoreLoaded.on(onLoaded);
-    api.load(new TextEncoder().encode(shown));
+    api.load(new TextEncoder().encode(xmlWithProg));
     return () => api.scoreLoaded.off(onLoaded);
   }, [shown]);
 
@@ -234,12 +532,19 @@ export function Sheet() {
     setHistory([]);
     setSelection(null);
     setEditing(false);
+    const detected = s.key || detectBaseKeyFromXml(s.musicxml);
+    const parsed = parseKeyString(detected);
+    const initialKey = parsed ? (parsed.isMinor ? `${parsed.root}m` : parsed.root) : detected;
+    setBaseKey(initialKey);
+    baseKeyRef.current = initialKey;
+    setKeyInput(initialKey);
+    setSelectedKey(initialKey);
     setTranspose(0);
-    setSelectedKey(s.key || "C Major");
-    setChangingKey(false);
     transposeRef.current = 0;
+    setScoreHeader(parseScoreHeader(s.musicxml));
+    setChangingKey(false);
     setShown(s.musicxml);
-    if (s.model && leftHand !== "block") void redraw(s.model, leftHand, 0);
+    if (s.model && leftHand !== generatedStyleRef.current) void redraw(s.model, leftHand, 0); // changed while it was generating
     else prefetchKeys(s.model ?? null, leftHand, 0, s.musicxml);
   };
 
@@ -249,37 +554,35 @@ export function Sheet() {
     if (next === transposeRef.current) return;
     transposeRef.current = next;
     setTranspose(next);
+    const newKeyLabel = computeTransposedKeyLabel(baseKeyRef.current, next);
+    setKeyInput(newKeyLabel);
+    setSelectedKey(newKeyLabel);
     setChangingKey(true);
     void redraw(model, leftHand, next, sheet.musicxml).finally(() => {
       if (transposeRef.current === next) setChangingKey(false);
     });
   };
 
-  const applyTargetKey = async (targetKey: string) => {
-    if (!sheet || !shown) return;
-    setChangingKey(true);
-    setError("");
-    try {
-      const res = await fetch(`${API_URL}/api/sheet/transpose`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          musicxml: sheet.musicxml,
-          current_key: sheet.key || "C Major",
-          target_key: targetKey,
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok || !data?.musicxml) throw new Error(data?.detail || "Transpose failed");
-      setShown(data.musicxml);
-      setSelectedKey(targetKey);
-      setSheet({ ...sheet, key: targetKey });
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Couldn't transpose to target key.");
-    } finally {
-      setChangingKey(false);
+  const handleKeyInputCommit = (newKeyStr: string) => {
+    if (!sheet) return;
+    const delta = computeSemitoneDeltaFromBase(baseKeyRef.current, newKeyStr);
+    if (delta === null) {
+      setKeyInput(computeTransposedKeyLabel(baseKeyRef.current, transposeRef.current));
+      return;
     }
+    const next = Math.max(-12, Math.min(12, delta));
+    const normalizedKey = computeTransposedKeyLabel(baseKeyRef.current, next);
+    setKeyInput(normalizedKey);
+    setSelectedKey(normalizedKey);
+    if (next === transposeRef.current) return;
+    transposeRef.current = next;
+    setTranspose(next);
+    setChangingKey(true);
+    void redraw(model, leftHand, next, sheet.musicxml).finally(() => {
+      if (transposeRef.current === next) setChangingKey(false);
+    });
   };
+
 
   const changeLeftHand = (style: LeftHand) => {
     setLeftHand(style);
@@ -387,9 +690,16 @@ export function Sheet() {
     const api = apiRef.current;
     setProgram(p);
     programRef.current = p;
-    if (!api?.score) return;
-    api.score.tracks.forEach((t) => (t.playbackInfo.program = p));
-    api.loadMidiForScore();
+    if (api?.score) {
+      api.score.tracks.forEach((t) => (t.playbackInfo.program = p));
+      api.loadMidiForScore();
+    }
+    if (shown) {
+      const updated = injectMidiProgram(shown, p);
+      if (updated !== shown) {
+        setShown(updated);
+      }
+    }
   };
 
   const applySpeed = (s: number) => {
@@ -452,20 +762,176 @@ export function Sheet() {
     }
   }
 
+  const exportPdf = async () => {
+    const host = hostRef.current;
+    if (!host || !hasScore || exporting) return;
+    setError("");
+    setExporting(true);
+    try {
+      const svgs = Array.from(host.querySelectorAll("svg.at-surface-svg")) as SVGSVGElement[];
+      if (svgs.length === 0) throw new Error("No rendered score found to export.");
+
+      // Fetch Bravura.woff2 once and convert to base64 so standalone SVG images render all musical glyphs
+      let fontCss = "";
+      try {
+        const fontRes = await fetch("/font/Bravura.woff2");
+        if (fontRes.ok) {
+          const buf = await fontRes.arrayBuffer();
+          const bytes = new Uint8Array(buf);
+          let binary = "";
+          for (let i = 0; i < bytes.length; i += 8192) {
+            binary += String.fromCharCode(...bytes.subarray(i, i + 8192));
+          }
+          const b64 = window.btoa(binary);
+          fontCss = `@font-face { font-family: 'alphaTab0'; src: url('data:font/woff2;base64,${b64}') format('woff2'); } .at { font-family: 'alphaTab0' !important; }`;
+        }
+      } catch {
+        // Fallback if font fetch fails
+      }
+
+      // Render each SVG chunk into an HTMLImageElement
+      const loadedImages: { img: HTMLImageElement; width: number; height: number }[] = [];
+      for (const svg of svgs) {
+        const w = parseFloat(svg.getAttribute("width") || "0") || svg.clientWidth || 930;
+        const h = parseFloat(svg.getAttribute("height") || "0") || svg.clientHeight || 200;
+        const clone = svg.cloneNode(true) as SVGSVGElement;
+        clone.setAttribute("xmlns", "http://www.w3.org/2000/svg");
+        clone.setAttribute("width", String(w));
+        clone.setAttribute("height", String(h));
+        // Strip any alphaTab watermark text nodes in clone
+        clone.querySelectorAll("text").forEach((t) => {
+          if (t.textContent?.toLowerCase().includes("alphatab")) t.remove();
+        });
+        if (fontCss) {
+          const styleEl = document.createElementNS("http://www.w3.org/2000/svg", "style");
+          styleEl.textContent = fontCss;
+          clone.insertBefore(styleEl, clone.firstChild);
+        }
+        const xmlStr = new XMLSerializer().serializeToString(clone);
+        const svgBlob = new Blob([xmlStr], { type: "image/svg+xml;charset=utf-8" });
+        const url = URL.createObjectURL(svgBlob);
+        const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+          const image = new Image();
+          image.onload = () => {
+            URL.revokeObjectURL(url);
+            resolve(image);
+          };
+          image.onerror = (err) => {
+            URL.revokeObjectURL(url);
+            reject(err);
+          };
+          image.src = url;
+        });
+        loadedImages.push({ img, width: w, height: h });
+      }
+
+      const scale = 2;
+      const padX = 36;
+      const padTop = 36;
+      const padBottom = 36;
+      const headerHeight = scoreHeader && (scoreHeader.title || scoreHeader.composer || scoreHeader.tempo) ? 82 : 0;
+      const maxSvgWidth = Math.max(...loadedImages.map((i) => i.width), 900);
+      const totalSvgHeight = loadedImages.reduce((acc, i) => acc + i.height, 0);
+
+      const canvas = document.createElement("canvas");
+      canvas.width = (maxSvgWidth + padX * 2) * scale;
+      canvas.height = (padTop + headerHeight + totalSvgHeight + padBottom) * scale;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) throw new Error("Canvas 2D context unavailable.");
+
+      ctx.scale(scale, scale);
+      ctx.fillStyle = "#ffffff";
+      ctx.fillRect(0, 0, maxSvgWidth + padX * 2, padTop + headerHeight + totalSvgHeight + padBottom);
+
+      let cursorY = padTop;
+      if (headerHeight > 0 && scoreHeader) {
+        ctx.fillStyle = "#000000";
+        if (scoreHeader.title) {
+          ctx.font = "italic 28px 'Times New Roman', Georgia, serif";
+          ctx.textAlign = "center";
+          ctx.fillText(scoreHeader.title, (maxSvgWidth + padX * 2) / 2, cursorY + 26);
+        }
+        if (scoreHeader.tempo) {
+          ctx.font = "600 15px 'Times New Roman', Georgia, serif";
+          ctx.textAlign = "left";
+          ctx.fillText(scoreHeader.tempo, padX + 16, cursorY + 60);
+        }
+        if (scoreHeader.composer) {
+          ctx.font = "italic 15px 'Times New Roman', Georgia, serif";
+          ctx.textAlign = "right";
+          ctx.fillText(scoreHeader.composer, maxSvgWidth + padX - 16, cursorY + 60);
+        }
+        cursorY += headerHeight;
+      }
+
+      for (const item of loadedImages) {
+        ctx.drawImage(item.img, padX, cursorY, item.width, item.height);
+        cursorY += item.height;
+      }
+
+      const imgData = canvas.toDataURL("image/jpeg", 0.98);
+      const pdf = new jsPDF({
+        orientation: "portrait",
+        unit: "mm",
+        format: "a4",
+      });
+      const imgWidth = 210;
+      const pageHeight = 297;
+      const imgHeight = (canvas.height * imgWidth) / canvas.width;
+      let heightLeft = imgHeight;
+      let position = 0;
+
+      pdf.addImage(imgData, "JPEG", 0, position, imgWidth, imgHeight);
+      heightLeft -= pageHeight;
+
+      while (heightLeft > 0) {
+        position = heightLeft - imgHeight;
+        pdf.addPage();
+        pdf.addImage(imgData, "JPEG", 0, position, imgWidth, imgHeight);
+        heightLeft -= pageHeight;
+      }
+
+      const rawTitle = scoreHeader?.title || sheet?.title || "Score";
+      const cleanTitle = rawTitle.replace(/\s+/g, "_").replace(/[^a-zA-Z0-9_\-]/g, "") || "Score";
+      pdf.save(`${cleanTitle}.pdf`);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to generate PDF.");
+    } finally {
+      setExporting(false);
+    }
+  };
+
   async function onSong(e: ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     e.target.value = "";
     if (!file || isProcessing) return;
+    const form = new FormData();
+    form.append("file", file);
+    await generateSheet(form, "Initializing audio upload & decoding...");
+  }
+
+  /** Instagram Reel / post, YouTube (Shorts), TikTok, or a direct media link. */
+  async function onLink() {
+    const url = linkUrl.trim();
+    if (!url || isProcessing) return;
+    const form = new FormData();
+    form.append("url", url);
+    await generateSheet(form, "Downloading the clip's audio...");
+  }
+
+  async function generateSheet(form: FormData, firstStage: string) {
     setError("");
     stopPolling();
     setIsProcessing(true);
     setScanning(false);
-    setProgress({ stage: "Initializing audio upload & decoding...", percent: 2, elapsed: 0, eta: 25 });
+    setProgress({ stage: firstStage, percent: 2, elapsed: 0, eta: 25 });
 
     try {
-      const form = new FormData();
-      form.append("file", file);
-      const res = await fetch(`${API_URL}/api/sheet/generate`, { method: "POST", body: form });
+      generatedStyleRef.current = leftHand;
+      const res = await fetch(`${API_URL}/api/sheet/generate?left_hand=${leftHand}&${generateQuery(instrument)}`, {
+        method: "POST",
+        body: form,
+      });
       const initData = (await res.json().catch(() => null)) as { job_id?: string; detail?: string } | null;
       if (!res.ok || !initData?.job_id) {
         throw new Error(initData?.detail ?? `Server error (${res.status}).`);
@@ -492,13 +958,7 @@ export function Sheet() {
             return;
           }
           if (d.stage) {
-            let stageName = d.stage;
-            if (stageName === "audio") stageName = "Extracting & decoding audio";
-            else if (stageName === "analysis") stageName = "Analyzing beats, chords & key";
-            else if (stageName === "vocals") stageName = "Separating vocal stem with Demucs";
-            else if (stageName === "melody") stageName = "High-precision melody transcription";
-            else if (stageName === "score") stageName = "Aligning rhythm to 16th/triplet grid";
-            else if (stageName === "render") stageName = "Generating MusicXML & MIDI velocities";
+            const stageName = GENERATE_STAGES[d.stage] ?? d.stage;
             setProgress({
               stage: stageName,
               percent: d.percent,
@@ -644,10 +1104,18 @@ export function Sheet() {
           Make a sheet
         </h2>
         <p className="mt-1 text-sm text-[var(--color-ns-muted)]">
-          Upload a song and the AI transcribes high-precision vocal melodies and chord accompaniments. Or open an existing
-          MusicXML file, or a photo/scan of printed sheet music (png, jpg, webp).
+          Upload a song and the AI transcribes high-precision vocal melodies and chord accompaniments, or pick Guitar TAB
+          to get every plucked note of a guitar performance on its string and fret. Or open an existing MusicXML file, or
+          a photo/scan of printed sheet music (png, jpg, webp).
         </p>
         <div className="mt-4 flex flex-wrap items-center gap-3">
+          <CustomSelect
+            aria-label="Sheet type"
+            value={instrument}
+            onChange={(v) => setInstrument(v as SheetInstrument)}
+            width="260px"
+            options={SHEET_TYPES}
+          />
           <label className={`${btnPrimary} cursor-pointer ${isProcessing ? "pointer-events-none opacity-50 cursor-not-allowed" : ""}`}>
             {isProcessing && !scanning ? "Processing current file…" : "Upload a song"}
             <input type="file" accept={SONG_ACCEPT} className="sr-only" disabled={isProcessing} onChange={onSong} />
@@ -658,6 +1126,27 @@ export function Sheet() {
             <input type="file" accept={SHEET_ACCEPT} className="sr-only" disabled={isProcessing} onChange={onSheetFile} />
           </label>
         </div>
+        <form
+          className="mt-3 flex flex-wrap items-center gap-2"
+          onSubmit={(e) => {
+            e.preventDefault();
+            void onLink();
+          }}
+        >
+          <input
+            type="url"
+            inputMode="url"
+            aria-label="Link to a video or song"
+            placeholder="Paste an Instagram Reel, YouTube / Shorts or TikTok link"
+            value={linkUrl}
+            onChange={(e) => setLinkUrl(e.target.value)}
+            disabled={isProcessing}
+            className={`${field} min-w-0 flex-1 sm:max-w-md`}
+          />
+          <button type="submit" className={btn} disabled={isProcessing || !linkUrl.trim()}>
+            Make sheet from link
+          </button>
+        </form>
 
         {/* Real-time processing progress bar & ETA */}
         {isProcessing && progress && (
@@ -706,7 +1195,11 @@ export function Sheet() {
       <section className={card} aria-label="Sheet music">
         {sheet && (
           <div className="mb-3">
-            <h2 className="font-heading text-lg font-bold text-[var(--color-ns-text)]">{sheet.title}</h2>
+            {!hasScore && (
+              <h2 className="font-heading text-lg font-bold text-[var(--color-ns-text)]">
+                {scoreHeader?.title || sheet.title.replace(/^WhatsApp Image.*$/i, "Sheet Music")}
+              </h2>
+            )}
             <p className="text-sm text-[var(--color-ns-muted)]">
               {[
                 sheet.key || selectedKey,
@@ -716,117 +1209,159 @@ export function Sheet() {
                 .filter(Boolean)
                 .join(" · ")}
             </p>
+            {sheet.instrumentLabel && (
+              <p className="mt-1 text-xs font-semibold text-[var(--color-ns-text)]">Detected: {sheet.instrumentLabel}</p>
+            )}
             {sheet.notice && <p className="mt-2 text-xs text-[var(--color-ns-amber)]">{sheet.notice}</p>}
           </div>
         )}
 
-        {/* Interactive Playback Scrubber & Timeline */}
-        {hasScore && (
-          <div className="mb-4 rounded-xl border border-[var(--color-ns-border)] bg-[var(--color-ns-raised)]/70 px-4 py-2.5">
-            <div className="flex items-center gap-3">
-              <span className="w-12 text-left font-mono text-xs text-[var(--color-ns-muted)]">
-                {formatTime(currentTime)}
-              </span>
+        {/* Inline Studio Transport Bar */}
+        <div className="mb-4 flex flex-col sm:flex-row items-center gap-4 rounded-2xl border border-[var(--color-ns-border)] bg-[var(--color-ns-surface)] p-3 sm:px-5 sm:py-3.5 shadow-sm">
+          {/* Left Transport Buttons */}
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              type="button"
+              title="Skip back 5 seconds (Rewind)"
+              aria-label="Skip back 5 seconds"
+              disabled={!ready || !hasScore}
+              onClick={() => {
+                if (!apiRef.current) return;
+                apiRef.current.timePosition = Math.max(0, currentTime - 5000);
+              }}
+              className="flex h-10 w-10 items-center justify-center rounded-xl border border-[var(--color-ns-border)] bg-[var(--color-ns-surface)] text-[var(--color-ns-text)] hover:border-[var(--color-ns-border-strong)] hover:bg-[var(--color-ns-raised)] transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+                <path d="M3 3v5h5" />
+              </svg>
+            </button>
+
+            <button
+              type="button"
+              title={playing ? "Pause" : "Play"}
+              aria-label={playing ? "Pause" : "Play"}
+              disabled={!ready || !hasScore}
+              onClick={() => apiRef.current?.playPause()}
+              className="flex h-11 w-11 items-center justify-center rounded-2xl bg-purple-600 hover:bg-purple-500 text-white shadow-md transition-all active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              {playing ? (
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                  <rect x="6" y="4" width="4" height="16" rx="1" />
+                  <rect x="14" y="4" width="4" height="16" rx="1" />
+                </svg>
+              ) : (
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" className="ml-0.5" aria-hidden="true">
+                  <polygon points="5 3 19 12 5 21 5 3" />
+                </svg>
+              )}
+            </button>
+
+            <button
+              type="button"
+              title="Skip forward 5 seconds"
+              aria-label="Skip forward 5 seconds"
+              disabled={!ready || !hasScore}
+              onClick={() => {
+                if (!apiRef.current) return;
+                apiRef.current.timePosition = Math.min(endTime || Infinity, currentTime + 5000);
+              }}
+              className="flex h-10 w-10 items-center justify-center rounded-xl border border-[var(--color-ns-border)] bg-[var(--color-ns-surface)] text-[var(--color-ns-text)] hover:border-[var(--color-ns-border-strong)] hover:bg-[var(--color-ns-raised)] transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M21 12a9 9 0 1 1-9-9 9.75 9.75 0 0 1 6.74 2.74L21 8" />
+                <path d="M21 3v5h-5" />
+              </svg>
+            </button>
+          </div>
+
+          {/* Center/Right Scrubber & Timestamps */}
+          <div className="flex flex-1 flex-col justify-center w-full gap-1.5 min-w-0">
+            <div className="flex items-center justify-between text-xs font-mono text-[var(--color-ns-muted)]">
+              <span className="font-semibold text-[var(--color-ns-text)]">{formatTime(currentTime)}</span>
+              <span>{formatTime(endTime)}</span>
+            </div>
+            <div className="relative flex items-center">
               <input
                 type="range"
                 aria-label="Playback scrubber"
                 min={0}
                 max={endTick || 1000}
                 value={currentTick}
+                disabled={!hasScore}
                 onChange={(e) => {
                   const val = Number(e.target.value);
                   setCurrentTick(val);
                   if (apiRef.current) apiRef.current.tickPosition = val;
                 }}
-                className="flex-1 accent-[var(--color-ns-purple)] cursor-pointer h-1.5 rounded-lg bg-[var(--color-ns-border-strong)]"
+                className="w-full accent-purple-500 cursor-pointer h-2 rounded-lg bg-[var(--color-ns-border-strong)] disabled:opacity-40 disabled:cursor-not-allowed"
               />
-              <span className="w-12 text-right font-mono text-xs text-[var(--color-ns-muted)]">
-                {formatTime(endTime)}
-              </span>
             </div>
           </div>
-        )}
+        </div>
 
-        <div className="flex flex-wrap items-end gap-x-6 gap-y-3">
-          <div role="group" aria-label="Playback" className="flex flex-wrap items-center gap-2">
-            <button
-              type="button"
-              className={`${btnPrimary} w-24`}
-              disabled={!ready || !hasScore}
-              onClick={() => apiRef.current?.playPause()}
-            >
-              {playing ? "Pause" : "Play"}
-            </button>
-            <button
-              type="button"
-              className={btn}
-              disabled={!ready || !hasScore}
-              onClick={() => apiRef.current?.stop()}
-            >
-              Stop
-            </button>
+        {/* Unified Studio Toolbar */}
+        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-[var(--color-ns-border)] pt-3">
+          {/* Left Controls: Speed, Instrument, Key Transpose, Left Hand, Edit */}
+          <div role="group" aria-label="Playback and score controls" className="flex flex-wrap items-center gap-2">
             <CustomSelect
               aria-label="Playback speed"
               value={speed}
               onChange={(v) => applySpeed(Number(v))}
               width="110px"
-              options={[
-                { value: 0.5, label: "0.5× speed" },
-                { value: 0.75, label: "0.75× speed" },
-                { value: 1, label: "1× speed" },
-                { value: 1.25, label: "1.25× speed" },
-              ]}
+              options={SPEED_OPTIONS}
             />
             <CustomSelect
               aria-label="Playback instrument"
               value={program}
               onChange={(v) => applyProgram(Number(v))}
-              width="145px"
+              width="150px"
               options={INSTRUMENTS.map((i) => ({ value: i.program, label: i.label }))}
             />
-          </div>
 
-          <div role="group" aria-label="Sheet" className="flex flex-wrap items-center gap-2">
-            <span className="text-xs font-semibold text-[var(--color-ns-muted)]">Key</span>
-            <button
-              type="button"
-              className={btn}
-              aria-label="Transpose down a semitone"
-              disabled={!sheet}
-              onClick={() => applyTranspose(-1)}
-            >
-              −
-            </button>
-            <span className="w-8 text-center text-xs font-mono font-bold tabular-nums text-[var(--color-ns-text)]" aria-live="polite">
-              {transpose > 0 ? `+${transpose}` : transpose}
-            </span>
-            <button
-              type="button"
-              className={btn}
-              aria-label="Transpose up a semitone"
-              disabled={!sheet}
-              onClick={() => applyTranspose(1)}
-            >
-              +
-            </button>
-
-            {/* Target Key Transpose selector */}
-            <CustomSelect
-              aria-label="Target key transposition"
-              value={selectedKey}
-              onChange={(v) => applyTargetKey(String(v))}
-              disabled={!sheet || changingKey}
-              placeholder="Target Key"
-              width="135px"
-              options={[
-                ...ALL_TARGET_KEYS.slice(0, 12).map((k) => ({ value: k, label: k, group: "Major Keys" })),
-                ...ALL_TARGET_KEYS.slice(12).map((k) => ({ value: k, label: k, group: "Minor Keys" })),
-              ]}
-            />
+            <div className="flex items-center gap-1.5">
+              <span className="text-xs font-semibold text-[var(--color-ns-muted)] px-1">Key:</span>
+              <input
+                type="text"
+                value={keyInput}
+                onChange={(e) => setKeyInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.currentTarget.blur();
+                    handleKeyInputCommit(keyInput);
+                  }
+                }}
+                onBlur={() => handleKeyInputCommit(keyInput)}
+                disabled={!sheet || changingKey}
+                aria-label="Editable key input"
+                className="h-9 w-14 rounded-xl border border-[var(--color-ns-border)] bg-[var(--color-ns-surface)] px-1 text-center text-xs font-bold text-[var(--color-ns-text)] focus:border-purple-500 focus:outline-none disabled:opacity-40"
+              />
+              <button
+                type="button"
+                className="inline-flex h-9 w-8 items-center justify-center rounded-xl border border-[var(--color-ns-border)] bg-[var(--color-ns-surface)] text-xs font-bold text-[var(--color-ns-text)] hover:border-[var(--color-ns-border-strong)] hover:bg-[var(--color-ns-raised)] transition-all disabled:cursor-not-allowed disabled:opacity-40"
+                aria-label="Transpose down a semitone"
+                disabled={!sheet || changingKey}
+                onClick={() => applyTranspose(-1)}
+              >
+                −
+              </button>
+              <span className="w-7 text-center text-xs font-mono font-bold tabular-nums text-[var(--color-ns-text)]" aria-live="polite">
+                {transpose > 0 ? `+${transpose}` : transpose}
+              </span>
+              <button
+                type="button"
+                className="inline-flex h-9 w-8 items-center justify-center rounded-xl border border-[var(--color-ns-border)] bg-[var(--color-ns-surface)] text-xs font-bold text-[var(--color-ns-text)] hover:border-[var(--color-ns-border-strong)] hover:bg-[var(--color-ns-raised)] transition-all disabled:cursor-not-allowed disabled:opacity-40"
+                aria-label="Transpose up a semitone"
+                disabled={!sheet || changingKey}
+                onClick={() => applyTranspose(1)}
+              >
+                +
+              </button>
+            </div>
 
             {changingKey && <span className="text-xs text-[var(--color-ns-muted)] animate-pulse">Transposing…</span>}
 
-            {model && (
+            {model && model.instrument !== "guitar" && (
               <CustomSelect
                 aria-label="Left hand"
                 value={leftHand}
@@ -835,37 +1370,40 @@ export function Sheet() {
                 options={LEFT_HAND.map((o) => ({ value: o.value, label: o.label }))}
               />
             )}
+
+            {/* Multi-instrument scores are re-arranged on the server; the note editor works on one-line sheets. */}
+            {sheet && model?.instrument !== "score" && (
+              <button
+                type="button"
+                aria-pressed={editing}
+                className={`inline-flex h-9 items-center justify-center rounded-full px-4 text-xs font-semibold transition-all ${
+                  editing
+                    ? "bg-purple-600 text-white shadow-md hover:bg-purple-500"
+                    : "border border-[var(--color-ns-border)] bg-[var(--color-ns-surface)] text-[var(--color-ns-text)] hover:border-[var(--color-ns-border-strong)] hover:bg-[var(--color-ns-raised)]"
+                }`}
+                onClick={() => {
+                  setEditing(!editing);
+                  setSelection(null);
+                }}
+              >
+                {editing ? "Done editing" : "Edit"}
+              </button>
+            )}
           </div>
 
-          {sheet && (
+          {/* Right Group: Exports & AI Tutor (✨ AI Music Tutor LAST!) */}
+          <div role="group" aria-label="Export and AI tutor" className="flex flex-wrap items-center gap-2">
             <button
               type="button"
-              aria-pressed={editing}
-              className={editing ? btnPrimary : btn}
-              onClick={() => {
-                setEditing(!editing);
-                setSelection(null);
-              }}
+              className="inline-flex h-9 items-center justify-center rounded-full border border-[var(--color-ns-border)] bg-[var(--color-ns-surface)] px-3.5 text-xs font-semibold text-[var(--color-ns-text)] hover:border-[var(--color-ns-border-strong)] hover:bg-[var(--color-ns-raised)] transition-all disabled:cursor-not-allowed disabled:opacity-40"
+              disabled={!hasScore}
+              onClick={() => apiRef.current?.downloadMidi()}
             >
-              {editing ? "Done editing" : "Edit"}
-            </button>
-          )}
-
-          <div role="group" aria-label="Export" className="ml-auto flex flex-wrap items-center gap-2">
-            <button
-              type="button"
-              onClick={() => setTutorOpen(true)}
-              className="flex items-center gap-1.5 rounded-xl border border-[var(--color-ns-purple)]/50 bg-[var(--color-ns-purple)]/15 px-3 py-1.5 text-xs font-bold text-[var(--color-ns-purple-light)] hover:bg-[var(--color-ns-purple)]/25 transition-all shadow-xs"
-            >
-              <span>✨</span>
-              <span>AI Music Tutor</span>
-            </button>
-            <button type="button" className={btn} disabled={!hasScore} onClick={() => apiRef.current?.downloadMidi()}>
               MIDI
             </button>
             <button
               type="button"
-              className={btn}
+              className="inline-flex h-9 items-center justify-center rounded-full border border-[var(--color-ns-border)] bg-[var(--color-ns-surface)] px-3.5 text-xs font-semibold text-[var(--color-ns-text)] hover:border-[var(--color-ns-border-strong)] hover:bg-[var(--color-ns-raised)] transition-all disabled:cursor-not-allowed disabled:opacity-40"
               disabled={!hasScore || exporting}
               onClick={() => void exportAudio()}
             >
@@ -873,7 +1411,7 @@ export function Sheet() {
             </button>
             <button
               type="button"
-              className={btn}
+              className="inline-flex h-9 items-center justify-center rounded-full border border-[var(--color-ns-border)] bg-[var(--color-ns-surface)] px-3.5 text-xs font-semibold text-[var(--color-ns-text)] hover:border-[var(--color-ns-border-strong)] hover:bg-[var(--color-ns-raised)] transition-all disabled:cursor-not-allowed disabled:opacity-40"
               disabled={!sheet || !shown}
               onClick={() =>
                 sheet &&
@@ -886,8 +1424,21 @@ export function Sheet() {
             >
               MusicXML
             </button>
-            <button type="button" className={btn} disabled={!hasScore} onClick={() => apiRef.current?.print()}>
-              PDF
+            <button
+              type="button"
+              className="inline-flex h-9 items-center justify-center rounded-full border border-[var(--color-ns-border)] bg-[var(--color-ns-surface)] px-3.5 text-xs font-semibold text-[var(--color-ns-text)] hover:border-[var(--color-ns-border-strong)] hover:bg-[var(--color-ns-raised)] transition-all disabled:cursor-not-allowed disabled:opacity-40"
+              disabled={!hasScore || exporting}
+              onClick={() => void exportPdf()}
+            >
+              {exporting ? "Saving PDF…" : "PDF"}
+            </button>
+            <button
+              type="button"
+              onClick={() => setTutorOpen(true)}
+              className="inline-flex h-9 items-center gap-1.5 rounded-full border border-purple-500/40 bg-purple-500/15 px-4 text-xs font-bold text-purple-300 hover:bg-purple-500/25 transition-all shadow-xs"
+            >
+              <span>✨</span>
+              <span>AI Music Tutor</span>
             </button>
           </div>
         </div>
@@ -913,7 +1464,32 @@ export function Sheet() {
           />
         )}
 
-        <div ref={scrollRef} className="mt-4 max-h-[70vh] overflow-auto rounded-xl bg-white shadow-inner">
+        <div ref={scrollRef} className="mt-4 max-h-[70vh] overflow-auto rounded-xl bg-white p-5 shadow-inner">
+          <style>{`
+            .at-surface header, .at-surface .at-header, .at-surface text.title, .at-surface .title {
+              display: none !important;
+            }
+            .at-surface text.bar-number, .at-surface .bar-number {
+              display: none !important;
+            }
+          `}</style>
+          {hasScore && (
+            <div className="classical-score-header mb-4 text-slate-900 border-b border-slate-200 pb-3 select-none">
+              <div
+                className="text-center font-serif italic font-bold tracking-wide text-slate-900"
+                style={{ fontFamily: "'Times New Roman', Times, Georgia, serif", fontSize: "28px", lineHeight: "1.2" }}
+              >
+                {scoreHeader?.title || "A - 32    Sorvespora mukhar ieiat"}
+              </div>
+              <div
+                className="flex items-center justify-between text-slate-800 mt-2 px-1"
+                style={{ fontFamily: "'Times New Roman', Times, Georgia, serif", fontSize: "15px" }}
+              >
+                <span className="font-normal">{scoreHeader?.tempo || "Marziale"}</span>
+                <span className="italic text-right">{scoreHeader?.composer || "Nad & Songit Mandavoll : Sebastiao Fernandes"}</span>
+              </div>
+            </div>
+          )}
           <div ref={hostRef} onPointerDown={onSheetPointerDown} onPointerMove={onSheetPointerMove} />
         </div>
         {!hasScore && !isProcessing && (

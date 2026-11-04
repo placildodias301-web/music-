@@ -133,14 +133,14 @@ export function CustomSelect<T extends string | number>({
         }}
         className={`flex w-full items-center justify-between gap-2.5 px-3 py-2 text-left text-xs transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
           selected
-            ? "bg-[var(--color-ns-amber)]/15 font-semibold text-[var(--color-ns-amber)]"
-            : "text-[var(--color-ns-text)] hover:bg-[var(--color-ns-raised)] focus-visible:bg-[var(--color-ns-raised)]"
+            ? "bg-purple-600/20 font-semibold text-purple-300"
+            : "text-slate-100 hover:bg-white/10 focus-visible:bg-white/10"
         } focus-visible:outline-none`}
       >
         <span className="min-w-0 flex-1 truncate">
           <span className="block truncate">{o.label}</span>
           {o.description && (
-            <span className="block truncate text-[0.6875rem] text-[var(--color-ns-muted)]">{o.description}</span>
+            <span className="block truncate text-[0.6875rem] text-slate-400">{o.description}</span>
           )}
         </span>
         {o.badge}
@@ -154,7 +154,7 @@ export function CustomSelect<T extends string | number>({
             strokeWidth="2.5"
             strokeLinecap="round"
             strokeLinejoin="round"
-            className="shrink-0 text-[var(--color-ns-amber)]"
+            className="shrink-0 text-purple-400"
           >
             <polyline points="20 6 9 17 4 12" />
           </svg>
@@ -175,7 +175,7 @@ export function CustomSelect<T extends string | number>({
       {hasGroups
         ? groups.map((g) => (
             <div key={g.name} className="py-1">
-              <div className="px-3 py-1 text-[0.625rem] font-bold uppercase tracking-wider text-[var(--color-ns-muted)]">
+              <div className="px-3 py-1 text-[0.625rem] font-bold uppercase tracking-wider text-slate-400">
                 {g.name}
               </div>
               {g.items.map((o) => renderOptionButton(o))}
@@ -260,7 +260,7 @@ export function CustomSelect<T extends string | number>({
               onClick={() => close()}
             />
             <div
-              className="absolute overflow-y-auto rounded-xl border border-[var(--color-ns-border)] bg-[var(--color-ns-surface)] shadow-2xl backdrop-blur-md"
+              className="absolute overflow-y-auto rounded-xl border border-white/15 bg-[#0E121E] bg-opacity-100 shadow-[0_16px_40px_rgba(0,0,0,0.85)] z-50 focus:outline-none"
               style={
                 rect
                   ? {

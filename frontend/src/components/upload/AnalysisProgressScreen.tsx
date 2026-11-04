@@ -6,7 +6,7 @@ export type AnalysisPhase = "downloading" | "preparing" | "uploading" | "analyzi
 const SERVER_DETAIL: Record<AnalysisStage, string> = {
   uploaded: "Upload received",
   decoding: "Decoding the audio",
-  separating: "Separating harmony from drums",
+  separating: "Isolating the instruments from the drums",
   beats: "Tracking beats and tempo",
   chroma: "Reading the notes in each moment",
   chords: "Recognising chords",
@@ -25,13 +25,13 @@ const SERVER_DETAIL: Record<AnalysisStage, string> = {
 type StepId = "link" | "sample" | "upload" | "tempo" | "chords" | "key" | "voicings";
 
 const STEP_LABEL: Record<StepId, string> = {
-  link: "Fetching media",
+  link: "Fetching the link's audio",
   sample: "Creating the sample track",
-  upload: "Uploading/Preparing",
-  tempo: "Analyzing: Detecting tempo & beats",
-  chords: "Building chord timeline",
-  key: "Detecting key & time signature",
-  voicings: "Preparing chord voicings",
+  upload: "Uploading your track",
+  tempo: "Finding the tempo and beats",
+  chords: "Reading the chords (passing & soft chords too)",
+  key: "Detecting the key and time signature",
+  voicings: "Preparing guitar, ukulele and piano shapes",
 };
 
 /** Server stages, in the order the analyser runs them, grouped into steps. */
@@ -54,13 +54,13 @@ const STAGE_STEP: Record<AnalysisStage, StepId> = {
 };
 
 const ERROR_TITLE: Record<AnalysisErrorKind, string> = {
-  network: "Can't reach the Wilsify server",
-  "too-large": "That file is too large",
-  unsupported: "That format isn't supported",
-  unreadable: "We couldn't read the music in that file",
-  busy: "The server is busy",
-  server: "Something went wrong on the server",
-  cancelled: "Analysis cancelled",
+  network: "We can't reach Wilsify right now",
+  "too-large": "This file is over the 100 MB limit",
+  unsupported: "This file type isn't supported",
+  unreadable: "We couldn't hear any music in this file",
+  busy: "Wilsify is busy right now",
+  server: "The analysis stopped unexpectedly",
+  cancelled: "Analysis stopped",
 };
 
 interface Props {
@@ -173,9 +173,9 @@ export function AnalysisProgressScreen({ fileName, origin, phase, upload, server
             ? (SERVER_DETAIL[server.stage] ?? "Analysing")
             : "Upload received"
         : phase === "voicings"
-          ? "Working out guitar, ukulele and piano shapes"
+          ? "Working out the chord shapes for each instrument"
           : phase === "downloading"
-            ? "Fetching media from YouTube on the server"
+            ? "Downloading the audio from the link"
             : phase === "preparing"
               ? "Synthesising an original demo clip"
               : "Done";

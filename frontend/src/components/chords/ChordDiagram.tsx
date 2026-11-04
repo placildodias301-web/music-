@@ -19,6 +19,7 @@ export function ChordDiagram({ model, shapeIndex, onShape }: { model: ChordModel
         <FretboardDiagram
           stringNames={model.stringNames}
           frets={shape.frets}
+          baseFret={(shape as { baseFret?: number }).baseFret}
           drone={model.tuning.drone}
           courses={model.courses ? model.tuning.offsets : undefined}
           fretless={model.definition.fretless}

@@ -3,6 +3,10 @@ import { StemFileMixer } from "../stems/StemFileMixer";
 import { ALLOWED_EXT, POLL_MS, PRESETS, analyseUpload, fmtBytes, getJob, getJobStems, startSeparation } from "../../lib/stemJob";
 import type { StemResults } from "../../lib/stemJob";
 
+/** Status polls that may fail in a row (network blips) before the separation counts as failed. */
+const POLL_RETRIES = 3;
+const POLL_RETRY_MS = 1500;
+
 type Mode = "two_stems" | "standard4" | "six_stems";
 const MODES: { value: Mode; label: string }[] = [
   { value: "two_stems", label: "2 stems · vocals + music" },
@@ -56,8 +60,20 @@ export function StemMixer({ audioUrl, fileName }: { audioUrl: string; fileName?:
         split_vocals: false,
         split_drums: false,
       });
+      let transientFailures = 0;
       for (;;) {
-        const job = await getJob(job_id);
+        let job: Awaited<ReturnType<typeof getJob>>;
+        try {
+          job = await getJob(job_id);
+          transientFailures = 0;
+        } catch (pollError) {
+          // A dropped poll (network blip, server busy) isn't a failed job:
+          // retry quietly a few times before telling the user.
+          if (++transientFailures > POLL_RETRIES) throw pollError;
+          await new Promise((r) => setTimeout(r, POLL_RETRY_MS));
+          if (!alive.current) return;
+          continue;
+        }
         if (!alive.current) return;
         if (job.status === "failed") throw new Error(job.error ?? "Separation failed on the server.");
         setProgress(Number(job.progress) || 0);

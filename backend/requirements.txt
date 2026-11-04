@@ -29,3 +29,5 @@ music21>=9,<11
 # weights download on first use into ~/panns_data.
 panns-inference>=0.1.1
 torchlibrosa
+
+google-genai>=2.30.0

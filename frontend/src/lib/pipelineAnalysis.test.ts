@@ -294,7 +294,7 @@ describe("mapping the completed result", () => {
     const noKey = pipelineResult({ key: null });
     expect(() => mapPipelineResult(view({ status: "completed", result: noKey }), file)).toThrow(AnalysisError);
     const onlyNoChord = pipelineResult({ chords: [{ start: 0, end: 12, chord: "N", simple: "N", type: "no_chord", confidence: null }] });
-    expect(() => mapPipelineResult(view({ status: "completed", result: onlyNoChord }), file)).toThrow(/No chords could be recognised/);
+    expect(() => mapPipelineResult(view({ status: "completed", result: onlyNoChord }), file)).toThrow(/couldn't find any chords/);
   });
 });
 

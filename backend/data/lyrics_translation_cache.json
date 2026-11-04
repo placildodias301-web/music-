@@ -461,5 +461,310 @@
         "instrumental": false
       }
     ]
+  },
+  "6ff7a4c06a06ad16a7aa27c445d28e56": {
+    "detected_source_lang_code": "en",
+    "detected_source_lang_name": "English",
+    "target_lang_code": "kok",
+    "target_lang_name": "Konkani",
+    "translated_lines": [
+      {
+        "id": "c0",
+        "text": "",
+        "romanized_text": "",
+        "chords": [
+          {
+            "originalChord": "Bbsus4",
+            "chord": "Bbsus4",
+            "time": 0,
+            "endTime": 1.5,
+            "charIndex": 0,
+            "confidence": 0.95
+          },
+          {
+            "originalChord": "Ebm",
+            "chord": "Ebm",
+            "time": 0,
+            "endTime": 1.5,
+            "charIndex": 0,
+            "confidence": 0.95
+          },
+          {
+            "originalChord": "Eb",
+            "chord": "Eb",
+            "time": 0,
+            "endTime": 1.5,
+            "charIndex": 0,
+            "confidence": 0.95
+          },
+          {
+            "originalChord": "Eb/G",
+            "chord": "Eb/G",
+            "time": 0,
+            "endTime": 1.5,
+            "charIndex": 0,
+            "confidence": 0.95
+          },
+          {
+            "originalChord": "Ab",
+            "chord": "Ab",
+            "time": 0,
+            "endTime": 1.5,
+            "charIndex": 0,
+            "confidence": 0.95
+          },
+          {
+            "originalChord": "Eb",
+            "chord": "Eb",
+            "time": 0,
+            "endTime": 1.5,
+            "charIndex": 0,
+            "confidence": 0.95
+          },
+          {
+            "originalChord": "Cm/Eb",
+            "chord": "Cm/Eb",
+            "time": 0,
+            "endTime": 1.5,
+            "charIndex": 0,
+            "confidence": 0.95
+          },
+          {
+            "originalChord": "Eb",
+            "chord": "Eb",
+            "time": 0,
+            "endTime": 1.5,
+            "charIndex": 0,
+            "confidence": 0.95
+          }
+        ],
+        "words": [],
+        "romanized_words": null,
+        "startTime": 0,
+        "endTime": 5.724,
+        "section": null,
+        "instrumental": false
+      },
+      {
+        "id": "c1",
+        "text": "",
+        "romanized_text": "",
+        "chords": [
+          {
+            "originalChord": "Eb",
+            "chord": "Eb",
+            "time": 5.724,
+            "endTime": 7.224,
+            "charIndex": 0,
+            "confidence": 0.95
+          },
+          {
+            "originalChord": "Gm/Bb",
+            "chord": "Gm/Bb",
+            "time": 5.724,
+            "endTime": 7.224,
+            "charIndex": 0,
+            "confidence": 0.95
+          },
+          {
+            "originalChord": "Eb",
+            "chord": "Eb",
+            "time": 5.724,
+            "endTime": 7.224,
+            "charIndex": 0,
+            "confidence": 0.95
+          },
+          {
+            "originalChord": "Ab",
+            "chord": "Ab",
+            "time": 5.724,
+            "endTime": 7.224,
+            "charIndex": 0,
+            "confidence": 0.95
+          },
+          {
+            "originalChord": "Eb",
+            "chord": "Eb",
+            "time": 5.724,
+            "endTime": 7.224,
+            "charIndex": 0,
+            "confidence": 0.95
+          }
+        ],
+        "words": [],
+        "romanized_words": null,
+        "startTime": 5.724,
+        "endTime": 13.166,
+        "section": null,
+        "instrumental": false
+      },
+      {
+        "id": "c2",
+        "text": "",
+        "romanized_text": "",
+        "chords": [
+          {
+            "originalChord": "Eb",
+            "chord": "Eb",
+            "time": 13.166,
+            "endTime": 14.666,
+            "charIndex": 0,
+            "confidence": 0.95
+          },
+          {
+            "originalChord": "Ebsus2",
+            "chord": "Ebsus2",
+            "time": 13.166,
+            "endTime": 14.666,
+            "charIndex": 0,
+            "confidence": 0.95
+          },
+          {
+            "originalChord": "Bbsus4",
+            "chord": "Bbsus4",
+            "time": 13.166,
+            "endTime": 14.666,
+            "charIndex": 0,
+            "confidence": 0.95
+          },
+          {
+            "originalChord": "Eb",
+            "chord": "Eb",
+            "time": 13.166,
+            "endTime": 14.666,
+            "charIndex": 0,
+            "confidence": 0.95
+          },
+          {
+            "originalChord": "Ebsus2",
+            "chord": "Ebsus2",
+            "time": 13.166,
+            "endTime": 14.666,
+            "charIndex": 0,
+            "confidence": 0.95
+          },
+          {
+            "originalChord": "Ab",
+            "chord": "Ab",
+            "time": 13.166,
+            "endTime": 14.666,
+            "charIndex": 0,
+            "confidence": 0.95
+          },
+          {
+            "originalChord": "Eb",
+            "chord": "Eb",
+            "time": 13.166,
+            "endTime": 14.666,
+            "charIndex": 0,
+            "confidence": 0.95
+          }
+        ],
+        "words": [],
+        "romanized_words": null,
+        "startTime": 13.166,
+        "endTime": 20.526,
+        "section": null,
+        "instrumental": false
+      },
+      {
+        "id": "c3",
+        "text": "",
+        "romanized_text": "",
+        "chords": [
+          {
+            "originalChord": "Ebsus4",
+            "chord": "Ebsus4",
+            "time": 20.526,
+            "endTime": 22.026,
+            "charIndex": 0,
+            "confidence": 0.95
+          },
+          {
+            "originalChord": "Eb",
+            "chord": "Eb",
+            "time": 20.526,
+            "endTime": 22.026,
+            "charIndex": 0,
+            "confidence": 0.95
+          },
+          {
+            "originalChord": "Cm7",
+            "chord": "Cm7",
+            "time": 20.526,
+            "endTime": 22.026,
+            "charIndex": 0,
+            "confidence": 0.95
+          },
+          {
+            "originalChord": "Eb",
+            "chord": "Eb",
+            "time": 20.526,
+            "endTime": 22.026,
+            "charIndex": 0,
+            "confidence": 0.95
+          },
+          {
+            "originalChord": "Absus4",
+            "chord": "Absus4",
+            "time": 20.526,
+            "endTime": 22.026,
+            "charIndex": 0,
+            "confidence": 0.95
+          },
+          {
+            "originalChord": "Ab",
+            "chord": "Ab",
+            "time": 20.526,
+            "endTime": 22.026,
+            "charIndex": 0,
+            "confidence": 0.95
+          },
+          {
+            "originalChord": "Bb",
+            "chord": "Bb",
+            "time": 20.526,
+            "endTime": 22.026,
+            "charIndex": 0,
+            "confidence": 0.95
+          }
+        ],
+        "words": [],
+        "romanized_words": null,
+        "startTime": 20.526,
+        "endTime": 28.003,
+        "section": null,
+        "instrumental": false
+      },
+      {
+        "id": "c4",
+        "text": "",
+        "romanized_text": "",
+        "chords": [
+          {
+            "originalChord": "Bbm/Db",
+            "chord": "Bbm/Db",
+            "time": 28.003,
+            "endTime": 29.503,
+            "charIndex": 0,
+            "confidence": 0.95
+          },
+          {
+            "originalChord": "Eb",
+            "chord": "Eb",
+            "time": 28.003,
+            "endTime": 29.503,
+            "charIndex": 0,
+            "confidence": 0.95
+          }
+        ],
+        "words": [],
+        "romanized_words": null,
+        "startTime": 28.003,
+        "endTime": 31.18,
+        "section": null,
+        "instrumental": false
+      }
+    ]
   }
 }

@@ -39,13 +39,34 @@ export function InteractiveChordDiagram({
   const frettedVals = frets.filter((f): f is number => f !== null && f > 0);
   const minFret = frettedVals.length ? Math.min(...frettedVals) : 0;
   const maxFret = frettedVals.length ? Math.max(...frettedVals) : 0;
-  const hasCapo = typeof capo === "number" && capo > 0;
-  const startFret = !fretless && maxFret > 4 ? minFret - 1 : 0;
+  const hasOpen = frets.some((f) => f === 0);
+  const hasCapo = typeof capo === "number" && capo > 0 && !fretless;
+
+  const captionMatch = caption ? /(?:fret|pos(?:ition)?)\s*(\d+)/i.exec(caption) : null;
+  const parsedCaptionFret = captionMatch ? parseInt(captionMatch[1], 10) : undefined;
+
+  const isOpenPosition =
+    !fretless &&
+    maxFret <= 4 &&
+    (hasOpen || (minFret <= 1 && !parsedCaptionFret && !/barre|power|position|pos\b|drop|shell/i.test(caption ?? "")));
+
+  const isPreNormalized = parsedCaptionFret !== undefined && parsedCaptionFret > 1 && minFret === 1;
+
+  const baseFret = isOpenPosition
+    ? 1
+    : isPreNormalized
+      ? parsedCaptionFret!
+      : minFret > 0
+        ? minFret
+        : parsedCaptionFret ?? 1;
+
+  const startFret = !fretless && !isOpenPosition && !isPreNormalized && minFret > 0 ? minFret - 1 : 0;
   const fretCount = fretless ? 5 : Math.min(8, Math.max(4, maxFret - startFret));
+  const leftFretNumber = !fretless ? (!isOpenPosition ? baseFret : hasCapo ? capo : 0) : 0;
 
   const spacing = n <= 4 ? 32 : n <= 6 ? 26 : 22;
   const fretSpacing = 32;
-  const left = 32;
+  const left = 36;
   const top = hasCapo ? 52 : 44;
   const width = left * 2 + spacing * (n - 1);
   const height = top + fretSpacing * fretCount + 28;
@@ -93,46 +114,55 @@ export function InteractiveChordDiagram({
             >
               CAPO {capo}
             </text>
-            <text
-              x={left - 18}
-              y={top + fretSpacing / 2 + 5}
-              fontSize="11"
-              fontWeight="bold"
-              fill="var(--color-ns-amber)"
-              textAnchor="middle"
-            >
-              +{capo}fr
-            </text>
-            <rect
-              x={left - 4}
-              y={top - 5}
-              width={spacing * (n - 1) + 8}
-              height={8}
-              rx={3}
-              fill="var(--color-ns-amber)"
-              opacity={0.95}
-            />
+            {leftFretNumber > 0 && (
+              <text
+                x={left - 20}
+                y={top + fretSpacing / 2 + 5}
+                fontSize="11"
+                fontWeight="bold"
+                fill="var(--color-ns-amber)"
+                textAnchor="middle"
+              >
+                +{leftFretNumber}fr
+              </text>
+            )}
+            {startFret === 0 && !isPreNormalized && (
+              <rect
+                x={left - 4}
+                y={top - 5}
+                width={spacing * (n - 1) + 8}
+                height={8}
+                rx={3}
+                fill="var(--color-ns-amber)"
+                opacity={0.95}
+              />
+            )}
           </g>
-        ) : startFret > 0 ? (
-          <text
-            x={left - 18}
-            y={top + fretSpacing / 2 + 5}
-            fontSize="12"
-            fontWeight="bold"
-            fill="var(--color-ns-amber)"
-            textAnchor="middle"
-          >
-            {startFret + 1}fr
-          </text>
         ) : (
-          <rect
-            x={left}
-            y={top - 4}
-            width={spacing * (n - 1)}
-            height={5}
-            rx={1}
-            fill="var(--color-ns-text)"
-          />
+          <>
+            {leftFretNumber > 0 && (
+              <text
+                x={left - 20}
+                y={top + fretSpacing / 2 + 5}
+                fontSize="11.5"
+                fontWeight="bold"
+                fill="var(--color-ns-amber)"
+                textAnchor="middle"
+              >
+                +{leftFretNumber}fr
+              </text>
+            )}
+            {startFret === 0 && !isPreNormalized && (
+              <rect
+                x={left}
+                y={top - 4}
+                width={spacing * (n - 1)}
+                height={5}
+                rx={1}
+                fill="var(--color-ns-text)"
+              />
+            )}
+          </>
         )}
 
         {/* Fingerboard: a plain board, no fret lines */}

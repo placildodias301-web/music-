@@ -1,8 +1,22 @@
 /**
- * Universal Interval Engine
- * Maps semitone distances and chord scale degrees to formal interval names,
+ * Universal Interval Engine — Phase 2
+ * Maps semitone distances, chord degrees, and note spellings to formal interval names,
  * abbreviations, and harmonic functions.
+ * Full support for Perfect, Major, Minor, Augmented, Diminished,
+ * Doubly Augmented, and Doubly Diminished intervals across simple and compound spans.
  */
+
+import type {
+  Interval,
+  IntervalQuality,
+  NoteSpelling,
+} from "./coreTypes";
+import {
+  DIATONIC_LETTERS,
+  noteSpellingToMidi,
+  parseNoteSpelling,
+  spellDiatonicOffset,
+} from "./notes";
 
 export interface IntervalInfo {
   semitones: number;
@@ -39,14 +53,36 @@ export const INTERVAL_TABLE: Record<number, { name: string; shortName: string; d
   21: { name: "Major 13th", shortName: "13", degree: 13, quality: "major" },
 };
 
+/** Perfect diatonic intervals (degree % 7) */
+const PERFECT_DEGREES = new Set([1, 4, 5]);
+
+/** Standard semitones for Major/Perfect intervals by degree (1 to 15) */
+const MAJOR_OR_PERFECT_SEMITONES: Record<number, number> = {
+  1: 0,
+  2: 2,
+  3: 4,
+  4: 5,
+  5: 7,
+  6: 9,
+  7: 11,
+  8: 12,
+  9: 14,
+  10: 16,
+  11: 17,
+  12: 19,
+  13: 21,
+  14: 23,
+  15: 24,
+};
+
 /**
- * Returns formal interval information based on semitones from root and optionally a target degree.
+ * Returns formal interval information based on semitones from root and optional target degree.
  */
 export function getIntervalInfo(semitones: number, degreeHint?: number): IntervalInfo {
   const normalizedSemi = ((semitones % 12) + 12) % 12;
   const compound = semitones > 12;
-  
-  // Specific degree overrides for augmented/diminished intervals (e.g. #5 vs b6, b5 vs #4)
+
+  // Specific degree overrides for augmented/diminished intervals
   if (degreeHint === 5 && normalizedSemi === 6) {
     return {
       semitones,
@@ -173,4 +209,169 @@ export function getSemitonesForDegree(
     default:
       return Math.min(24, Math.max(0, (degree - 1) * 2));
   }
+}
+
+/**
+ * Complete theoretical interval determination between two spelled notes.
+ * Distinguishes between enharmonics (e.g. C to F# is Augmented 4th, C to Gb is Diminished 5th).
+ */
+export function intervalBetween(
+  noteA: string | NoteSpelling,
+  noteB: string | NoteSpelling
+): Interval {
+  const spA = typeof noteA === "string" ? parseNoteSpelling(noteA) : noteA;
+  const spB = typeof noteB === "string" ? parseNoteSpelling(noteB) : noteB;
+
+  const midiA = noteSpellingToMidi(spA);
+  const midiB = noteSpellingToMidi(spB);
+  const semitones = midiB - midiA;
+
+  const letterIdxA = DIATONIC_LETTERS.indexOf(spA.letter);
+  const letterIdxB = DIATONIC_LETTERS.indexOf(spB.letter);
+
+  let diatonicStepDiff = letterIdxB - letterIdxA;
+  let octaveDiff = spB.octave - spA.octave;
+
+  if (diatonicStepDiff < 0) {
+    diatonicStepDiff += 7;
+    octaveDiff -= 1;
+  }
+
+  const degree = diatonicStepDiff + 1 + octaveDiff * 7;
+  const isCompound = degree > 8 || semitones > 12;
+
+  // Reduced simple degree in 1..7 for quality check
+  const simpleDegree = (((degree - 1) % 7) + 7) % 7 + 1;
+  const octaveSpan = Math.floor((degree - 1) / 7);
+
+  const baseMajorOrPerfect = (MAJOR_OR_PERFECT_SEMITONES[simpleDegree] ?? 0) + octaveSpan * 12;
+  const diff = semitones - baseMajorOrPerfect;
+
+  const isPerfectType = PERFECT_DEGREES.has(simpleDegree);
+  let quality: IntervalQuality = "perfect";
+  let prefix = "";
+
+  if (isPerfectType) {
+    if (diff === 0) {
+      quality = "perfect";
+      prefix = "P";
+    } else if (diff === 1) {
+      quality = "augmented";
+      prefix = "A";
+    } else if (diff === 2) {
+      quality = "doubly_augmented";
+      prefix = "AA";
+    } else if (diff === -1) {
+      quality = "diminished";
+      prefix = "d";
+    } else if (diff === -2) {
+      quality = "doubly_diminished";
+      prefix = "dd";
+    } else if (diff > 2) {
+      quality = "doubly_augmented";
+      prefix = `+${diff}`;
+    } else {
+      quality = "doubly_diminished";
+      prefix = `${diff}`;
+    }
+  } else {
+    // Major type
+    if (diff === 0) {
+      quality = "major";
+      prefix = "M";
+    } else if (diff === -1) {
+      quality = "minor";
+      prefix = "m";
+    } else if (diff === -2) {
+      quality = "diminished";
+      prefix = "d";
+    } else if (diff === -3) {
+      quality = "doubly_diminished";
+      prefix = "dd";
+    } else if (diff === 1) {
+      quality = "augmented";
+      prefix = "A";
+    } else if (diff === 2) {
+      quality = "doubly_augmented";
+      prefix = "AA";
+    } else if (diff > 2) {
+      quality = "doubly_augmented";
+      prefix = `+${diff}`;
+    } else {
+      quality = "doubly_diminished";
+      prefix = `${diff}`;
+    }
+  }
+
+  const DEGREE_NAMES: Record<number, string> = {
+    1: "Unison",
+    2: "2nd",
+    3: "3rd",
+    4: "4th",
+    5: "5th",
+    6: "6th",
+    7: "7th",
+    8: "Octave",
+    9: "9th",
+    10: "10th",
+    11: "11th",
+    12: "12th",
+    13: "13th",
+    14: "14th",
+    15: "15th",
+  };
+
+  const degreeName = DEGREE_NAMES[degree] ?? `${degree}th`;
+  const qualityCapitalized = quality.replace("_", " ").replace(/\b\w/g, (c) => c.toUpperCase());
+  const fullName = `${qualityCapitalized} ${degreeName}`;
+  const shortName = `${prefix}${degree}`;
+
+  return {
+    degree,
+    quality,
+    semitones,
+    shortName,
+    fullName,
+    isCompound,
+  };
+}
+
+/**
+ * Transposes a note by a theoretical interval.
+ */
+export function transposeNote(note: string | NoteSpelling, interval: Interval | string): NoteSpelling {
+  const sp = typeof note === "string" ? parseNoteSpelling(note) : note;
+  if (typeof interval === "string") {
+    // Parse shorthand like "P5", "m3", "M7", "A4", "d5", "M9"
+    const m = interval.trim().match(/^(P|M|m|A|AA|d|dd)?(\d+)$/i);
+    if (!m) throw new Error(`Unknown interval symbol: '${interval}'`);
+    const qPrefix = m[1] ?? "P";
+    const deg = parseInt(m[2], 10);
+    const simpleDeg = (((deg - 1) % 7) + 7) % 7 + 1;
+    const octSpan = Math.floor((deg - 1) / 7);
+    const baseSemi = (MAJOR_OR_PERFECT_SEMITONES[simpleDeg] ?? 0) + octSpan * 12;
+    let offset = 0;
+    if (qPrefix === "m") offset = -1;
+    else if (qPrefix === "d") offset = PERFECT_DEGREES.has(simpleDeg) ? -1 : -2;
+    else if (qPrefix === "dd") offset = PERFECT_DEGREES.has(simpleDeg) ? -2 : -3;
+    else if (qPrefix === "A") offset = 1;
+    else if (qPrefix === "AA") offset = 2;
+    const targetSemitones = baseSemi + offset;
+    return spellDiatonicOffset(sp, deg, targetSemitones);
+  }
+
+  return spellDiatonicOffset(sp, interval.degree, interval.semitones);
+}
+
+/**
+ * Inverts an interval (e.g. M3 -> m6, P5 -> P4, A4 -> d5)
+ */
+export function invertInterval(interval: Interval): Interval {
+  const simpleDegree = (((interval.degree - 1) % 7) + 7) % 7 + 1;
+  const invertedDegree = 9 - simpleDegree;
+  const invertedSemitones = ((12 - (interval.semitones % 12)) % 12);
+
+  const dummyRoot: NoteSpelling = { letter: "C", accidental: "", alteration: 0, octave: 4 };
+  const targetNote = spellDiatonicOffset(dummyRoot, invertedDegree, invertedSemitones);
+  return intervalBetween(dummyRoot, targetNote);
 }

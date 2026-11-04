@@ -154,7 +154,7 @@ export function InstrumentVoicings({ chords, songKey, playingChord, selectedChor
         <div className="flex flex-wrap items-center gap-2">
         <div className="w-44">
           <InstrumentPicker
-            label="More instruments"
+            label="Instrument"
             variant="field"
             value={extraId ?? (CORE_VIEWS.includes(view) ? view : "guitar")}
             definitions={chordInstruments()}
@@ -167,27 +167,6 @@ export function InstrumentVoicings({ chords, songKey, playingChord, selectedChor
               }
             }}
           />
-        </div>
-        <div className="flex gap-1 rounded-xl border border-[var(--color-ns-border)] bg-[var(--color-ns-bg)] p-1" role="tablist" aria-label="Instrument">
-          {(["guitar", "ukulele", "piano"] as InstrumentView[]).map((v) => (
-            <button
-              key={v}
-              type="button"
-              role="tab"
-              aria-selected={view === v && !extraId}
-              onClick={() => {
-                setView(v);
-                setExtraId(null);
-              }}
-              className={`rounded-lg px-3.5 py-1.5 text-xs font-semibold capitalize transition-all ${
-                view === v && !extraId
-                  ? "bg-[var(--color-ns-coral)] font-bold text-[var(--color-ns-ink)] shadow-sm"
-                  : "text-[var(--color-ns-muted)] hover:text-[var(--color-ns-text)]"
-              }`}
-            >
-              {v}
-            </button>
-          ))}
         </div>
         </div>
       </div>

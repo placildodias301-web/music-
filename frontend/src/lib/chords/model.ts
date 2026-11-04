@@ -555,7 +555,7 @@ export function loadChordSettings(): ChordSettings {
         definitionId: def.id,
         tuningId: typeof v.tuningId === "string" ? v.tuningId : undefined,
         inversion: typeof v.inversion === "number" ? v.inversion : 0,
-        capo: typeof v.capo === "number" ? v.capo : 0,
+        capo: 0,
         leftHanded: typeof v.leftHanded === "boolean" ? v.leftHanded : false,
         voicingFilter: v.voicingFilter ?? "all",
         audioMode: v.audioMode ?? "samples",

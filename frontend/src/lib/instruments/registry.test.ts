@@ -300,9 +300,9 @@ describe("instrument-aware chords", () => {
     expect(kind("harp")).toBe("harp");
     expect(kind("accordion")).toBe("accordion");
     expect(kind("flute")).toBe("wind");
-    // sitar and oud get the notes to play, one at a time — not a fretboard
-    expect(kind("sitar")).toBe("wind");
-    expect(kind("oud")).toBe("wind");
+    // sitar and oud have authentic modal representations (drones, Sargam / Maqam)
+    expect(kind("sitar")).toBe("modal");
+    expect(kind("oud")).toBe("modal");
     // tabla and timpani have no chord at all
     expect(buildChordModel(ch("C"), def("tabla"), { inversion: 0 })).toBeNull();
     expect(buildChordModel(ch("C"), def("timpani"), { inversion: 0 })).toBeNull();

@@ -15,6 +15,12 @@ import { midiToFrequency } from "../theory/notes";
 import { findCompatibleScales, type ScaleInfo } from "../theory/scales";
 import { assignFingers, type FingeringResult } from "./fingering";
 import { describeChord, type ChordDescription } from "./describe";
+import {
+  getChordScaleGuide,
+  type ChordScaleGuide,
+} from "../theory/harmony";
+
+export * from "../theory/harmony";
 
 export interface PlayedStringAnalysis {
   stringIndex: number;      // 0-indexed: 0 = lowest pitch string
@@ -56,6 +62,7 @@ export interface ChordAnalysis {
   description: ChordDescription;
   diatonicKeys: DiatonicKeyRelation[];
   relatedScales: ScaleInfo[];
+  scaleGuide: ChordScaleGuide;
   comparison: {
     relativeChord: string;
     description: string;
@@ -174,6 +181,7 @@ export function analyzeChord(parsed: ParsedChord): ChordAnalysis {
     description,
     diatonicKeys,
     relatedScales,
+    scaleGuide: getChordScaleGuide(parsed),
     comparison,
   };
 }

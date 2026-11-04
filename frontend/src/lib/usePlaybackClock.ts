@@ -23,6 +23,24 @@ export interface PlaybackClock {
   subscribe: (cb: (t: number) => void) => () => void;
 }
 
+/**
+ * play() rejects with AbortError whenever a pause(), seek or new src
+ * interrupts it (scrubbing the timeline, switching songs quickly). That is
+ * expected browser behaviour, not a playback failure.
+ */
+export function isBenignPlaybackError(err: unknown): boolean {
+  return err instanceof DOMException ? err.name === "AbortError" : (err as { name?: string } | null)?.name === "AbortError";
+}
+
+/** Sets currentTime, ignoring the InvalidStateError some browsers throw before metadata loads. */
+function safeSetTime(audio: HTMLAudioElement, t: number) {
+  try {
+    audio.currentTime = t;
+  } catch {
+    // Not seekable yet; the next seek or play starts from where the media is.
+  }
+}
+
 export function usePlaybackClock(audioRef: RefObject<HTMLAudioElement | null>, src: string | null): PlaybackClock {
   const [duration, setDuration] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -76,7 +94,7 @@ export function usePlaybackClock(audioRef: RefObject<HTMLAudioElement | null>, s
     const tick = () => {
       const range = loopRef.current;
       if (range && audio.currentTime >= range.end) {
-        audio.currentTime = range.start;
+        safeSetTime(audio, range.start);
       }
       publish();
       frame = requestAnimationFrame(tick);
@@ -103,8 +121,12 @@ export function usePlaybackClock(audioRef: RefObject<HTMLAudioElement | null>, s
       setDuration(Number.isFinite(audio.duration) ? audio.duration : 0);
       if (!pendingResume) return;
       pendingResume = false;
-      audio.currentTime = resumeAt;
-      if (resumePlaying) audio.play().catch(() => setIsPlaying(false));
+      safeSetTime(audio, resumeAt);
+      if (resumePlaying) {
+        audio.play().catch((err) => {
+          if (!isBenignPlaybackError(err)) setIsPlaying(false);
+        });
+      }
     };
     const onError = () => {
       setIsPlaying(false);
@@ -114,6 +136,16 @@ export function usePlaybackClock(audioRef: RefObject<HTMLAudioElement | null>, s
     audio.addEventListener("play", onPlay);
     audio.addEventListener("pause", onPause);
     audio.addEventListener("ended", onPause);
+    // A loop reaching the very end of the file (no frame ran before it stopped) starts again from the loop's start.
+    const onEnded = () => {
+      const range = loopRef.current;
+      if (!range) return;
+      safeSetTime(audio, range.start);
+      audio.play().catch((err) => {
+        if (!isBenignPlaybackError(err)) setIsPlaying(false);
+      });
+    };
+    audio.addEventListener("ended", onEnded);
     audio.addEventListener("seeked", onSeeked);
     audio.addEventListener("timeupdate", onTimeUpdate);
     audio.addEventListener("loadedmetadata", onMeta);
@@ -126,6 +158,7 @@ export function usePlaybackClock(audioRef: RefObject<HTMLAudioElement | null>, s
       audio.removeEventListener("play", onPlay);
       audio.removeEventListener("pause", onPause);
       audio.removeEventListener("ended", onPause);
+      audio.removeEventListener("ended", onEnded);
       audio.removeEventListener("seeked", onSeeked);
       audio.removeEventListener("timeupdate", onTimeUpdate);
       audio.removeEventListener("loadedmetadata", onMeta);
@@ -137,8 +170,16 @@ export function usePlaybackClock(audioRef: RefObject<HTMLAudioElement | null>, s
   const play = useCallback(() => {
     const audio = audioRef.current;
     if (!audio) return;
-    audio.play().catch(() => {
+    let pending: Promise<void> | undefined;
+    try {
+      pending = audio.play();
+    } catch {
       setIsPlaying(false);
+      return;
+    }
+    // Older engines return undefined instead of a promise.
+    pending?.catch((err) => {
+      if (!isBenignPlaybackError(err)) setIsPlaying(false);
     });
   }, [audioRef]);
 
@@ -156,8 +197,8 @@ export function usePlaybackClock(audioRef: RefObject<HTMLAudioElement | null>, s
       const audio = audioRef.current;
       if (!audio) return;
       const max = Number.isFinite(audio.duration) ? audio.duration : time;
-      const t = Math.min(Math.max(0, time), max);
-      audio.currentTime = t;
+      const t = Math.min(Math.max(0, Number.isFinite(time) ? time : 0), max);
+      safeSetTime(audio, t);
       publish();
     },
     [audioRef, publish]

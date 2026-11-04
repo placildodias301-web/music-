@@ -112,6 +112,8 @@ describe("pipeline analysis from the Upload page", () => {
     // Polling stopped at completion: exactly one poll answered "completed", none after it.
     expect(pollsAfterRelease).toBe(1);
     expect(calls.length).toBeGreaterThan(pollsBeforeRelease);
+    expect(getLibrary()).toHaveLength(0);
+    await user.click(await screen.findByRole("button", { name: "Save to Library" }));
     const saved = getLibrary()[0];
     expect(saved.analysis.engine).toBe("pipeline");
     expect(saved.analysis.chordProgression).toEqual(["Am7", "D7"]);
@@ -123,6 +125,8 @@ describe("pipeline analysis from the Upload page", () => {
     const { user } = await renderApp({ session, path: "/upload" });
     await analyse(user);
     await waitFor(() => expect(window.location.pathname).toBe("/analysis"), { timeout: 10_000 });
+    expect(getLibrary()).toHaveLength(0);
+    await user.click(await screen.findByRole("button", { name: "Save to Library" }));
     expect(getLibrary()[0].analysis.key).toBe("A Minor");
     expect(calls.filter((c) => c.url.includes(`/api/pipeline/jobs/${JOB}`))).toHaveLength(1);
   }, TIMEOUT);

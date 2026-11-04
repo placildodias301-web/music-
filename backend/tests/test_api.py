@@ -1757,12 +1757,25 @@ def test_build_score_puts_melody_right_hand_and_chords_left_hand():
     assert str(score.flatten().getElementsByClass("Key").first()) == "G major"
 
 
+def _wait_for_sheet_job(client, job_id, timeout=10.0):
+    """Generation runs in a background thread; poll its progress like the Sheet page does."""
+    import time
+
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        job = client.get(f"/api/sheet/progress/{job_id}").json()
+        if job["status"] in ("completed", "failed"):
+            return job
+        time.sleep(0.05)
+    raise AssertionError(f"sheet job {job_id} didn't finish: {job}")
+
+
 def test_sheet_generate_endpoint_returns_musicxml(client, tmp_path, monkeypatch):
     from services import sheet_generation
 
     seen = {}
 
-    def fake_generate(path, title, left_hand):
+    def fake_generate(path, title, left_hand, **_):
         seen.update(path=path, title=title, left_hand=left_hand)
         return {"title": title, "musicxml": "<score-partwise/>", "model": {}, "noteCount": 1}
 
@@ -1772,7 +1785,9 @@ def test_sheet_generate_endpoint_returns_musicxml(client, tmp_path, monkeypatch)
     with open(wav, "rb") as f:
         r = client.post("/api/sheet/generate?left_hand=bass", files={"file": ("My Song.wav", f, "audio/wav")})
     assert r.status_code == 200, r.text
-    assert r.json()["musicxml"] == "<score-partwise/>"
+    job = _wait_for_sheet_job(client, r.json()["job_id"])
+    assert job["status"] == "completed", job
+    assert job["result"]["musicxml"] == "<score-partwise/>"
     assert seen["title"] == "My Song" and seen["left_hand"] == "bass"
     assert not os.path.exists(seen["path"])  # the upload is deleted afterwards
 
@@ -1780,7 +1795,7 @@ def test_sheet_generate_endpoint_returns_musicxml(client, tmp_path, monkeypatch)
 def test_sheet_generate_says_when_there_is_no_singing(client, tmp_path, monkeypatch):
     from services import sheet_generation
 
-    def no_melody(path, title, left_hand):
+    def no_melody(path, title, left_hand, **_):
         raise sheet_generation.SheetError("No sung melody was found in this song.")
 
     monkeypatch.setattr(sheet_generation, "generate", no_melody)
@@ -1788,7 +1803,8 @@ def test_sheet_generate_says_when_there_is_no_singing(client, tmp_path, monkeypa
     _progression_wav(wav, ["C", "G"])
     with open(wav, "rb") as f:
         r = client.post("/api/sheet/generate", files={"file": ("s.wav", f, "audio/wav")})
-    assert r.status_code == 400 and "No sung melody" in r.json()["detail"]
+    job = _wait_for_sheet_job(client, r.json()["job_id"])
+    assert job["status"] == "failed" and "No sung melody" in job["error"]
 
 
 def test_flat_keys_are_spelled_with_flats_and_transpose_moves_everything(client):

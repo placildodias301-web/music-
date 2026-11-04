@@ -119,3 +119,8 @@ backend/pipeline_data/
 # ── Evaluation harness: reference clips (audio/video) and generated reports ──
 backend/evaluation/clips/
 backend/evaluation/reports/
+
+# Runtime caches written by the backend (per-deployment data, not source)
+backend/data/tutor_cache.json
+backend/data/tutor_cache.json.tmp
+backend/data/analysis_cache.json

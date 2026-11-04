@@ -25,9 +25,27 @@ def client():
 
 def test_scan_returns_musicxml(client, monkeypatch):
     monkeypatch.setattr(sheet_scan, "scan", lambda path: "<score-partwise><note/></score-partwise>")
-    r = client.post("/api/sheet/scan", files={"file": ("My Page.png", PNG, "image/png")})
+    r = client.post("/api/sheet/scan?sync=true", files={"file": ("My Page.png", PNG, "image/png")})
     assert r.status_code == 200
     assert r.json() == {"title": "My Page", "musicxml": "<score-partwise><note/></score-partwise>"}
+
+
+def test_scan_async_job_and_progress(client, monkeypatch):
+    import time
+    monkeypatch.setattr(sheet_scan, "scan", lambda path: "<score-partwise><note/></score-partwise>")
+    r = client.post("/api/sheet/scan", files={"file": ("My Page.png", PNG, "image/png")})
+    assert r.status_code == 200
+    body = r.json()
+    assert "job_id" in body and body["status"] == "processing"
+    jid = body["job_id"]
+
+    for _ in range(50):
+        time.sleep(0.05)
+        p = client.get(f"/api/sheet/progress/{jid}").json()
+        if p.get("status") == "completed":
+            break
+    assert p.get("status") == "completed"
+    assert p.get("result") == {"title": "My Page", "musicxml": "<score-partwise><note/></score-partwise>"}
 
 
 def test_scan_rejects_non_images(client):
@@ -41,14 +59,14 @@ def test_scan_reports_unreadable_pages_and_missing_install(client, monkeypatch):
         raise sheet_scan.SheetScanError("Couldn't find any notes in that picture.")
 
     monkeypatch.setattr(sheet_scan, "scan", unreadable)
-    r = client.post("/api/sheet/scan", files={"file": ("p.jpg", b"\xff\xd8\xff" + b"\x00" * 32, "image/jpeg")})
+    r = client.post("/api/sheet/scan?sync=true", files={"file": ("p.jpg", b"\xff\xd8\xff" + b"\x00" * 32, "image/jpeg")})
     assert r.status_code == 400 and "notes" in r.json()["detail"]
 
     def missing(path):
         raise ImportError("homr")
 
     monkeypatch.setattr(sheet_scan, "scan", missing)
-    r = client.post("/api/sheet/scan", files={"file": ("p.png", PNG, "image/png")})
+    r = client.post("/api/sheet/scan?sync=true", files={"file": ("p.png", PNG, "image/png")})
     assert r.status_code == 503 and "pip install homr" in r.json()["detail"]
 
 

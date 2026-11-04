@@ -115,22 +115,26 @@ export function SettingsSelect<T extends string>({
               onChange(o.value);
               close();
             }}
-            className="flex w-full items-center gap-3 px-4 py-2.5 text-left transition-colors hover:bg-[var(--color-ns-raised)] focus-visible:bg-[var(--color-ns-raised)] focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-55"
+            className={`flex w-full items-center gap-3 px-4 py-2.5 text-left transition-colors disabled:cursor-not-allowed disabled:opacity-55 ${
+              selected
+                ? "bg-purple-600/20 font-semibold text-purple-300"
+                : "text-slate-100 hover:bg-white/10 focus-visible:bg-white/10"
+            }`}
           >
             <span className="min-w-0 flex-1">
-              <span className={`block text-[0.875rem] ${selected ? "font-bold text-[var(--color-ns-text)]" : "font-medium text-[var(--color-ns-text)]"}`}>{o.label}</span>
-              {o.description && <span className="block text-[0.75rem] text-[var(--color-ns-muted)]">{o.description}</span>}
+              <span className={`block text-[0.875rem] ${selected ? "font-bold text-slate-100" : "font-medium text-slate-200"}`}>{o.label}</span>
+              {o.description && <span className="block text-[0.75rem] text-slate-400">{o.description}</span>}
             </span>
             {o.badge && <ComingSoonBadge label={o.badge} />}
             {selected && (
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className="shrink-0 text-[var(--color-ns-purple-light)]">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className="shrink-0 text-purple-400">
                 <path d="M20 6 9 17l-5-5" />
               </svg>
             )}
           </button>
         );
       })}
-      {extra && <div className="border-t border-[var(--color-ns-border)] px-4 pb-2 pt-3">{extra}</div>}
+      {extra && <div className="border-t border-white/15 px-4 pb-2 pt-3">{extra}</div>}
     </div>
   );
 
@@ -217,9 +221,9 @@ export function SettingsSelect<T extends string>({
           mobile ? (
             <div className="fixed inset-0 z-[100] flex items-end" role="dialog" aria-modal="true" aria-label={label}>
               <button type="button" aria-label="Close" tabIndex={-1} className="absolute inset-0 bg-black/60" onClick={() => close()} />
-              <div className="relative max-h-[80vh] w-full overflow-y-auto rounded-t-3xl border-t border-[var(--color-ns-border)] bg-[var(--color-ns-card)] pb-[max(env(safe-area-inset-bottom),12px)] shadow-2xl">
-                <div className="mx-auto mt-2.5 h-1 w-10 rounded-full bg-[var(--color-ns-border-strong)]" aria-hidden="true" />
-                <p className="px-4 pb-1 pt-3 font-heading text-base font-bold text-[var(--color-ns-text)]">{label}</p>
+              <div className="relative max-h-[80vh] w-full overflow-y-auto rounded-t-3xl border-t border-white/15 bg-[#0E121E] pb-[max(env(safe-area-inset-bottom),12px)] shadow-2xl">
+                <div className="mx-auto mt-2.5 h-1 w-10 rounded-full bg-white/20" aria-hidden="true" />
+                <p className="px-4 pb-1 pt-3 font-heading text-base font-bold text-slate-100">{label}</p>
                 {list}
               </div>
             </div>
@@ -227,7 +231,7 @@ export function SettingsSelect<T extends string>({
             <div className="fixed inset-0 z-[100]" role="dialog" aria-label={label}>
               <button type="button" aria-label="Close" tabIndex={-1} className="absolute inset-0 cursor-default" onClick={() => close()} />
               <div
-                className="absolute max-h-[min(370px,calc(100vh-16px))] overflow-y-auto rounded-xl border border-[var(--color-ns-border)] bg-[var(--color-ns-surface)] shadow-2xl backdrop-blur-md"
+                className="absolute max-h-[min(370px,calc(100vh-16px))] overflow-y-auto rounded-xl border border-white/15 bg-[#0E121E] bg-opacity-100 shadow-[0_16px_40px_rgba(0,0,0,0.85)] z-50"
                 style={
                   rect
                     ? variant === "field"

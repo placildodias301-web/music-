@@ -19,7 +19,7 @@ const GROUPS: { title: string; items: { keys: string[]; action: string }[] }[] =
       { keys: ["Space"], action: "Play / pause" },
       { keys: ["←"], action: "Back 5 seconds" },
       { keys: ["→"], action: "Forward 5 seconds" },
-      { keys: ["L"], action: "Loop the current chord / stop looping" },
+      { keys: ["L"], action: "Loop the whole song / stop looping" },
     ],
   },
   {

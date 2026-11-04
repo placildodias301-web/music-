@@ -67,6 +67,8 @@ describe("Successful analysis", () => {
     await waitFor(() => expect(window.location.pathname).toBe("/analysis"), { timeout: 3000 });
 
     // Saved as a completed Library song, with the full analysis.
+    expect(getLibrary()).toHaveLength(0);
+    await user.click(await screen.findByRole("button", { name: "Save to Library" }));
     const lib = getLibrary();
     expect(lib).toHaveLength(1);
     expect(lib[0].fileName).toBe(SONG_FILE);
@@ -83,7 +85,7 @@ describe("Successful analysis", () => {
 
     // The active song is restored too, so the chord sheet opens straight away.
     await refreshApp(second, { session, path: "/song/current" });
-    expect(await page().findByRole("button", { name: "Open Practice Studio" })).toBeInTheDocument();
+    expect(await page().findByRole("button", { name: "Practice This Song" })).toBeInTheDocument();
     const sheetText = page().getAllByRole("region").map((r) => r.textContent ?? "").join(" ");
     for (const chord of ["C", "G", "Am", "F"]) expect(sheetText).toContain(chord);
   });
@@ -101,7 +103,7 @@ describe("Failed or cancelled analysis is never saved as a completed song", () =
     await user.click(page().getByRole("button", { name: "Analyze Song" }));
 
     const alert = await screen.findByRole("alert");
-    expect(within(alert).getByRole("heading", { name: "We couldn't read the music in that file" })).toBeInTheDocument();
+    expect(within(alert).getByRole("heading", { name: "We couldn't hear any music in this file" })).toBeInTheDocument();
     expect(alert).toHaveTextContent("That file could not be decoded as audio.");
     expect(within(alert).getByRole("button", { name: "Retry" })).toBeInTheDocument();
 
@@ -122,7 +124,7 @@ describe("Failed or cancelled analysis is never saved as a completed song", () =
     await user.click(page().getByRole("button", { name: "Analyze Song" }));
 
     const alert = await screen.findByRole("alert");
-    expect(alert).toHaveTextContent(/connection closed before analysis finished/i);
+    expect(alert).toHaveTextContent(/connection dropped before the analysis finished/i);
     expect(getLibrary()).toEqual([]);
   });
 
@@ -137,7 +139,7 @@ describe("Failed or cancelled analysis is never saved as a completed song", () =
     await user.click(await screen.findByRole("button", { name: "Cancel" }));
 
     expect(xhrBehaviour.instances[0].aborted).toBe(true);
-    expect(await page().findByRole("alert")).toHaveTextContent("Analysis cancelled.");
+    expect(await page().findByRole("alert")).toHaveTextContent("You stopped the analysis. Nothing was saved.");
     expect(page().getByRole("heading", { name: "Select media" })).toBeInTheDocument();
     expect(getLibrary()).toEqual([]);
     expect(JSON.parse(localStorage.getItem("wilsify_library_v1") ?? "[]")).toEqual([]);
@@ -191,7 +193,7 @@ describe("Backend offline", () => {
     await user.click(page().getByRole("button", { name: "Analyze Song" }));
 
     const alert = await screen.findByRole("alert");
-    expect(within(alert).getByRole("heading", { name: "Can't reach the Wilsify server" })).toBeInTheDocument();
+    expect(within(alert).getByRole("heading", { name: "We can't reach Wilsify right now" })).toBeInTheDocument();
     expect(alert).toHaveTextContent(/isn't responding/i);
     expect(getLibrary()).toEqual([]); // nothing half-saved
 
@@ -199,6 +201,8 @@ describe("Backend offline", () => {
 
     await waitFor(() => expect(window.location.pathname).toBe("/analysis"), { timeout: 3000 });
     expect(xhrBehaviour.instances).toHaveLength(2);
+    expect(getLibrary()).toHaveLength(0);
+    await user.click(await screen.findByRole("button", { name: "Save to Library" }));
     expect(getLibrary()).toHaveLength(1);
   });
 
@@ -209,7 +213,7 @@ describe("Backend offline", () => {
     await user.click(page().getByRole("button", { name: "Analyze Song" }));
 
     const alert = await screen.findByRole("alert");
-    expect(within(alert).getByRole("heading", { name: "The server is busy" })).toBeInTheDocument();
+    expect(within(alert).getByRole("heading", { name: "Wilsify is busy right now" })).toBeInTheDocument();
     expect(within(alert).getByRole("button", { name: "Retry" })).toBeInTheDocument();
     expect(getLibrary()).toEqual([]);
   });

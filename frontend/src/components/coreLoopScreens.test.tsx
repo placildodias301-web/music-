@@ -139,7 +139,7 @@ describe("ErrorBanner", () => {
       </ErrorBoundary>,
     );
     const alert = screen.getByRole("alert");
-    expect(within(alert).getByRole("heading", { name: "Something went wrong" })).toBeInTheDocument();
+    expect(within(alert).getByRole("heading", { name: "This page hit a problem" })).toBeInTheDocument();
     await user.click(within(alert).getByRole("button", { name: "Technical details" }));
     expect(alert).toHaveTextContent("boom Bearer [token redacted]");
     expect(alert).not.toHaveTextContent("doNotLeakThisSignature");
@@ -177,7 +177,7 @@ describe("Empty states and next-step CTAs", () => {
     expect(page().getByText("Choose a song from your Library or upload a new one.")).toBeInTheDocument();
     expect(page().getByRole("link", { name: "Upload a song" })).toHaveAttribute("href", "/upload");
     // Practice Studio can't open without a song, and says why.
-    const practice = page().getByRole("button", { name: "Open Practice Studio" });
+    const practice = page().getByRole("button", { name: "Practice This Song" });
     expect(practice).toBeDisabled();
     expect(practice).toHaveAttribute("title", "Analyze or select a song first to open Practice Studio");
 
@@ -194,7 +194,7 @@ describe("Empty states and next-step CTAs", () => {
     const saved = seedSong();
     const { user } = await renderApp({ session, path: `/song/${saved.id}` });
 
-    expect(await page().findByRole("button", { name: "Open Practice Studio" })).toBeInTheDocument();
+    expect(await page().findByRole("button", { name: "Practice This Song" })).toBeInTheDocument();
 
     // The chord sheet is rendered even though there are no lyrics: every chord of the progression is on it.
     const sheetSections = page().getAllByRole("region");
@@ -264,7 +264,7 @@ describe("Supabase sync failure", () => {
     expect(await page().findByText("core_loop_test")).toBeInTheDocument();
     expect(warn).toHaveBeenCalled();
     await user.click(page().getByRole("button", { name: "Open" }));
-    expect(await page().findByRole("button", { name: "Open Practice Studio" })).toBeInTheDocument();
+    expect(await page().findByRole("button", { name: "Practice This Song" })).toBeInTheDocument();
     expect(window.location.pathname).toBe(`/song/${saved.id}`);
 
     // Nothing was lost locally.
@@ -310,7 +310,7 @@ describe("Song sheet: lyrics are the same on /song/current and /song/:songId", (
   it("lyrics saved on /song/current are visible when the song is opened from the Library (/song/:songId)", async () => {
     const saved = seedSong();
     const { user } = await renderApp({ session, path: "/song/current" });
-    expect(await page().findByRole("button", { name: "Open Practice Studio" })).toBeInTheDocument();
+    expect(await page().findByRole("button", { name: "Practice This Song" })).toBeInTheDocument();
 
     await addLyrics(user);
 
@@ -326,7 +326,7 @@ describe("Song sheet: lyrics are the same on /song/current and /song/:songId", (
   it("lyrics saved on /song/:songId are visible on /song/current, including after a full refresh", async () => {
     const saved = seedSong();
     const first = await renderApp({ session, path: `/song/${saved.id}` });
-    expect(await page().findByRole("button", { name: "Open Practice Studio" })).toBeInTheDocument();
+    expect(await page().findByRole("button", { name: "Practice This Song" })).toBeInTheDocument();
 
     await addLyrics(first.user);
 
@@ -354,7 +354,7 @@ describe("Transpose, capo and simplify persist across a refresh", () => {
     });
     const first = await renderApp({ session, path: `/song/${saved.id}` });
     const { user } = first;
-    await page().findByRole("button", { name: "Open Practice Studio" });
+    await page().findByRole("button", { name: "Practice This Song" });
 
     await user.click(page().getByRole("button", { name: "Transpose up one semitone" }));
     await user.click(page().getByRole("button", { name: "Transpose up one semitone" }));
@@ -372,7 +372,7 @@ describe("Transpose, capo and simplify persist across a refresh", () => {
 
     // Refresh the page: React state is gone, storage survives.
     await refreshApp(first, { session, path: `/song/${saved.id}` });
-    await page().findByRole("button", { name: "Open Practice Studio" });
+    await page().findByRole("button", { name: "Practice This Song" });
 
     expect(page().getByText("+2")).toBeInTheDocument();
     expect(page().getByRole("checkbox", { name: "Simplify chords" })).toBeChecked();

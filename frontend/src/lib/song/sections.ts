@@ -107,22 +107,88 @@ export function buildLyricSections(analysis: AnalysisResult, lyrics: ParsedLyric
   return [...result, ...out.filter((s) => s.startTime === null)];
 }
 
+/** Bar start times from `from` to `end`: the tracked downbeats when available, else BPM × beats per bar. */
+function barBounds(analysis: AnalysisResult, from: number, end: number): number[] {
+  const downbeats = analysis.downbeats ?? [];
+  let bounds: number[];
+  if (downbeats.length > 1) {
+    bounds = [from, ...downbeats.filter((d) => d > from + 0.2 && d < end - 0.2)];
+  } else {
+    const perBar = (60 / Math.max(analysis.bpm, 1)) * (analysis.beatsPerBar ?? 4);
+    bounds = [];
+    for (let t = from; t < end - 0.2; t += perBar) bounds.push(t);
+  }
+  bounds.push(end);
+  return bounds;
+}
+
+/** Chord-only lines of `barsPerLine` bars each over [from, end). */
+function barLines(analysis: AnalysisResult, from: number, end: number, barsPerLine: number, idPrefix: string): LyricLine[] {
+  const timeline = analysis.chordTimeline;
+  const bounds = barBounds(analysis, from, end);
+  const lineBounds: [number, number][] = [];
+  for (let i = 0; i + 1 < bounds.length; i += barsPerLine) lineBounds.push([bounds[i], bounds[Math.min(i + barsPerLine, bounds.length - 1)]]);
+  return lineBounds
+    .map(([a, b], i): LyricLine => {
+      const chords: ChordEvent[] = chordsForInterval(timeline, a, b).map(({ seg, carried }) => ({
+        originalChord: seg.chord,
+        time: seg.start,
+        endTime: Math.min(seg.end, b),
+        charIndex: 0,
+        confidence: seg.confidence,
+        carried,
+      }));
+      return { id: `${idPrefix}${i}`, text: "", startTime: a, endTime: b, instrumental: true, chords };
+    })
+    .filter((l) => l.chords.length);
+}
+
+/** allin1-style labels from the analysis → sheet section kinds. */
+const DETECTED_KIND: Record<string, SectionKind> = {
+  intro: "Intro",
+  verse: "Verse",
+  chorus: "Chorus",
+  bridge: "Bridge",
+  solo: "Solo",
+  inst: "Instrumental",
+  break: "Instrumental",
+  outro: "Outro",
+};
+
+/**
+ * Sections the analysis itself detected (intro / verse / chorus …), used for
+ * the chords-only sheet when there are at least two. Repeated kinds are
+ * numbered ("Verse 1", "Verse 2"); a lone chorus stays "Chorus".
+ */
+export function buildDetectedSections(analysis: AnalysisResult, barsPerLine = 4): SongSection[] {
+  const detected = (analysis.sections ?? []).filter((s) => s.end - s.start > 0.5 && DETECTED_KIND[s.label.toLowerCase()]);
+  if (detected.length < 2 || !analysis.chordTimeline.length) return [];
+  const totals = new Map<SectionKind, number>();
+  detected.forEach((s) => {
+    const k = DETECTED_KIND[s.label.toLowerCase()];
+    totals.set(k, (totals.get(k) ?? 0) + 1);
+  });
+  const seen = new Map<SectionKind, number>();
+  const out: SongSection[] = [];
+  detected.forEach((s, i) => {
+    const kind = DETECTED_KIND[s.label.toLowerCase()];
+    const n = (seen.get(kind) ?? 0) + 1;
+    seen.set(kind, n);
+    const numbered = (totals.get(kind) ?? 0) > 1 && (kind === "Verse" || kind === "Chorus" || kind === "Bridge" || kind === "Solo" || kind === "Instrumental");
+    const lines = barLines(analysis, s.start, s.end, barsPerLine, `d${i}l`);
+    if (lines.length) out.push(section(`d${i}`, numbered ? `${kind} ${n}` : kind, kind, "inferred", lines));
+  });
+  return out.length >= 2 ? out : [];
+}
+
 /** No lyrics: a chords-only sheet. Bars come from the tracked downbeats when available. */
 export function buildChordOnlySections(analysis: AnalysisResult, barsPerLine = 4, linesPerSection = 2): SongSection[] {
   const timeline = analysis.chordTimeline;
   if (!timeline.length) return [];
+  const detected = buildDetectedSections(analysis, barsPerLine);
+  if (detected.length) return detected;
   const end = analysis.durationSeconds || timeline[timeline.length - 1].end;
-  const downbeats = analysis.downbeats ?? [];
-  let bounds: number[];
-  if (downbeats.length > 1) {
-    bounds = [timeline[0].start, ...downbeats.filter((d) => d > timeline[0].start + 0.2)];
-    bounds.push(end);
-  } else {
-    const perBar = (60 / Math.max(analysis.bpm, 1)) * (analysis.beatsPerBar ?? 4);
-    bounds = [];
-    for (let t = timeline[0].start; t < end; t += perBar) bounds.push(t);
-    bounds.push(end);
-  }
+  const bounds = barBounds(analysis, timeline[0].start, end);
   const lineBounds: [number, number][] = [];
   for (let i = 0; i + 1 < bounds.length; i += barsPerLine) lineBounds.push([bounds[i], bounds[Math.min(i + barsPerLine, bounds.length - 1)]]);
 

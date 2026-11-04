@@ -11,6 +11,7 @@ import type { AnalysisResult } from "./api";
 import { SYNCED_KEYS, syncList } from "./cloudSync";
 import { loadLyrics, saveLyrics, validateLyrics, type StoredLyrics } from "./song/songStore";
 import type { PracticePreferences } from "./practicePreferences";
+import { validateChordEdits, type ChordEdit } from "./song/chordEdits";
 
 const STORAGE_KEY = SYNCED_KEYS.library;
 
@@ -25,12 +26,14 @@ export interface SavedAnalysis {
   lyrics?: StoredLyrics | null;
   /** Optional saved semitone transpose (-12 to +12). */
   transpose?: number;
-  /** Optional saved capo fret (0 to 7). */
+  /** Optional saved capo fret (0 to 12). */
   capo?: number;
   /** Optional chord simplification state for the synced chord sheet. */
   simplify?: boolean;
   /** Optional persisted practice preferences (speed, loop, metronome, mode). */
   practicePreferences?: PracticePreferences;
+  /** User corrections replayed over `analysis.chordTimeline` (the analysis itself is never changed). */
+  chordEdits?: ChordEdit[];
   /** ISO timestamp of the latest song-state edit (lyrics/transpose/capo/simplify). */
   stateUpdatedAt?: string;
 }
@@ -41,6 +44,7 @@ export interface LibrarySongStatePatch {
   capo?: number;
   simplify?: boolean;
   practicePreferences?: PracticePreferences;
+  chordEdits?: ChordEdit[];
 }
 
 export function validateTranspose(value: number): number {
@@ -51,8 +55,8 @@ export function validateTranspose(value: number): number {
 }
 
 export function validateCapo(value: number): number {
-  if (typeof value !== "number" || !Number.isInteger(value) || value < 0 || value > 7) {
-    throw new RangeError("Capo must be an integer between 0 and 7.");
+  if (typeof value !== "number" || !Number.isInteger(value) || value < 0 || value > 12) {
+    throw new RangeError("Capo must be an integer between 0 and 12.");
   }
   return value;
 }
@@ -108,6 +112,13 @@ function normalizeEntry(rawItem: unknown): SavedAnalysis | null {
       delete normalized.lyrics;
     }
   }
+  if (normalized.chordEdits !== undefined) {
+    try {
+      normalized.chordEdits = validateChordEdits(normalized.chordEdits);
+    } catch {
+      delete normalized.chordEdits;
+    }
+  }
   if (normalized.practicePreferences !== undefined && (typeof normalized.practicePreferences !== "object" || normalized.practicePreferences === null)) {
     delete normalized.practicePreferences;
   }
@@ -126,6 +137,9 @@ function readAll(): SavedAnalysis[] {
   }
 }
 
+/** Fired after every library write so the sidebar count and other open views follow saves and deletes immediately. */
+export const LIBRARY_CHANGED_EVENT = "wilsify:library-changed";
+
 function writeAll(items: SavedAnalysis[]) {
   const before = readAll();
   // Offline-first: write localStorage BEFORE attempting cloud sync.
@@ -134,6 +148,7 @@ function writeAll(items: SavedAnalysis[]) {
   } catch {
     // localStorage full/unavailable — non-fatal
   }
+  window.dispatchEvent(new Event(LIBRARY_CHANGED_EVENT));
   syncList("library", before, items);
 }
 
@@ -208,6 +223,8 @@ export function saveToLibrary(
       (analysis.fileName && item.fileName === analysis.fileName)
   );
   const existingLocalLyrics = loadLyrics(`file:${stripped}`) ?? (existing ? loadLyrics(existing.id) : null);
+  // Chord corrections made before the song was saved come along with it.
+  const localChordEdits = existing?.chordEdits?.length ? null : loadChordEdits(stripped, stripped);
 
   const patchTranspose = statePatch?.transpose !== undefined ? validateTranspose(statePatch.transpose) : undefined;
   const patchCapo = statePatch?.capo !== undefined ? validateCapo(statePatch.capo) : undefined;
@@ -238,6 +255,9 @@ export function saveToLibrary(
     if (patchSimplify !== undefined) {
       existing.simplify = patchSimplify;
     }
+    if (localChordEdits?.length) {
+      existing.chordEdits = localChordEdits;
+    }
     writeAll(items);
     if (existing.lyrics) {
       saveLyrics(existing.id, existing.lyrics, { skipLibrarySync: true });
@@ -257,6 +277,7 @@ export function saveToLibrary(
     ...(patchTranspose !== undefined ? { transpose: patchTranspose } : {}),
     ...(effectiveCapo !== undefined ? { capo: effectiveCapo } : {}),
     ...(patchSimplify !== undefined ? { simplify: patchSimplify } : {}),
+    ...(localChordEdits?.length ? { chordEdits: localChordEdits } : {}),
     ...(effectiveLyrics
       ? { lyrics: effectiveLyrics, stateUpdatedAt: effectiveLyrics.updatedAt ?? nowIso }
       : { stateUpdatedAt: nowIso }),
@@ -358,6 +379,7 @@ export function updateLibrarySongState(fileNameOrId: string, patch: LibrarySongS
   const validatedCapo = patch.capo !== undefined ? validateCapo(patch.capo) : undefined;
   const validatedSimplify = typeof patch.simplify === "boolean" ? patch.simplify : undefined;
   const validatedLyrics = patch.lyrics !== undefined ? validateLyrics(patch.lyrics) : undefined;
+  const validatedChordEdits = patch.chordEdits !== undefined ? validateChordEdits(patch.chordEdits) : undefined;
 
   const items = readAll();
   const trimmed = fileNameOrId.trim();
@@ -396,6 +418,9 @@ export function updateLibrarySongState(fileNameOrId: string, patch: LibrarySongS
   }
   if (patch.practicePreferences !== undefined) {
     target.practicePreferences = patch.practicePreferences;
+  }
+  if (validatedChordEdits !== undefined) {
+    target.chordEdits = validatedChordEdits;
   }
   target.stateUpdatedAt = nowIso;
   writeAll(items);
@@ -441,4 +466,36 @@ export function pruneLibrary(maxAgeDays: number): number {
 export function clearLibrary() {
   writeAll([]);
   clearActiveSongRef();
+}
+
+const chordEditsKey = (ref: string) => `wilsify.song.chordEdits.${ref.startsWith("file:") ? ref.slice(5) : ref}`;
+
+/**
+ * Chord corrections for a song: from its Library record when saved, otherwise
+ * from this device (keyed by file name, so they follow the song when it is saved).
+ */
+export function loadChordEdits(songIdOrFile: string, fileName?: string): ChordEdit[] {
+  const saved = resolveLibrarySong(songIdOrFile) ?? (fileName ? resolveLibrarySong(fileName) : null);
+  if (saved?.chordEdits) return saved.chordEdits;
+  for (const ref of [fileName, saved?.fileName, songIdOrFile]) {
+    if (!ref) continue;
+    try {
+      const raw = localStorage.getItem(chordEditsKey(ref));
+      if (raw) return validateChordEdits(JSON.parse(raw));
+    } catch {
+      // unreadable or invalid: ignore
+    }
+  }
+  return [];
+}
+
+export function saveChordEdits(songIdOrFile: string, fileName: string, edits: ChordEdit[]): void {
+  const valid = validateChordEdits(edits);
+  try {
+    if (valid.length) localStorage.setItem(chordEditsKey(fileName), JSON.stringify(valid));
+    else localStorage.removeItem(chordEditsKey(fileName));
+  } catch {
+    // storage full/unavailable: the Library record below still keeps them when saved
+  }
+  updateLibrarySongState(songIdOrFile || fileName, { chordEdits: valid });
 }

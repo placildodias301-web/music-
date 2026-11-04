@@ -1,0 +1,186 @@
+{
+  "version": "2.0.0",
+  "updated_at": "2026-10-27T00:00:00Z",
+  "transition_priors": {
+    "I-IV-V": {
+      "pattern": [
+        "I",
+        "IV",
+        "V"
+      ],
+      "self_transition_max": 0.5,
+      "step_transition_boost": 0.28,
+      "description": "Classic primary triad progression (e.g., G -> C -> D); prevents tonic stickiness on I."
+    },
+    "I-V-vi-IV": {
+      "pattern": [
+        "I",
+        "V",
+        "vi",
+        "IV"
+      ],
+      "self_transition_max": 0.5,
+      "step_transition_boost": 0.26,
+      "description": "Four-chord pop/rock progression."
+    },
+    "I-V6-vi": {
+      "pattern": [
+        "I",
+        "V/3",
+        "vi"
+      ],
+      "self_transition_max": 0.45,
+      "step_transition_boost": 0.35,
+      "description": "First-inversion bass walkdown (e.g., G -> D/F# -> Em, A -> E/G# -> F#m, C -> G/B -> Am)."
+    },
+    "I-I6-IV": {
+      "pattern": [
+        "I",
+        "I/3",
+        "IV"
+      ],
+      "self_transition_max": 0.45,
+      "step_transition_boost": 0.35,
+      "description": "Stepwise ascending bass bridge (e.g., G -> G/B -> C, C -> C/E -> F, D -> D/F# -> G)."
+    },
+    "ii-V-I": {
+      "pattern": [
+        "ii",
+        "V",
+        "I"
+      ],
+      "self_transition_max": 0.5,
+      "step_transition_boost": 0.28,
+      "description": "Jazz/soul ii-V-I cadence."
+    },
+    "IV-iv-I": {
+      "pattern": [
+        "IV",
+        "iv",
+        "I"
+      ],
+      "self_transition_max": 0.48,
+      "step_transition_boost": 0.25,
+      "description": "Minor plagal cadence."
+    }
+  },
+  "chroma_and_bass_calibration": {
+    "soft_chord_log_gamma": 50.0,
+    "silence_floor_db": -55.0,
+    "flux_change_threshold": 0.16,
+    "slash_bass_ratio": 0.38,
+    "min_passing_duration_sec": 0.18,
+    "polyphonic_note_boost": 0.25,
+    "fast_bpm_threshold": 115.0,
+    "fast_onset_density_threshold": 3.8,
+    "target_slowdown_bpm": 90.0
+  },
+  "chord_confusion_fixes": [
+    {
+      "id": "seed_g_to_c_overtone_fix",
+      "key": "G Major",
+      "prev_chord": "G",
+      "bass_pitch_class": "C",
+      "top_notes": [
+        "C",
+        "E",
+        "G"
+      ],
+      "raw_student_chord": "G",
+      "corrected_chord": "C",
+      "role": "main",
+      "reason": "When bass shifts to C2 with C-E-G triad notes after G, resolve to C despite shared G5 fifth/vocal overtone."
+    },
+    {
+      "id": "seed_c_to_d_soft_fix",
+      "key": "G Major",
+      "prev_chord": "C",
+      "bass_pitch_class": "D",
+      "top_notes": [
+        "D",
+        "F#",
+        "A"
+      ],
+      "raw_student_chord": "G",
+      "corrected_chord": "D",
+      "role": "main",
+      "reason": "When bass shifts to D2 with D-F#-A triad notes, resolve to D major."
+    },
+    {
+      "id": "seed_g_over_b_passing",
+      "key": "G Major",
+      "prev_chord": "G",
+      "bass_pitch_class": "B",
+      "top_notes": [
+        "B",
+        "D",
+        "G"
+      ],
+      "raw_student_chord": "G",
+      "corrected_chord": "G/B",
+      "role": "passing",
+      "reason": "First-inversion G/B stepwise bass bridge between G and C."
+    },
+    {
+      "id": "seed_d_over_fsharp_passing",
+      "key": "G Major",
+      "prev_chord": "G",
+      "bass_pitch_class": "F#",
+      "top_notes": [
+        "D",
+        "F#",
+        "A"
+      ],
+      "raw_student_chord": "D",
+      "corrected_chord": "D/F#",
+      "role": "passing",
+      "reason": "First-inversion D/F# bass walkdown between G and Em."
+    },
+    {
+      "id": "seed_e_over_gsharp_passing",
+      "key": "A Major",
+      "prev_chord": "A",
+      "bass_pitch_class": "G#",
+      "top_notes": [
+        "E",
+        "G#",
+        "B"
+      ],
+      "raw_student_chord": "E",
+      "corrected_chord": "E/G#",
+      "role": "passing",
+      "reason": "First-inversion E/G# bass walkdown between A and F#m."
+    },
+    {
+      "id": "seed_dsus4_filler",
+      "key": "D Major",
+      "prev_chord": "D",
+      "bass_pitch_class": "D",
+      "top_notes": [
+        "D",
+        "G",
+        "A"
+      ],
+      "raw_student_chord": "G",
+      "corrected_chord": "Dsus4",
+      "role": "filler",
+      "reason": "D pedal bass with suspended 4th G resolving back to D."
+    }
+  ],
+  "progression_insight_templates": {
+    "strumming_patterns": {
+      "4/4_slow": "D - D U - U D U (steady 8th-note acoustic groove with light palm-mute on beats 2 & 4)",
+      "4/4_mid": "D - D U - U D U (folk/pop syncopated 8th-note groove; accent beats 2 and 4)",
+      "4/4_fast": "D - D U D U D U (driving 8th/16th rhythm; keep wrist loose for rapid passing chords)",
+      "3/4_waltz": "D - D U D U (waltz 3/4 feel: strong bass root on beat 1, light brush strums on beats 2 & 3)",
+      "6/8_compound": "D - - D U D - - D U (compound 6/8 sway; accent beats 1 and 4)",
+      "fingerstyle_arpeggio": "p - i - m - a - m - i (thumb 'p' alternates bass roots on strings 6/5/4 while i-m-a pluck treble strings 3-2-1)"
+    },
+    "playing_tip_rules": {
+      "slash_walkdown": "Emphasize the moving bass note on the lowest fretted string with your thumb or a firm down-pick so the stepwise slash-chord walkdown rings clearly.",
+      "sus_filler": "Keep your anchor fingers planted on the base triad while adding or lifting your pinky/index finger for the sus2/sus4 embellishment.",
+      "soft_dynamics": "Match the track's dynamic contour by strumming closer to the neck with lighter pick velocity during soft chord passages, then digging in near the bridge on main chorus chords.",
+      "barre_transition": "Pre-form the index-finger barre slightly ahead of the beat and use open or passing chords on the final eighth-note to pivot smoothly."
+    }
+  }
+}

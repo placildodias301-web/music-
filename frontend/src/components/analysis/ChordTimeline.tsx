@@ -66,9 +66,12 @@ const ChordBlock = memo(function ChordBlock({ seg, index, pps, active, selected,
   const uncertain = showUncertain && isUncertain(seg, threshold);
   const label = formatLabel(seg.chord);
   const confidencePct = seg.confidence !== undefined ? Math.round(seg.confidence * 100) : null;
+  const isFiller = seg.role === "filler";
+  const isPassing = seg.role === "passing" || (Boolean(seg.passing) && !isFiller);
+  const roleTag = isFiller ? " · filler chord" : isPassing ? " · passing chord" : "";
   const title =
     `${label} · ${formatTime(seg.start)}–${formatTime(seg.end)}` +
-    (seg.passing ? " · passing chord" : "") +
+    roleTag +
     (uncertain && seg.alternative ? ` · uncertain${confidencePct !== null ? ` (${confidencePct}%)` : ""}, could be ${formatLabel(seg.alternative)}` : "");
 
   return (
@@ -80,7 +83,7 @@ const ChordBlock = memo(function ChordBlock({ seg, index, pps, active, selected,
       aria-current={active ? "true" : undefined}
       className={`absolute top-0 flex h-full flex-col justify-center overflow-hidden rounded-lg border px-1.5 text-left transition-[box-shadow,transform,background-color] duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ns-purple-light)] ${
         active ? "z-10" : "hover:shadow-[0_0_14px_rgba(255,176,32,0.45)]"
-      } ${seg.passing ? "border-dotted opacity-80" : uncertain ? "border-dashed" : ""}`}
+      } ${isPassing || isFiller ? "border-dotted opacity-90" : uncertain ? "border-dashed" : ""}`}
       style={{
         left: seg.start * pps,
         width,
@@ -90,11 +93,24 @@ const ChordBlock = memo(function ChordBlock({ seg, index, pps, active, selected,
         boxShadow: active ? "0 0 0 1px #8b5cf6, 0 8px 22px -6px rgba(108, 77, 255, 0.7)" : undefined,
       }}
     >
-      {width >= 22 && (
-        <span className={`truncate font-heading font-bold leading-tight ${width >= 44 ? "text-base" : "text-xs"} ${active ? "text-[var(--color-ns-text)]" : ""}`}>
-          {label}
-          {uncertain && <sup className="ml-0.5 text-[0.5625rem] font-semibold opacity-80">?</sup>}
-        </span>
+      {width >= 14 && (
+        <div className="flex items-center gap-1 overflow-hidden">
+          <span className={`truncate font-heading font-bold leading-tight ${width >= 44 ? "text-base" : "text-xs"} ${active ? "text-[var(--color-ns-text)]" : ""}`}>
+            {label}
+            {uncertain && <sup className="ml-0.5 text-[0.5625rem] font-semibold opacity-80">?</sup>}
+          </span>
+          {width >= 46 && (isPassing || isFiller) && (
+            <span
+              className={`shrink-0 rounded px-1 py-0.2 text-[0.52rem] font-bold uppercase tracking-wider ${
+                isFiller
+                  ? "border border-[var(--color-ns-amber)]/40 bg-[var(--color-ns-amber)]/15 text-[var(--color-ns-amber)]"
+                  : "border border-[var(--color-ns-cyan)]/40 bg-[var(--color-ns-cyan)]/15 text-[var(--color-ns-cyan)]"
+              }`}
+            >
+              {isFiller ? "Filler" : "Passing"}
+            </span>
+          )}
+        </div>
       )}
       {width >= 52 && (
         <span className={`truncate font-mono text-[0.5938rem] ${active ? "text-[var(--color-ns-muted)]" : "text-[var(--color-ns-dim)]"}`}>
@@ -151,7 +167,7 @@ export function ChordTimeline({
   const [follow, setFollow] = useState(true);
   const scrollRef = useRef<HTMLDivElement>(null);
   const playheadRef = useRef<HTMLDivElement>(null);
-  
+
   // Where the timeline last scrolled itself, to tell its own scrolling
   // apart from the user dragging/swiping it.
   const autoScrollLeft = useRef<number | null>(null);
@@ -178,7 +194,8 @@ export function ChordTimeline({
 
   const sections = useMemo<AnalysisSection[]>(() => analysis.sections ?? [], [analysis.sections]);
   const fills = useMemo<PossibleFill[]>(() => analysis.possibleFills ?? [], [analysis.possibleFills]);
-  const passingCount = timeline.filter((s) => s.passing).length;
+  const fillerCount = timeline.filter((s) => s.role === "filler").length;
+  const passingCount = timeline.filter((s) => s.role === "passing" || (s.passing && s.role !== "filler")).length;
 
   const sectionBands = useMemo(
     () =>
@@ -285,7 +302,7 @@ export function ChordTimeline({
   // Use the clock subscription to update playhead and scroll without re-rendering
   useEffect(() => {
     if (!interactive) return;
-    
+
     // Initial sync
     const initialT = clock.getCurrentTime() - (syncOffsetMs / 1000);
     if (playheadRef.current) {
@@ -300,11 +317,11 @@ export function ChordTimeline({
     return clock.subscribe((audioT) => {
       const t = audioT - (syncOffsetRef.current / 1000);
       const currentPps = ppsRef.current;
-      
+
       if (playheadRef.current) {
         playheadRef.current.style.transform = `translateX(${t * currentPps}px)`;
       }
-      
+
       if (followRef.current && interactiveRef.current) {
         const scrollEl = scrollRef.current;
         if (scrollEl) {
@@ -390,6 +407,16 @@ export function ChordTimeline({
         <span className="rounded-full border border-[var(--color-ns-border)] bg-[var(--color-ns-raised)] px-2.5 py-0.5 font-semibold text-[var(--color-ns-muted)]">
           {timeline.length} chord changes
         </span>
+        {passingCount > 0 && (
+          <span className="inline-flex items-center gap-1 rounded-full border border-[var(--color-ns-cyan)]/35 bg-[var(--color-ns-cyan)]/10 px-2.5 py-0.5 font-semibold text-[var(--color-ns-cyan)]">
+            {passingCount} passing
+          </span>
+        )}
+        {fillerCount > 0 && (
+          <span className="inline-flex items-center gap-1 rounded-full border border-[var(--color-ns-amber)]/35 bg-[var(--color-ns-amber)]/10 px-2.5 py-0.5 font-semibold text-[var(--color-ns-amber)]">
+            {fillerCount} filler
+          </span>
+        )}
         {loop && (
           <span className="inline-flex items-center gap-1.5 rounded-full border border-[var(--color-ns-cyan)]/35 bg-[var(--color-ns-cyan)]/10 px-2.5 py-0.5 font-semibold text-[var(--color-ns-cyan)]">
             <span className="text-[var(--color-ns-muted)]">Main progression</span>
@@ -453,7 +480,7 @@ export function ChordTimeline({
 
       {notation.legend && <p className="mt-2 text-[0.6875rem] text-[var(--color-ns-muted)]">{notation.legend}</p>}
 
-      {(showBeats || sections.length > 0 || fills.length > 0 || passingCount > 0) && timeline.length > 0 && (
+      {(showBeats || sections.length > 0 || fills.length > 0 || passingCount > 0 || fillerCount > 0) && timeline.length > 0 && (
         <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-[0.6562rem] text-[var(--color-ns-dim)]">
           {showBeats && (
             <>
@@ -467,7 +494,12 @@ export function ChordTimeline({
           )}
           {passingCount > 0 && (
             <span className="inline-flex items-center gap-1.5">
-              <span className="h-2 w-3 rounded-sm border border-dotted border-[var(--color-ns-border-bright)]" /> Passing chord
+              <span className="h-2 w-3 rounded-sm border border-dotted border-[var(--color-ns-cyan)]/60" /> Passing chord
+            </span>
+          )}
+          {fillerCount > 0 && (
+            <span className="inline-flex items-center gap-1.5">
+              <span className="h-2 w-3 rounded-sm border border-dotted border-[var(--color-ns-amber)]/60" /> Filler chord
             </span>
           )}
           {sections.length > 0 && (

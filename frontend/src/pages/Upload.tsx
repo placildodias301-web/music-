@@ -23,7 +23,7 @@ import type { AnalysisProgress, AnalysisResult, YouTubeVideo } from "../lib/api"
 import { AnalysisProgressScreen, type AnalysisPhase } from "../components/upload/AnalysisProgressScreen";
 import { getGuitarVoicings, getUkuleleShape, parseChordSymbol } from "../lib/chordTheory";
 import { isVoiceableChord } from "../lib/chordSync";
-import { saveToLibrary } from "../lib/library";
+
 
 function formatBytes(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
@@ -175,7 +175,7 @@ export function Upload() {
   function cancelAnalysis() {
     abortRef.current?.abort();
     setPhase(null);
-    setErrorMessage("Analysis cancelled.");
+    setErrorMessage("You stopped the analysis. Nothing was saved.");
   }
 
   async function handleAnalyze() {
@@ -286,9 +286,9 @@ export function Upload() {
       });
       if (cancelled()) return;
 
-      const savedEntry = saveToLibrary(file.name, analysis);
+      // Manual save only: do not auto-save to Library on analysis completion.
       setSong({
-        libraryId: savedEntry.id,
+        libraryId: null,
         fileName: file.name,
         fileSizeBytes: file.size,
         audioUrl: URL.createObjectURL(file),
@@ -384,6 +384,9 @@ export function Upload() {
                 aria-selected={active}
                 disabled={isBusy}
                 onClick={() => {
+                  // Switching source starts clean: the hidden file input is emptied
+                  // (MicRecorder stops its stream tracks when it unmounts).
+                  if (s.id !== source && fileInputRef.current) fileInputRef.current.value = "";
                   setSource(s.id);
                   setUsingSample(false);
                   setErrorMessage(null);

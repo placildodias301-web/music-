@@ -61,11 +61,23 @@ const MvpContext = createContext<MvpContextValue | null>(null);
 
 export function MvpProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<MvpState>(getInitialMvpState);
-  const attachedBlobUrlRef = useRef<string | null>(null);
+
+  // The session's playable blob: URL. Revoked only when a replacement track
+  // arrives or the session is reset, never while it may still be playing.
+  const sessionBlobUrlRef = useRef<string | null>(null);
+  const adoptBlobUrl = useCallback((url: string | null) => {
+    const previous = sessionBlobUrlRef.current;
+    if (previous && previous !== url) URL.revokeObjectURL(previous);
+    sessionBlobUrlRef.current = url && url.startsWith("blob:") ? url : null;
+  }, []);
 
   const setSong = useCallback<MvpContextValue["setSong"]>((input) => {
-    const resolved = resolveLibrarySong(input.libraryId || input.fileName);
-    const libId = input.libraryId ?? resolved?.id ?? null;
+    if (input.audioUrl) adoptBlobUrl(input.audioUrl);
+    // Manual save only: when libraryId is explicitly null (fresh analysis run),
+    // do not auto-bind to any previously saved song with the same filename.
+    const isExplicitUnsaved = input.libraryId === null;
+    const resolved = isExplicitUnsaved ? null : resolveLibrarySong(input.libraryId || input.fileName);
+    const libId = isExplicitUnsaved ? null : (input.libraryId ?? resolved?.id ?? null);
     persistActiveSongRef({ libraryId: libId, fileName: input.fileName });
     setState((prev) => ({
       ...prev,
@@ -77,13 +89,14 @@ export function MvpProvider({ children }: { children: ReactNode }) {
       isSampleAudio: input.isSampleAudio,
       analysis: null,
     }));
-  }, []);
+  }, [adoptBlobUrl]);
 
   const setAnalysis = useCallback((analysis: AnalysisResult) => {
     if (!isValidAnalysisResult(analysis)) return;
     setState((prev) => {
       const name = prev.fileName ?? analysis.fileName;
-      const resolved = name ? resolveLibrarySong(prev.libraryId || name) : null;
+      // Preserve explicit unsaved state (prev.libraryId === null when setSong was called for a new analysis)
+      const resolved = prev.fileName !== null ? null : (name ? resolveLibrarySong(name) : null);
       const libId = prev.libraryId ?? resolved?.id ?? null;
       if (name) {
         persistActiveSongRef({ libraryId: libId, fileName: name });
@@ -99,27 +112,21 @@ export function MvpProvider({ children }: { children: ReactNode }) {
 
   const attachAudioFile = useCallback((file: File) => {
     if (!file || file.size <= 0) return;
-    if (attachedBlobUrlRef.current) {
-      URL.revokeObjectURL(attachedBlobUrlRef.current);
-    }
     const url = URL.createObjectURL(file);
-    attachedBlobUrlRef.current = url;
+    adoptBlobUrl(url);
     setState((prev) => ({
       ...prev,
       fileSizeBytes: file.size,
       audioUrl: url,
       isSampleAudio: false,
     }));
-  }, []);
+  }, [adoptBlobUrl]);
 
   const reset = useCallback(() => {
-    if (attachedBlobUrlRef.current) {
-      URL.revokeObjectURL(attachedBlobUrlRef.current);
-      attachedBlobUrlRef.current = null;
-    }
+    adoptBlobUrl(null);
     clearActiveSongRef();
     setState(emptyState);
-  }, []);
+  }, [adoptBlobUrl]);
 
   const canonicalSongId = useMemo(() => {
     const ref = state.libraryId || state.fileName || state.analysis?.fileName || "";

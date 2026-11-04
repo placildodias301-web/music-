@@ -35,8 +35,8 @@ export class ErrorBoundary extends Component<Props, State> {
         <div className="flex min-h-[50vh] items-center justify-center p-6">
           <div className="w-full max-w-lg">
             <ErrorBanner
-              title={this.props.fallbackTitle ?? "Something went wrong"}
-              message="An unexpected error occurred. You can reload the page or return to Wilsify Studio."
+              title={this.props.fallbackTitle ?? "This page hit a problem"}
+              message="Your songs and settings are safe. Reload the page to try again, or go back to Studio."
               actionLabel="Reload page"
               onAction={() => window.location.reload()}
               secondaryActionLabel="Return to Studio"

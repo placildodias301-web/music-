@@ -296,7 +296,7 @@ describe("TASK-02: cloudSync, library state, and offline-first lyrics", () => {
     expect(() => updateLibrarySongState(entry.id, { transpose: 13 })).toThrow(RangeError);
     expect(() => updateLibrarySongState(entry.id, { transpose: 1.5 })).toThrow(RangeError);
     expect(() => updateLibrarySongState(entry.id, { capo: -1 })).toThrow(RangeError);
-    expect(() => updateLibrarySongState(entry.id, { capo: 8 })).toThrow(RangeError);
+    expect(() => updateLibrarySongState(entry.id, { capo: 13 })).toThrow(RangeError);
     expect(() => updateLibrarySongState(entry.id, { capo: 2.5 })).toThrow(RangeError);
 
     const unchanged = resolveLibrarySong(entry.id);

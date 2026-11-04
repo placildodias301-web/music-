@@ -25,7 +25,7 @@ import socket
 import threading
 import time
 import uuid
-from urllib.parse import parse_qs, urlparse
+from urllib.parse import parse_qs, parse_qsl, urlencode, urlparse, urlunparse
 
 from services.audio_extract import TMP_DIR
 
@@ -228,6 +228,27 @@ def extract_youtube_video_id(url_or_id: str) -> str:
     return video_id
 
 
+# Share/tracking parameters that never select different media. Stripped before
+# yt-dlp sees the link so share links from apps resolve like the plain URL.
+_TRACKING_PARAMS = {
+    "si", "feature", "pp", "igsh", "igshid", "img_index", "dlrf", "srtk", "fbclid", "gclid",
+    "mibextid", "ref", "ref_src", "_r", "_t", "is_from_webapp", "sender_device", "share_app_id",
+    "psln", "cplk", "rpxt", "mdxt",
+}
+
+
+def strip_tracking_params(url: str) -> str:
+    """Drops utm_* and other share-tracking query parameters, keeping the ones that pick the media (v=, t=, ...)."""
+    parsed = urlparse(url)
+    if not parsed.query:
+        return url
+    kept = [
+        (k, v) for k, v in parse_qsl(parsed.query, keep_blank_values=True)
+        if not k.lower().startswith("utm_") and k.lower() not in _TRACKING_PARAMS
+    ]
+    return urlunparse(parsed._replace(query=urlencode(kept)))
+
+
 def fetch_media(url: str, client_key: str = "global", request_id: str | None = None) -> tuple[str, str]:
     """
     Validates `url` and downloads its audio into `TMP_DIR` under a random UUID
@@ -239,6 +260,8 @@ def fetch_media(url: str, client_key: str = "global", request_id: str | None = N
     raw = (url or "").strip()
     if not raw:
         raise MediaFetchError("Please paste a valid link to a video or song.")
+    if "://" in raw:
+        raw = strip_tracking_params(raw)
 
     # Preserve SSRF / scheme checks first when a full URL is provided.
     normalized = _validate_url(raw)
@@ -276,25 +299,61 @@ def _reject_non_video_link(url: str) -> None:
         raise MediaFetchError("Live streams cannot be analyzed. Please choose a recorded video under 20 minutes.")
 
 
+# yt-dlp player clients tried in order. YouTube regularly breaks one client
+# (bot checks, missing formats, signature changes) while another still works.
+YOUTUBE_PLAYER_CLIENTS = ("android", "ios", "web")
+
+# Failures no other client can fix: stop retrying and explain them at once.
+_DEFINITIVE_YTDLP_ERRORS = ("private", "members-only", "live", "premiere", "larger than max-filesize",
+                            "unsupported url", "no suitable extractor", "longer than 20 minutes")
+
+
+def _is_definitive_error(err: MediaFetchError) -> bool:
+    m = str(err).lower()
+    return any(marker in m for marker in _DEFINITIVE_YTDLP_ERRORS) or getattr(err, "status_code", 400) == 504
+
+
 def _download_youtube_video(canonical_url: str, video_id: str, request_id: str) -> tuple[str, str]:
-    return _download_media(
-        canonical_url,
-        request_id,
-        label=video_id,
-        allowed_extractors=["youtube", "default", "-generic"],
-        fallback_message=YOUTUBE_FALLBACK_MESSAGE,
-        site_name="YouTube",
-    )
+    last_error: MediaFetchError | None = None
+    for attempt, client in enumerate(YOUTUBE_PLAYER_CLIENTS):
+        try:
+            return _download_media(
+                canonical_url,
+                request_id,
+                label=video_id,
+                allowed_extractors=["youtube", "default", "-generic"],
+                fallback_message=YOUTUBE_FALLBACK_MESSAGE,
+                site_name="YouTube",
+                extra_opts={"extractor_args": {"youtube": {"player_client": [client]}}},
+            )
+        except MediaFetchError as e:
+            last_error = e
+            if _is_definitive_error(e) or attempt == len(YOUTUBE_PLAYER_CLIENTS) - 1:
+                raise
+            logger.info("[request_id=%s] YouTube client %r failed for %s, trying the next one: %s",
+                        request_id, client, video_id, e)
+    raise last_error or MediaFetchError(YOUTUBE_FALLBACK_MESSAGE)  # pragma: no cover - loop always returns/raises
+
+
+DIRECT_MEDIA_EXTENSIONS = (".mp3", ".wav", ".m4a", ".aac", ".flac", ".ogg", ".opus",
+                           ".webm", ".mp4", ".mov", ".mkv", ".m4v")
+
+
+def is_direct_media_url(url: str) -> bool:
+    return (urlparse(url).path or "").lower().endswith(DIRECT_MEDIA_EXTENSIONS)
 
 
 def _download_linked_media(url: str, request_id: str) -> tuple[str, str]:
     # "default" = every site-specific extractor; "-generic" keeps yt-dlp from
-    # scraping arbitrary pages or downloading raw file URLs.
+    # scraping arbitrary pages. A link whose path is a media file
+    # (…/song.mp3) is the one case the generic extractor is allowed, and
+    # only for that file; the host was already checked to be public.
+    extractors = ["default", "generic"] if is_direct_media_url(url) else ["default", "-generic"]
     return _download_media(
         url,
         request_id,
         label=urlparse(url).hostname or "link",
-        allowed_extractors=["default", "-generic"],
+        allowed_extractors=extractors,
         fallback_message=LINK_FALLBACK_MESSAGE,
         site_name=None,
     )
@@ -308,6 +367,7 @@ def _download_media(
     allowed_extractors: list[str],
     fallback_message: str,
     site_name: str | None,
+    extra_opts: dict | None = None,
 ) -> tuple[str, str]:
     try:
         import yt_dlp
@@ -344,6 +404,8 @@ def _download_media(
         "noprogress": True,
         "cachedir": False,
         "http_headers": {"User-Agent": USER_AGENT},
+        "geo_bypass": True,
+        **(extra_opts or {}),
     }
 
     try:
